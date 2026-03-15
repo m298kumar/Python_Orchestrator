@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-03-10T13:34:22.303852",
+  "model_used": "phi4-mini:3.8b",
+  "summary": {
+    "total_requirements": 1,
+    "total_test_cases": 6,
+    "avg_tests_per_requirement": 6.0
+  },
+  "breakdown_by_type": {
+    "positive": 2,
+    "negative": 2,
+    "edge_case": 2
+  },
+  "breakdown_by_priority": {
+    "High": 6
+  },
+  "test_cases_per_requirement": {
+    "REQ-001": 6
+  },
+  "test_cases": [
+    {
+      "tc_id": "TC-0001",
+      "req_id": "REQ-001",
+      "title": "Verify -- Customer sees RCD enrollment prompt first navigation Deposit section",
+      "test_type": "positive",
+      "priority": "High",
+      "steps_count": 4
+    },
+    {
+      "tc_id": "TC-0002",
+      "req_id": "REQ-001",
+      "title": "Validate rejection when -- Eligibility check runs silently before showing enrollment \u2014",
+      "test_type": "negative",
+      "priority": "High",
+      "steps_count": 3
+    },
+    {
+      "tc_id": "TC-0003",
+      "req_id": "REQ-001",
+      "title": "Confirm boundary for -- Terms Conditions displayed full scroll-to-bottom requirement before",
+      "test_type": "edge_case",
+      "priority": "High",
+      "steps_count": 4
+    },
+    {
+      "tc_id": "TC-0004",
+      "req_id": "REQ-001",
+      "title": "Verify -- Biometric re-verification attempted first \u2014 falls back OTP if",
+      "test_type": "positive",
+      "priority": "High",
+      "steps_count": 4
+    },
+    {
+      "tc_id": "TC-0005",
+      "req_id": "REQ-001",
+      "title": "Validate rejection when -- OTP delivered within 60 seconds registered mobile number",
+      "test_type": "negative",
+      "priority": "High",
+      "steps_count": 6
+    },
+    {
+      "tc_id": "TC-0006",
+      "req_id": "REQ-001",
+      "title": "Confirm boundary for -- Accounts less than 90 days old shown specific ineligibility reason",
+      "test_type": "edge_case",
+      "priority": "High",
+      "steps_count": 5
+    }
+  ]
+}

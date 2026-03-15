@@ -1,0 +1,31 @@
+# Core LLM & AI
+ollama>=0.1.8
+
+# ChromaDB — must be >=0.5.3 to use Pydantic V2 natively (fixes Python 3.14 compat)
+# chromadb<0.5 imports pydantic.v1 which is broken on Python 3.14+
+chromadb>=0.5.3
+
+langchain>=0.1.0
+langchain-community>=0.0.20
+langchain-ollama>=0.1.0
+
+# BDD Testing Framework
+behave>=1.2.6
+
+# File Reading
+python-docx>=1.1.0
+PyPDF2>=3.0.1
+openpyxl>=3.1.2
+pandas>=2.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0   # pydantic v2 split BaseSettings into its own package
+rich>=13.0.0
+click>=8.1.0
+requests>=2.31.0
+sentence-transformers>=2.2.2
+
+# MCP Server
+mcp>=1.0.0        # Model Context Protocol — FastMCP server for tool exposure

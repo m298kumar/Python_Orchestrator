@@ -1,0 +1,6 @@
+id,title,description,priority,category,acceptance_criteria
+REQ-001,User Login Authentication,"Users authenticate with email and password. System validates credentials and creates a session.",High,Security,"Valid login redirects to dashboard; Invalid shows error; Account locks after 5 fails"
+REQ-002,Password Reset via Email,"Forgotten password reset via email link. Link expires after 24 hours.",High,Security,"Email delivered in 60s; Link valid 24h; Link one-time use"
+REQ-003,User Registration,"New users register with name, email, and password. Email verification required.",Medium,Onboarding,"Email must be unique; Password meets complexity; Verification email sent"
+REQ-004,Product Search,"Users can search products by keyword, category, price range, and rating.",High,E-Commerce,"Search returns relevant results; Filters work correctly; Results paginated"
+REQ-005,Shopping Cart Management,"Users can add, update quantity, and remove items from their shopping cart.",High,E-Commerce,"Cart persists across sessions; Quantity updates reflect in totals; Items can be removed"
