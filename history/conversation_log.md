@@ -1,0 +1,134 @@
+# STLC Automation Platform - Conversation History
+
+> This file is append-only. Each session adds a new entry below.
+> Use this as a reference for decisions, rationale, and progress.
+
+---
+
+## Session 001 — 2026-03-15
+
+### Context
+- Reviewed entire codebase of the Python Orchestrator (v10)
+- Current state: working orchestrator that converts requirements → test cases via Ollama LLM + ChromaDB
+
+### User Goals (Stated)
+1. **Domain-Agnostic Test Generation** — remove hardcoded domain-specific logic; make generator work for any software domain
+2. **BDD Automation Code Generation** — convert generated test cases into executable BDD automation code (feature files + step definition skeletons) in the user's preferred language
+3. **Web Crawler + API Test Generator** — crawl web apps to build site models, discover APIs, generate API tests (REST Assured / Karate / user-preferred framework)
+4. **Frontend UI + Agent Integration** — unify all agents behind a web UI for smooth end-to-end workflow
+
+### Architecture Decision: Specification Workflow Model
+- Project will follow a **staged specification workflow** where each stage is a self-contained milestone
+- Each stage must pass validation (tests, lint, integration checks) before the next stage begins
+- Stages are sequentially improvable — revisiting an earlier stage does not break downstream stages
+- See `history/SPEC_WORKFLOW.md` for the full specification
+
+### Key Technical Decisions
+- **6 stages** defined (0 through 5), each with entry criteria, deliverables, and exit criteria
+- Stage 0 (Foundation) added to set up project structure, CI validation, and testing infrastructure first
+- Each stage has a validation gate: unit tests + integration tests + lint must pass
+- Agents communicate via well-defined artifact contracts (JSON/YAML files)
+
+### Files Created
+- `history/conversation_log.md` — this file
+- `history/SPEC_WORKFLOW.md` — full specification workflow with stage definitions
+
+### Next Steps
+- Begin Stage 0: Foundation & Project Restructure
+
+---
+
+## Session 002 — 2026-03-15 (Stage 0 Implementation)
+
+### What Was Done
+Implemented Stage 0: Foundation & Project Restructure. All existing functionality
+migrated into a modular package structure under `stlc_platform/`.
+
+### Files Created (New Package Structure)
+
+#### Core Infrastructure
+- `stlc_platform/__init__.py` — package root with version/stage metadata
+- `stlc_platform/core/contracts.py` — **13 Pydantic artifact models** covering all 5 stages:
+  RequirementArtifact, TestStepArtifact, TestCaseArtifact, FeatureFileArtifact,
+  StepDefinitionArtifact, PageElementArtifact, CrawledPageArtifact, SiteModelArtifact,
+  APIEndpointArtifact, APIModelArtifact, APITestArtifact, PipelineRunArtifact
+- `stlc_platform/core/base_agent.py` — BaseAgent ABC + AgentCapabilities, ValidationResult, AgentResult
+- `stlc_platform/core/config_loader.py` — unified config from YAML + .env + env vars, backward-compatible
+
+#### LLM Abstraction Layer
+- `stlc_platform/core/llm/base_client.py` — BaseLLMClient ABC with shared retry/JSON repair logic,
+  TESTCASE_JSON_SCHEMA, repair_truncated_json(), is_hollow()
+- `stlc_platform/core/llm/ollama_client.py` — concrete OllamaClient implementation (migrated from llm_client.py)
+
+#### Migrated Modules
+- `stlc_platform/core/storage/chroma_store.py` — RequirementsVectorStore (from chroma_store.py)
+- `stlc_platform/agents/requirements_agent/reader.py` — RequirementsReader + Requirement (from requirements_reader.py)
+- `stlc_platform/exporters/exporters.py` — CSVExporter, ZephyrScaleExporter, JSONReportExporter
+
+#### Configuration
+- `config/stlc_config.yaml` — master YAML config file covering all stages
+
+#### Validation & Testing
+- `scripts/validate_stage.py` — validation gate script (13 checks for Stage 0)
+- `tests/conftest.py` — shared fixtures (temp dirs, sample requirement, sample test case)
+- `tests/unit/test_contracts.py` — 12 tests for artifact Pydantic models
+- `tests/unit/test_config_loader.py` — 7 tests for config loading and env overrides
+- `tests/unit/test_base_agent.py` — 6 tests for BaseAgent ABC
+- `tests/unit/test_llm_base.py` — 12 tests for JSON repair, hollow check, schema validation
+- `tests/unit/agents/requirements_agent/test_reader.py` — 7 tests for requirements parsing
+
+### Key Design Decisions & Why
+
+1. **LLM Abstraction (BaseLLMClient ABC) instead of direct Ollama coupling**
+   - Why: Stage 1 needs pluggable providers (OpenAI, Anthropic, Azure). Building the interface
+     now means we add providers without touching generator code.
+   - Why ABC over Protocol: fail-fast at class definition time; shared retry/repair logic in base.
+   - Improvement: retry logic + JSON repair moved from OllamaClient into BaseLLMClient so ALL
+     future providers get the same robustness for free.
+
+2. **Pydantic contracts instead of dataclasses for inter-agent artifacts**
+   - Why: Pydantic gives us serialization, validation, schema generation (JSON Schema for config
+     validation), and versioning (`schema_version` field). Dataclasses can't validate on creation.
+   - The legacy `Requirement` and `TestCase` dataclasses still exist for backward compatibility
+     with test_generator.py (which is ~1639 lines and will be migrated in Stage 1).
+
+3. **Config loaded from YAML + .env + env vars (triple cascade)**
+   - Why: YAML gives structured config (nested, typed) that .env can't do. But existing users
+     have .env files and CI uses env vars — so all three sources are supported.
+   - Precedence: env var > .env > YAML defaults.
+
+4. **ChromaDB store accepts config injection instead of importing global config**
+   - Why: the original `RequirementsVectorStore` imported `config` at module level, making it
+     untestable and tightly coupled. Now it accepts an optional `chromadb_config` parameter
+     and falls back to the global config only if none provided. This makes testing with temp
+     directories trivial.
+
+5. **E402 (import-not-at-top) ignored in lint rules**
+   - Why: chroma_store.py must configure warnings/logging filters BEFORE importing chromadb
+     (which triggers noisy deprecation warnings at import time). This is the same pattern
+     used in the original code.
+
+### Validation Results
+- **46/46 unit tests pass** (pytest)
+- **13/13 validation gate checks pass** (validate_stage.py --stage 0)
+- 0 lint errors (ruff E/F rules)
+- All imports verified via smoke tests
+
+### What Was NOT Changed
+- Original root-level `.py` files (orchestrator.py, test_generator.py, etc.) are untouched
+- Original Behave tests (environment.py, test_generation_steps.py, test_generation.feature) untouched
+- The ~1639-line test_generator.py will be migrated and refactored in Stage 1
+
+### Improvements Over Original Discussion
+- Added **Stage 0** (not in original roadmap) — ensures solid foundation before any logic changes
+- Contracts defined for ALL stages upfront — not just Stage 1. This means Stage 2/3/4 developers
+  know exactly what data shapes to consume and produce.
+- LLM retry/repair logic centralized in BaseLLMClient — original had it scattered between
+  llm_client.py and test_generator.py
+
+### Next Steps
+- Stage 1: Domain-Agnostic Test Generation Engine
+  - Migrate test_generator.py into stlc_platform/agents/requirements_agent/generator.py
+  - Replace hardcoded _classify_ac() keywords with configurable AC types
+  - Externalize prompts into Jinja2 templates
+  - Add OpenAI and Anthropic LLM clients

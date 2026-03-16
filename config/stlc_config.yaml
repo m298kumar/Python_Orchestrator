@@ -1,0 +1,74 @@
+# STLC Automation Platform — Master Configuration
+# ================================================
+# This file drives all agents. Override any value via environment variables
+# prefixed with STLC_ (e.g., STLC_LLM__MODEL overrides llm.model).
+
+project:
+  name: "My Application"
+  domain: ""  # auto-detected from requirements if empty
+  tech_stack:
+    platform: web           # web | mobile | api | desktop
+    frontend: ""            # react | angular | vue | flutter | native
+    backend: rest           # rest | graphql | grpc | soap
+    database: ""            # postgres | mysql | mongo | dynamodb
+    auth: ""                # jwt | oauth2 | session | saml
+
+llm:
+  provider: ollama          # ollama | openai | anthropic | azure
+  model: "phi4-mini:3.8b"
+  base_url: "http://localhost:11434"
+  temperature: 0.6
+  num_ctx: 8192
+  timeout: 450
+  num_predict: 3200
+  # OpenAI / Anthropic (used when provider != ollama)
+  api_key: ""               # or set STLC_LLM__API_KEY env var
+
+chromadb:
+  persist_directory: "./chroma_db"
+  collection_name: "requirements"
+  embedding_backend: ollama  # ollama | sentence_transformer
+  ollama_embedding_model: "qwen3-embedding:0.6b"
+  ollama_embedding_url: "http://localhost:11434/api/embeddings"
+  sentence_transformer_model: "all-MiniLM-L6-v2"
+
+test_generation:
+  max_per_requirement: 6
+  include_negative: true
+  include_edge_cases: true
+  format: gherkin
+
+bdd:
+  language: python          # python | java | javascript | csharp
+  framework: behave         # behave | pytest_bdd | cucumber | cucumber_js | specflow
+  automation_lib: playwright  # selenium | playwright | cypress | requests | rest_assured
+
+crawler:
+  base_url: ""
+  max_depth: 3
+  max_pages: 100
+  wait_for_network_idle: true
+  respect_robots_txt: true
+  rate_limit_ms: 1000
+  auth:
+    type: ""                # form | oauth | bearer | none
+    login_url: ""
+    username: ""
+    password: ""            # or set STLC_CRAWLER__AUTH__PASSWORD env var
+
+api_testing:
+  framework: pytest_requests  # pytest_requests | rest_assured | karate | supertest
+  openapi_spec: ""          # path to swagger/openapi spec file
+  base_url: ""
+
+export:
+  output_dir: "./output"
+  formats:
+    - csv
+    - zephyr
+    - json
+  zephyr:
+    project_key: "PROJ"
+    folder_prefix: "Generated Tests"
+    default_status: "Draft"
+    default_labels: "automated,generated"

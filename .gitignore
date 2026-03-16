@@ -1,0 +1,33 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# ChromaDB local storage
+chroma_db/
+
+# Output artifacts
+output/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
