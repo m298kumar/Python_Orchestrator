@@ -1,0 +1,141 @@
+[
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0001",
+    "req_id": "REQ-EC-001",
+    "title": "Verify user can search for products by keyword",
+    "description": "Positive test for product search functionality",
+    "preconditions": "User is logged in and on the product catalogue page",
+    "test_type": "positive",
+    "priority": "High",
+    "steps": [
+      {"action": "Navigate to the product catalogue page", "expected_result": "Product catalogue page is displayed"},
+      {"action": "Enter 'laptop' in the search field", "expected_result": "Search field accepts the input"},
+      {"action": "Click the search button", "expected_result": "Search results display products matching 'laptop'"}
+    ],
+    "expected_outcome": "Search results display products matching the keyword with name, price, and thumbnail",
+    "tags": ["product-catalogue", "positive", "req-ec-001"],
+    "category": "Product Catalogue",
+    "component": "Search Page",
+    "given": "A logged-in user on the product catalogue page",
+    "when": "The user enters 'laptop' in the search field and clicks search",
+    "then": "The system displays products matching 'laptop' with name, price, and thumbnail",
+    "estimated_duration": "5"
+  },
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0002",
+    "req_id": "REQ-EC-001",
+    "title": "Validate search with no matching results",
+    "description": "Negative test for product search with no results",
+    "preconditions": "User is logged in and on the product catalogue page",
+    "test_type": "negative",
+    "priority": "High",
+    "steps": [
+      {"action": "Navigate to the product catalogue page", "expected_result": "Product catalogue page is displayed"},
+      {"action": "Enter 'xyznonexistent999' in the search field", "expected_result": "Search field accepts the input"},
+      {"action": "Click the search button", "expected_result": "System displays a no results message"}
+    ],
+    "expected_outcome": "System displays a friendly no results found message",
+    "tags": ["product-catalogue", "negative", "req-ec-001"],
+    "category": "Product Catalogue",
+    "component": "Search Page",
+    "given": "A logged-in user on the product catalogue page",
+    "when": "The user enters 'xyznonexistent999' in the search field and clicks search",
+    "then": "The system displays a no results found message with search suggestions",
+    "estimated_duration": "3"
+  },
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0003",
+    "req_id": "REQ-EC-002",
+    "title": "Verify user can add product to shopping cart",
+    "description": "Positive test for shopping cart add functionality",
+    "preconditions": "User is logged in and viewing a product detail page",
+    "test_type": "positive",
+    "priority": "High",
+    "steps": [
+      {"action": "Navigate to a product detail page", "expected_result": "Product detail page is displayed"},
+      {"action": "Click the Add to Cart button", "expected_result": "Product is added to the cart"},
+      {"action": "Navigate to the shopping cart", "expected_result": "Cart displays the added product with correct details"}
+    ],
+    "expected_outcome": "Product appears in the shopping cart with correct name, price, and quantity",
+    "tags": ["shopping-cart", "positive", "req-ec-002"],
+    "category": "Shopping Cart",
+    "component": "Cart Page",
+    "given": "A logged-in user viewing a product detail page",
+    "when": "The user clicks the Add to Cart button",
+    "then": "The product appears in the shopping cart with correct name, price, and quantity of 1",
+    "estimated_duration": "5"
+  },
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0004",
+    "req_id": "REQ-EC-002",
+    "title": "Validate adding out-of-stock product to cart",
+    "description": "Negative test for adding unavailable product to cart",
+    "preconditions": "User is logged in and viewing an out-of-stock product",
+    "test_type": "negative",
+    "priority": "Medium",
+    "steps": [
+      {"action": "Navigate to an out-of-stock product detail page", "expected_result": "Product page shows out-of-stock status"},
+      {"action": "Attempt to click the Add to Cart button", "expected_result": "Button is disabled or shows an error message"}
+    ],
+    "expected_outcome": "System prevents adding out-of-stock product and displays appropriate message",
+    "tags": ["shopping-cart", "negative", "req-ec-002"],
+    "category": "Shopping Cart",
+    "component": "Cart Page",
+    "given": "A logged-in user viewing an out-of-stock product detail page",
+    "when": "The user attempts to click the Add to Cart button",
+    "then": "The system prevents the action and displays an out-of-stock message",
+    "estimated_duration": "3"
+  },
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0005",
+    "req_id": "REQ-EC-003",
+    "title": "Verify user can complete checkout with valid payment",
+    "description": "Positive test for checkout flow",
+    "preconditions": "User is logged in with items in cart and valid payment method saved",
+    "test_type": "positive",
+    "priority": "Critical",
+    "steps": [
+      {"action": "Navigate to the shopping cart", "expected_result": "Cart page displays items"},
+      {"action": "Click Proceed to Checkout", "expected_result": "Checkout page is displayed"},
+      {"action": "Select saved payment method", "expected_result": "Payment method is selected"},
+      {"action": "Click Place Order", "expected_result": "Order confirmation page is displayed"}
+    ],
+    "expected_outcome": "Order is placed successfully with confirmation number displayed",
+    "tags": ["checkout", "positive", "req-ec-003"],
+    "category": "Checkout",
+    "component": "Checkout Page",
+    "given": "A logged-in user with items in cart and a valid payment method",
+    "when": "The user proceeds to checkout and places the order",
+    "then": "The system processes the order and displays a confirmation with order number",
+    "estimated_duration": "8"
+  },
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0006",
+    "req_id": "REQ-EC-003",
+    "title": "Validate checkout with expired payment method",
+    "description": "Negative test for checkout with invalid payment",
+    "preconditions": "User is logged in with items in cart and an expired payment method",
+    "test_type": "negative",
+    "priority": "High",
+    "steps": [
+      {"action": "Navigate to the shopping cart", "expected_result": "Cart page displays items"},
+      {"action": "Click Proceed to Checkout", "expected_result": "Checkout page is displayed"},
+      {"action": "Select expired payment method", "expected_result": "Payment method is selected"},
+      {"action": "Click Place Order", "expected_result": "System displays payment error"}
+    ],
+    "expected_outcome": "System rejects the expired payment and displays an appropriate error message",
+    "tags": ["checkout", "negative", "req-ec-003"],
+    "category": "Checkout",
+    "component": "Checkout Page",
+    "given": "A logged-in user with items in cart and an expired payment method",
+    "when": "The user proceeds to checkout and attempts to place the order",
+    "then": "The system rejects the payment and displays an error asking to update payment details",
+    "estimated_duration": "5"
+  }
+]

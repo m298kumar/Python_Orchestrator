@@ -398,7 +398,143 @@ def check_stage_2():
     """BDD Automation Code Generator."""
     check_stage_1()
     print("\n--- Stage 2: BDD Automation Code Generator ---")
-    print("  SKIP  Stage 2 checks not yet implemented")
+
+    global _PASS, _FAIL
+
+    # 1. BDD Agent importable
+    _check_import(
+        "BDD Agent import",
+        "from stlc_platform.agents.bdd_agent import BDDAgent, FeatureFileGenerator, GherkinValidator, StepDefinitionGenerator, StepParser",
+    )
+
+    # 2. Feature generator importable
+    _check_import(
+        "Feature generator import",
+        "from stlc_platform.agents.bdd_agent.feature_generator import FeatureFileGenerator",
+    )
+
+    # 3. Gherkin validator importable
+    _check_import(
+        "Gherkin validator import",
+        "from stlc_platform.agents.bdd_agent.gherkin_validator import GherkinValidator, GherkinValidationResult",
+    )
+
+    # 4. Step parser importable
+    _check_import(
+        "Step parser import",
+        "from stlc_platform.agents.bdd_agent.step_parser import StepParser, ParsedStep, ParameterizedStep",
+    )
+
+    # 5. Step def generator importable
+    _check_import(
+        "Step def generator import",
+        "from stlc_platform.agents.bdd_agent.step_def_generator import StepDefinitionGenerator",
+    )
+
+    # 6. Jinja2 templates exist
+    template_dir = _ROOT / "stlc_platform" / "agents" / "bdd_agent" / "templates"
+    required_templates = ["feature.j2", "behave_steps.py.j2", "pytest_bdd_steps.py.j2"]
+    all_found = all((template_dir / t).exists() for t in required_templates)
+    if all_found:
+        _PASS += 1
+        print(f"  PASS  BDD templates exist ({len(required_templates)} files)")
+    else:
+        _FAIL += 1
+        print("  FAIL  Missing BDD template files")
+
+    # 7. Test case fixtures for BDD exist
+    fixtures_dir = _ROOT / "tests" / "fixtures"
+    bdd_fixtures = [
+        "test_cases_ecommerce.json",
+        "test_cases_healthcare.json",
+        "test_cases_banking.json",
+    ]
+    fixtures_ok = all((fixtures_dir / f).exists() for f in bdd_fixtures)
+    if fixtures_ok:
+        _PASS += 1
+        print(f"  PASS  BDD test case fixtures exist ({len(bdd_fixtures)} files)")
+    else:
+        _FAIL += 1
+        print("  FAIL  Missing BDD test case fixture files")
+
+    # 8. BDDAgent can execute end-to-end (smoke test)
+    _check_import(
+        "BDD Agent smoke test",
+        (
+            "from stlc_platform.agents.bdd_agent import BDDAgent; "
+            "from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact; "
+            "agent = BDDAgent(); "
+            "tc = TestCaseArtifact("
+            "  tc_id='TC-001', req_id='REQ-001', title='Smoke test', "
+            "  description='Smoke', preconditions='Ready', test_type='positive', "
+            "  priority='High', steps=[TestStepArtifact(action='Do it', expected_result='Done')], "
+            "  given='the system is ready', when='the user acts', then='the result is correct'"
+            "); "
+            "r = agent.execute({'test_cases': [tc]}, {'framework': 'behave'}); "
+            "assert r.success, f'BDD Agent failed: {r.errors}'"
+        ),
+    )
+
+    # 9. Generated step defs are valid Python (ast.parse)
+    _check_import(
+        "Step def syntax check",
+        (
+            "import ast; "
+            "from stlc_platform.agents.bdd_agent import BDDAgent; "
+            "from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact; "
+            "agent = BDDAgent(); "
+            "tc = TestCaseArtifact("
+            "  tc_id='TC-001', req_id='REQ-001', title='Syntax check', "
+            "  description='Test', preconditions='Ready', test_type='positive', "
+            "  priority='High', steps=[TestStepArtifact(action='Click', expected_result='OK')], "
+            "  given='the user is logged in', when='the user clicks submit', then='the result is shown'"
+            "); "
+            "r = agent.execute({'test_cases': [tc]}, {'framework': 'behave'}); "
+            "[ast.parse(sd.content) for sd in r.artifacts['step_definitions']]"
+        ),
+    )
+
+    # 10. Behave and Pytest-BDD both supported
+    _check_import(
+        "Framework support (behave + pytest_bdd)",
+        (
+            "from stlc_platform.agents.bdd_agent.step_def_generator import StepDefinitionGenerator; "
+            "b = StepDefinitionGenerator(framework='behave'); "
+            "p = StepDefinitionGenerator(framework='pytest_bdd'); "
+            "assert b.framework == 'behave'; "
+            "assert p.framework == 'pytest_bdd'"
+        ),
+    )
+
+    # 11. No hardcoded domain terms in bdd_agent/
+    _run(
+        "No hardcoded domain terms in BDD agent",
+        [
+            sys.executable, "-c",
+            (
+                "import pathlib; "
+                "agent_dir = pathlib.Path('stlc_platform/agents/bdd_agent'); "
+                "bad = []; "
+                "[bad.append(f'{p.name}:{i+1}: {line.strip()}') "
+                " for p in agent_dir.rglob('*.py') if 'test' not in p.name "
+                " for i, line in enumerate(p.read_text().splitlines()) "
+                " if any(term in line.lower() for term in "
+                "   ['mobile banking', 'patient registration', 'cheque-shaped'])"
+                "]; "
+                "assert len(bad) == 0, f'Found hardcoded terms: {bad}'"
+            ),
+        ],
+    )
+
+    # 12. Stage 2 integration tests pass
+    integration_dir = _ROOT / "tests" / "integration"
+    stage2_tests = list(integration_dir.glob("test_stage2*.py"))
+    if stage2_tests:
+        _run(
+            "Stage 2 integration tests",
+            [sys.executable, "-m", "pytest", str(integration_dir / "test_stage2_validation.py"),
+             "-v", "--tb=short", "-q"],
+        )
 
 
 def check_stage_3():

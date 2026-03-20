@@ -268,3 +268,110 @@ Added 6 new checks to `scripts/validate_stage.py`:
 
 ### Next Steps
 - Stage 2: BDD Automation Code Generator
+
+---
+
+## Session 005 -- 2026-03-18 (Stage 2: BDD Automation Code Generator)
+
+### Context
+- Stage 1 complete (38/38 validation, 341 tests, tagged `stage-1-complete`)
+- User requested: "implement Stage 2 Phase 1: Feature file generator + Gherkin validation tests, Phase 2: Step definition generator for Python Behave + Pytest-BDD"
+
+### Stage 2 Implementation: BDD Automation Code Generator
+
+**Spec Coverage**: Phase 1 (Feature File Generator + Gherkin Validation) and Phase 2 (Step Definition Generator) fully implemented.
+
+#### Phase 1: Feature File Generator + Gherkin Validation
+
+- **Created** `stlc_platform/agents/bdd_agent/feature_generator.py` -- FeatureFileGenerator
+  - Groups TestCaseArtifacts by req_id (one .feature per requirement)
+  - Extracts shared Background (>50% Given text agreement)
+  - Falls back to preconditions/steps when GWT fields are empty
+  - Jinja2 template rendering with override support
+  - Gherkin-safe escaping (Unicode, control chars, comment markers)
+
+- **Created** `stlc_platform/agents/bdd_agent/gherkin_validator.py` -- GherkinValidator
+  - Regex-based validation (no behave dependency required)
+  - Checks: Feature keyword, Scenario presence, When/Then steps, Outline+Examples pairing, tag format, empty steps, duplicate scenario names
+
+- **Created** `stlc_platform/agents/bdd_agent/templates/feature.j2` -- Gherkin feature template
+
+#### Phase 2: Step Definition Generator
+
+- **Created** `stlc_platform/agents/bdd_agent/step_parser.py` -- StepParser
+  - Extracts Given/When/Then/And/But steps from feature content
+  - Deduplicates (case-insensitive normalization)
+  - Parameterizes similar steps with generic param names (param1, param2)
+
+- **Created** `stlc_platform/agents/bdd_agent/step_def_generator.py` -- StepDefinitionGenerator
+  - Supports Behave (@given/@when/@then) and Pytest-BDD (parsers.parse())
+  - Configurable automation lib: Playwright (default) or Selenium
+  - Shared seen_names set across keyword groups prevents duplicate function names
+  - Single-quote escaping in step patterns
+
+- **Created** `stlc_platform/agents/bdd_agent/templates/behave_steps.py.j2` -- Behave template
+- **Created** `stlc_platform/agents/bdd_agent/templates/pytest_bdd_steps.py.j2` -- Pytest-BDD template
+
+#### Agent Assembly
+
+- **Created** `stlc_platform/agents/bdd_agent/agent.py` -- BDDAgent(BaseAgent)
+  - Orchestrates: Feature generation -> Gherkin validation -> Step parsing -> Step def generation
+  - Returns AgentResult with feature_files and step_definitions
+
+- **Updated** `stlc_platform/agents/bdd_agent/__init__.py` -- Exports all 5 public classes
+
+#### Test Fixtures
+
+- **Created** `tests/fixtures/test_cases_ecommerce.json` -- 6 TCs (3 reqs x 2 TCs)
+- **Created** `tests/fixtures/test_cases_healthcare.json` -- 4 TCs (2 reqs x 2 TCs)
+- **Created** `tests/fixtures/test_cases_banking.json` -- 4 TCs (2 reqs x 2 TCs)
+
+#### Tests
+
+- **Created** 5 unit test files under `tests/unit/agents/bdd_agent/`:
+  - `test_gherkin_validator.py` -- 12 tests
+  - `test_feature_generator.py` -- 15 tests
+  - `test_step_parser.py` -- 10 tests
+  - `test_step_def_generator.py` -- 17 tests
+  - `test_agent.py` -- 11 tests
+  - **Total: 65 unit tests**
+
+- **Created** `tests/integration/test_stage2_validation.py` -- 38 integration tests:
+  - Feature file generation (multi-domain, parameterized)
+  - Gherkin validation on all 3 domain fixtures
+  - Step parsing and parameterization
+  - Step definition generation (Behave + Pytest-BDD, syntax validation)
+  - BDDAgent end-to-end pipeline (3 domains)
+  - Cross-domain consistency (no hardcoded terms, no Unicode issues)
+
+#### Infrastructure Updates
+
+- **Updated** `scripts/validate_stage.py` -- Added 12 Stage 2 checks to check_stage_2()
+- **Updated** `pyproject.toml` -- Added pytest-bdd>=7.0.0 to bdd optional deps
+
+### Key Design Decisions
+
+1. **No LLM needed**: All transformations are deterministic -- GWT fields map directly to Gherkin, step defs are pattern-matched skeletons
+2. **Regex-based Gherkin validation**: Works without behave installed (behave is optional), richer error messages tailored to our pipeline
+3. **Generic param names for parameterization**: Using param1/param2 instead of value-derived names ensures consistent pattern signatures for grouping
+4. **Shared seen_names across keyword groups**: Prevents duplicate function names when Given and When steps have identical text
+5. **Template override support**: Both generators accept template_dir and override_dir for user customization
+
+### Bugs Fixed During Implementation
+
+1. **Single quotes in step patterns**: Pattern `'test@example.com'` nested inside `@given('...')` caused SyntaxError -- fixed with `pattern.replace("'", "\\'")`
+2. **Duplicate function names**: Given "A user" + When "A user" both generated `step_a_user` -- fixed by sharing `seen_names` set across all keyword groups
+3. **Parameterization signature mismatch**: Steps differing only in quoted values got different param names -- fixed by using generic names (param1, param2)
+4. **Lint issues**: Removed unused imports (PurePosixPath, Optional), fixed ambiguous variable name `l` -> `line`
+
+### Validation Results
+
+- **65 unit tests pass** (BDD agent)
+- **38 integration tests pass** (Stage 2)
+- **50/50 validation gate checks pass** (Stage 0: 19 + Stage 1: 19 + Stage 2: 12)
+- 0 ruff lint errors
+- 0 mypy errors
+
+### Next Steps
+- Commit Stage 2 and tag `stage-2-complete`
+- Stage 3: Web Crawler & API Test Generator

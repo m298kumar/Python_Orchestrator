@@ -1,0 +1,92 @@
+[
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0001",
+    "req_id": "REQ-HC-001",
+    "title": "Verify new patient can register with valid details",
+    "description": "Positive test for patient registration",
+    "preconditions": "Registration system is available and user has valid identification",
+    "test_type": "positive",
+    "priority": "High",
+    "steps": [
+      {"action": "Navigate to the patient registration form", "expected_result": "Registration form is displayed"},
+      {"action": "Fill in required patient details", "expected_result": "Form fields accept the input"},
+      {"action": "Submit the registration form", "expected_result": "System creates patient record and displays confirmation"}
+    ],
+    "expected_outcome": "Patient is registered with a unique patient ID",
+    "tags": ["patient-registration", "positive", "req-hc-001"],
+    "category": "Registration",
+    "component": "Registration Form",
+    "given": "A new patient with valid identification documents",
+    "when": "The patient fills in the registration form and submits",
+    "then": "The system creates a patient record and assigns a unique patient ID",
+    "estimated_duration": "5"
+  },
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0002",
+    "req_id": "REQ-HC-001",
+    "title": "Validate registration with missing required fields",
+    "description": "Negative test for incomplete registration",
+    "preconditions": "Registration system is available",
+    "test_type": "negative",
+    "priority": "High",
+    "steps": [
+      {"action": "Navigate to the patient registration form", "expected_result": "Registration form is displayed"},
+      {"action": "Leave required fields empty and submit", "expected_result": "System displays validation errors"}
+    ],
+    "expected_outcome": "System prevents registration and highlights missing fields",
+    "tags": ["patient-registration", "negative", "req-hc-001"],
+    "category": "Registration",
+    "component": "Registration Form",
+    "given": "A new patient on the registration form",
+    "when": "The patient submits the form with required fields left empty",
+    "then": "The system displays validation errors for each missing required field",
+    "estimated_duration": "3"
+  },
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0003",
+    "req_id": "REQ-HC-002",
+    "title": "Verify appointment can be scheduled for available slot",
+    "description": "Positive test for appointment scheduling",
+    "preconditions": "Patient is registered and doctor has available slots",
+    "test_type": "positive",
+    "priority": "High",
+    "steps": [
+      {"action": "Search for a doctor by specialty", "expected_result": "List of available doctors is displayed"},
+      {"action": "Select an available time slot", "expected_result": "Time slot is selected"},
+      {"action": "Confirm the appointment", "expected_result": "Appointment confirmation is displayed"}
+    ],
+    "expected_outcome": "Appointment is booked and confirmation is sent",
+    "tags": ["appointment", "positive", "req-hc-002"],
+    "category": "Scheduling",
+    "component": "Appointment Page",
+    "given": "A registered patient and a doctor with available appointment slots",
+    "when": "The patient selects a doctor, picks an available time slot, and confirms",
+    "then": "The system books the appointment and sends a confirmation notification",
+    "estimated_duration": "5"
+  },
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0004",
+    "req_id": "REQ-HC-002",
+    "title": "Validate booking already-taken appointment slot",
+    "description": "Negative test for double-booking prevention",
+    "preconditions": "Patient is registered and the target slot is already booked",
+    "test_type": "negative",
+    "priority": "Medium",
+    "steps": [
+      {"action": "Search for a doctor by specialty", "expected_result": "List of doctors is displayed"},
+      {"action": "Select an already-booked time slot", "expected_result": "System indicates slot is unavailable"}
+    ],
+    "expected_outcome": "System prevents double-booking and suggests alternative slots",
+    "tags": ["appointment", "negative", "req-hc-002"],
+    "category": "Scheduling",
+    "component": "Appointment Page",
+    "given": "A registered patient and a doctor whose target slot is already booked",
+    "when": "The patient attempts to book the already-taken time slot",
+    "then": "The system prevents the booking and suggests alternative available slots",
+    "estimated_duration": "3"
+  }
+]

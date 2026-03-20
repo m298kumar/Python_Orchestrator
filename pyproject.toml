@@ -30,8 +30,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# BDD testing framework
-bdd = ["behave>=1.2.6"]
+# BDD testing frameworks
+bdd = ["behave>=1.2.6", "pytest-bdd>=7.0.0"]
 
 # Sentence transformer embeddings (alternative to Ollama embeddings)
 embeddings = ["sentence-transformers>=2.2.2"]

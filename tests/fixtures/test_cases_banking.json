@@ -1,0 +1,92 @@
+[
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0001",
+    "req_id": "REQ-BK-001",
+    "title": "Verify account balance is displayed correctly",
+    "description": "Positive test for account balance display",
+    "preconditions": "User is authenticated and has an active bank account",
+    "test_type": "positive",
+    "priority": "High",
+    "steps": [
+      {"action": "Log in to the banking portal", "expected_result": "Dashboard is displayed"},
+      {"action": "Navigate to account summary", "expected_result": "Account balance is displayed with current amount"}
+    ],
+    "expected_outcome": "Account balance matches the actual balance in the system",
+    "tags": ["account", "positive", "req-bk-001"],
+    "category": "Account Management",
+    "component": "Dashboard",
+    "given": "An authenticated user with an active bank account",
+    "when": "The user navigates to the account summary page",
+    "then": "The system displays the current account balance with recent transactions",
+    "estimated_duration": "3"
+  },
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0002",
+    "req_id": "REQ-BK-001",
+    "title": "Validate balance display for suspended account",
+    "description": "Negative test for suspended account access",
+    "preconditions": "User is authenticated but account is suspended",
+    "test_type": "negative",
+    "priority": "Medium",
+    "steps": [
+      {"action": "Log in to the banking portal", "expected_result": "Dashboard is displayed"},
+      {"action": "Navigate to account summary", "expected_result": "System displays account suspended notice"}
+    ],
+    "expected_outcome": "System shows account suspended message instead of balance",
+    "tags": ["account", "negative", "req-bk-001"],
+    "category": "Account Management",
+    "component": "Dashboard",
+    "given": "An authenticated user with a suspended bank account",
+    "when": "The user navigates to the account summary page",
+    "then": "The system displays an account suspended notice with contact information",
+    "estimated_duration": "3"
+  },
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0003",
+    "req_id": "REQ-BK-002",
+    "title": "Verify fund transfer between own accounts",
+    "description": "Positive test for internal fund transfer",
+    "preconditions": "User is authenticated with sufficient balance in source account",
+    "test_type": "positive",
+    "priority": "Critical",
+    "steps": [
+      {"action": "Navigate to the fund transfer page", "expected_result": "Transfer form is displayed"},
+      {"action": "Select source and destination accounts", "expected_result": "Accounts are selected"},
+      {"action": "Enter transfer amount and confirm", "expected_result": "Transfer confirmation is displayed"}
+    ],
+    "expected_outcome": "Funds are transferred and both account balances are updated",
+    "tags": ["transfer", "positive", "req-bk-002"],
+    "category": "Fund Transfer",
+    "component": "Transfer Page",
+    "given": "An authenticated user with sufficient balance in the source account",
+    "when": "The user initiates a transfer between own accounts and confirms",
+    "then": "The system processes the transfer and updates both account balances",
+    "estimated_duration": "5"
+  },
+  {
+    "schema_version": "1.0",
+    "tc_id": "TC-0004",
+    "req_id": "REQ-BK-002",
+    "title": "Validate transfer exceeding available balance",
+    "description": "Negative test for insufficient funds transfer",
+    "preconditions": "User is authenticated with limited balance in source account",
+    "test_type": "negative",
+    "priority": "High",
+    "steps": [
+      {"action": "Navigate to the fund transfer page", "expected_result": "Transfer form is displayed"},
+      {"action": "Enter amount exceeding available balance", "expected_result": "Amount field shows the entered value"},
+      {"action": "Click transfer", "expected_result": "System displays insufficient funds error"}
+    ],
+    "expected_outcome": "System rejects the transfer and displays insufficient funds message",
+    "tags": ["transfer", "negative", "req-bk-002"],
+    "category": "Fund Transfer",
+    "component": "Transfer Page",
+    "given": "An authenticated user with limited balance in the source account",
+    "when": "The user attempts to transfer an amount exceeding the available balance",
+    "then": "The system rejects the transfer and displays an insufficient funds error",
+    "estimated_duration": "3"
+  }
+]

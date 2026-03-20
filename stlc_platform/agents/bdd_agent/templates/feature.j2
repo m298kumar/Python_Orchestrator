@@ -1,0 +1,43 @@
+{% for tag in feature_tags %}
+{{ tag }}
+{% endfor %}
+Feature: {{ feature_title }}
+  {{ feature_description }}
+{% if background %}
+
+  Background:
+    Given {{ background }}
+{% endif %}
+{% for scenario in scenarios %}
+
+  {% for tag in scenario.tags %}
+  {{ tag }}
+  {% endfor %}
+  {% if scenario.is_outline %}
+  Scenario Outline: {{ scenario.name }}
+  {% else %}
+  Scenario: {{ scenario.name }}
+  {% endif %}
+  {% if scenario.given %}
+    Given {{ scenario.given }}
+  {% endif %}
+  {% for g in scenario.and_givens %}
+    And {{ g }}
+  {% endfor %}
+    When {{ scenario.when }}
+  {% for w in scenario.and_whens %}
+    And {{ w }}
+  {% endfor %}
+    Then {{ scenario.then }}
+  {% for t in scenario.and_thens %}
+    And {{ t }}
+  {% endfor %}
+  {% if scenario.is_outline and scenario.examples_header %}
+
+    Examples:
+      {{ scenario.examples_header }}
+  {% for row in scenario.examples_rows %}
+      {{ row }}
+  {% endfor %}
+  {% endif %}
+{% endfor %}
