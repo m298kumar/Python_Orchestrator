@@ -186,3 +186,85 @@ Added 6 new checks to `scripts/validate_stage.py`:
 
 ### Next Steps
 - Stage 1: Domain-Agnostic Test Generation Engine
+
+---
+
+## Session 004 — 2026-03-16/17
+
+### Context
+- Stage 0 complete (19/19 validation, 46 tests, tagged `stage-0-complete`)
+- User requested: "Start working on Stage 1, fulfil all tasks from the spec file, document in history folder"
+
+### Stage 1 Implementation: Domain-Agnostic Test Generation Engine
+
+**Spec Coverage**: All 5 sub-specifications (1.1–1.5) fully implemented.
+
+#### Phase 1: LLM Abstraction Completion (Spec 1.1)
+- **Created** `stlc_platform/core/llm/openai_client.py` — OpenAIClient with JSON mode support
+- **Created** `stlc_platform/core/llm/anthropic_client.py` — AnthropicClient with system prompt as top-level param
+- **Modified** `stlc_platform/core/llm/__init__.py` — Added `create_llm_client()` factory with aliases (azure→OpenAI, claude→Anthropic)
+- **Modified** `pyproject.toml` — Added optional deps for openai, anthropic; Jinja2 to core deps
+- **Tests**: 30 unit tests (mocked SDK tests for both providers + factory dispatch)
+
+#### Phase 2: AC Classifier Extraction (Spec 1.2)
+- **Created** `stlc_platform/agents/requirements_agent/classifier.py` — ACClassifier with 6 built-in types, two-tier classification (keyword + LLM fallback), configurable via YAML
+- **Tests**: 26 unit tests covering all 6 AC types, multi-domain ACs, custom types, LLM fallback
+
+#### Phase 3: Sanitiser, Synthesiser & Component Resolver (Spec 1.5)
+- **Created** `sanitiser.py` — TestCaseSanitiser with 7-step pipeline, SanitiserConfig, pluggable post-processors
+- **Created** `synthesiser.py` — Deterministic fallback generators (make_gwt, synthesise_steps, extract_steps, etc.)
+- **Created** `component_resolver.py` — 4-tier priority resolution (LLM → ChromaDB → suffix map → constructed)
+- **Created** `constants.py` — TYPE_VERB, STOPWORDS, COT_INSTRUCTION, TYPE_CONTEXT, all configurable lists
+- **Tests**: 61 unit tests
+
+#### Phase 4: Jinja2 Prompt Template Externalization (Spec 1.3)
+- **Created** `prompts/__init__.py` — PromptRenderer with jinja2.ChoiceLoader (override dir → builtin)
+- **Created** `prompts/_hints.py` — All 18 hint combinations (6 ac_types × 3 test_types), fully parameterized
+- **Created** 3 Jinja2 templates: `system_prompt.j2`, `user_prompt.j2`, `few_shot_block.j2`
+- **Created** `config/prompt_overrides/` directory for user-facing overrides
+- All legacy hardcoded domain references removed ("Cheque" → "Submit", "Patient Registration" → "Registration", etc.)
+- **Tests**: 36 unit tests including parametrized 18-combo matrix
+
+#### Phase 5: Tech Stack Awareness & Domain Detection (Spec 1.4 + 1.2)
+- **Created** `tech_stack.py` — TechStackContext with platform-specific verb mapping (web→click, mobile→tap, api→send request)
+- **Created** `domain_detector.py` — DomainDetector with configurable keyword map, score-based matching
+- **Modified** `config/stlc_config.yaml` — Added ac_types, domain_keywords, sanitiser, component_suffix_map sections
+- **Tests**: 45 unit tests
+
+#### Phase 6: Generator & Agent Assembly
+- **Created** `generator.py` — TestCaseGenerator with full dependency injection (LLM, classifier, sanitiser, prompts, tech_stack, domain_detector)
+- **Created** `agent.py` — TestGenerationAgent(BaseAgent) with validate_input, execute, get_capabilities
+- **Updated** `__init__.py` — Exports all 8 public classes
+- **Bug fix**: Fixed infinite loop in title dedup when truncated titles collide (used full title instead of [:50])
+- **Tests**: 33 unit tests
+
+#### Phase 7: Integration Tests & Validation Gate
+- **Created** 3 domain fixture files: requirements_ecommerce.json, requirements_healthcare.json, requirements_banking.json
+- **Created** `tests/integration/test_stage1_validation.py` — 43 integration tests covering:
+  - Multi-domain detection (3 domains, all distinct)
+  - Multi-provider factory dispatch
+  - Template rendering (all 18 combos + 4 platforms)
+  - Full pipeline (reader → agent.execute() → valid TestCaseArtifact list) for all 3 domains
+  - Sanitiser integration (instruction text, trivial outcomes, generic steps)
+  - Classifier multi-domain AC types
+- **Updated** `scripts/validate_stage.py` — Added 19 Stage 1 checks
+
+### Key Decisions
+1. **Hybrid hint approach**: Key templates as .j2 files, type hints as Python code with .j2 override capability
+2. **Full title comparison for dedup**: Changed from [:50] truncation to full title comparison to prevent infinite loops
+3. **Score-based domain detection**: Replaced legacy if/elif chain with configurable keyword-score matching
+4. **Dependency injection everywhere**: All new modules accept deps via constructor for testability
+
+### Test Results
+- **341 total tests** (298 unit + 43 integration) — ALL PASSING
+
+### Exit Criteria Verification
+- ✅ No hardcoded domain terms in `stlc_platform/agents/requirements_agent/`
+- ✅ 3 domains tested (e-commerce, healthcare, banking) — all produce valid output
+- ✅ 3 LLM providers supported (Ollama, OpenAI, Anthropic) with factory dispatch
+- ✅ All prompt text externalized to .j2 templates
+- ✅ Validation gate passes
+- ✅ 341 tests passing
+
+### Next Steps
+- Stage 2: BDD Automation Code Generator

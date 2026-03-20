@@ -1,0 +1,27 @@
+
+── FEW-SHOT EXAMPLES ───────────────────────────────────────────────
+Study the pattern in these approved test cases before writing yours.
+Your test case must follow the same level of specificity.
+Substitute values from the TARGET ACCEPTANCE CRITERION above — do not copy these examples.
+
+{% for ex in examples %}
+EXAMPLE {{ loop.index }}  [{{ ex.get('test_type', '') }} | {{ ex.get('ac_type', '') }}]
+  description:   {{ ex.get('description', '')[:120] }}
+  preconditions: {{ ex.get('preconditions', '')[:120] }}
+  given: {{ ex.get('given', '')[:100] }}
+  when:  {{ ex.get('when', '')[:100] }}
+  then:  {{ ex.get('then', '')[:100] }}
+  steps:
+{% for step in ex.get('steps', [])[:5] %}
+{% if step is mapping %}
+    {{ loop.index }}. {{ step.get('action', '')[:100] }}
+       -> {{ step.get('expected_result', '')[:100] }}
+{% endif %}
+{% endfor %}
+  expected_outcome: {{ ex.get('expected_outcome', '')[:120] }}
+  component: {{ ex.get('component', '') }}
+{% if not loop.last %}
+
+{% endif %}
+{% endfor %}
+── END EXAMPLES ────────────────────────────────────────────────────

@@ -1,0 +1,41 @@
+[
+  {
+    "req_id": "REQ-EC-001",
+    "title": "Product Search Functionality",
+    "description": "Users should be able to search for products by name, category, or keyword.",
+    "priority": "High",
+    "category": "Product Catalogue",
+    "acceptance_criteria": [
+      "User can enter a search term and view matching products",
+      "Search results display product name, price, and thumbnail image",
+      "System returns results within 2 seconds of submitting search"
+    ],
+    "tags": ["search", "product"]
+  },
+  {
+    "req_id": "REQ-EC-002",
+    "title": "Shopping Cart Management",
+    "description": "Users should be able to add, remove, and update items in their shopping cart.",
+    "priority": "High",
+    "category": "Shopping Cart",
+    "acceptance_criteria": [
+      "User can add a product to the cart from the product detail page",
+      "Cart displays correct total price including quantity adjustments",
+      "User receives confirmation message when item is added to cart"
+    ],
+    "tags": ["cart", "checkout"]
+  },
+  {
+    "req_id": "REQ-EC-003",
+    "title": "Checkout Payment Processing",
+    "description": "Users should be able to complete purchase using multiple payment methods.",
+    "priority": "Critical",
+    "category": "Checkout",
+    "acceptance_criteria": [
+      "User can select from credit card, debit card, or digital wallet payment",
+      "System validates payment details before processing transaction",
+      "Order confirmation page displays order number and estimated delivery date"
+    ],
+    "tags": ["payment", "checkout"]
+  }
+]

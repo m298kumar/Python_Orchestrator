@@ -38,6 +38,101 @@ test_generation:
   include_edge_cases: true
   format: gherkin
 
+  # AC type classification keywords (Phase 2)
+  ac_types:
+    security:
+      keywords: ["password", "auth", "login", "encrypt", "token", "credential",
+                 "access control", "permission", "role", "session", "mfa",
+                 "two-factor", "oauth", "ssl", "tls", "certificate",
+                 "vulnerability", "injection", "xss", "csrf", "sanitize"]
+    timing:
+      keywords: ["timeout", "expire", "deadline", "schedule", "interval",
+                 "within * minutes", "within * seconds", "within * hours",
+                 "before", "after", "duration", "elapsed", "countdown",
+                 "real-time", "delay", "latency", "ttl"]
+    eligibility:
+      keywords: ["eligible", "qualify", "condition", "criteria", "require",
+                 "must be", "only if", "prerequisite", "minimum", "maximum",
+                 "at least", "no more than", "threshold", "limit"]
+    data_valid:
+      keywords: ["valid", "invalid", "format", "length", "range", "pattern",
+                 "regex", "mandatory", "optional", "required field",
+                 "alphanumeric", "numeric", "email", "phone", "date format",
+                 "min length", "max length", "character"]
+    ui_behaviour:
+      keywords: ["display", "show", "hide", "enable", "disable", "visible",
+                 "button", "dropdown", "modal", "popup", "tooltip", "scroll",
+                 "highlight", "focus", "hover", "toggle", "collapse", "expand",
+                 "placeholder", "label", "icon", "color", "font"]
+    general:
+      keywords: []
+
+  # Domain detection keywords (Phase 5)
+  domain_keywords:
+    financial services:
+      - cheque
+      - banking
+      - deposit
+      - transaction
+      - account
+      - ledger
+      - transfer
+      - payment
+    healthcare:
+      - patient
+      - clinical
+      - ehr
+      - prescription
+      - pharmacy
+      - diagnosis
+      - medical
+      - health
+    retail e-commerce:
+      - product
+      - cart
+      - checkout
+      - inventory
+      - catalogue
+      - order
+      - shipping
+    insurance:
+      - policy
+      - claim
+      - premium
+      - underwriting
+    education:
+      - student
+      - course
+      - enrol
+      - grade
+      - curriculum
+      - lms
+    IT service management:
+      - ticket
+      - incident
+      - asset
+      - sla
+      - helpdesk
+      - itil
+
+  # Sanitiser configuration (Phase 3)
+  sanitiser:
+    min_desc_length: 15
+    min_step_length: 10
+    max_step_count: 20
+    min_step_count: 1
+
+  # Component suffix map (Phase 3)
+  component_suffix_map:
+    login: "Login Screen"
+    register: "Registration Screen"
+    dashboard: "Dashboard"
+    settings: "Settings Page"
+    profile: "Profile Page"
+    search: "Search Page"
+    checkout: "Checkout Page"
+    cart: "Shopping Cart"
+
 bdd:
   language: python          # python | java | javascript | csharp
   framework: behave         # behave | pytest_bdd | cucumber | cucumber_js | specflow

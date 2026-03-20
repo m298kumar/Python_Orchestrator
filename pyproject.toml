@@ -26,6 +26,7 @@ dependencies = [
     "click>=8.1.0",
     "requests>=2.31.0",
     "PyYAML>=6.0",
+    "Jinja2>=3.1.0",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +38,12 @@ embeddings = ["sentence-transformers>=2.2.2"]
 
 # MCP server for tool exposure
 mcp = ["mcp>=1.0.0"]
+
+# OpenAI provider
+openai = ["openai>=1.0.0"]
+
+# Anthropic provider
+anthropic = ["anthropic>=0.25.0"]
 
 # LangChain integrations (optional, for future provider chains)
 langchain = [

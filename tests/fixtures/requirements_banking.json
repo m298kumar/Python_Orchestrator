@@ -1,0 +1,41 @@
+[
+  {
+    "req_id": "REQ-BK-001",
+    "title": "Account Balance Inquiry",
+    "description": "Customers should be able to view their current account balance and recent transactions.",
+    "priority": "High",
+    "category": "Account Management",
+    "acceptance_criteria": [
+      "Customer can view current balance after successful authentication",
+      "Transaction history displays last 30 days of activity by default",
+      "Balance updates are reflected within 3 seconds of a completed transaction"
+    ],
+    "tags": ["account", "balance"]
+  },
+  {
+    "req_id": "REQ-BK-002",
+    "title": "Fund Transfer",
+    "description": "Customers should be able to transfer funds between accounts securely.",
+    "priority": "Critical",
+    "category": "Transaction Processing",
+    "acceptance_criteria": [
+      "Customer can initiate transfer between own accounts or to external accounts",
+      "System requires OTP verification for transfers exceeding the daily limit",
+      "Transfer confirmation displays transaction reference number and expected settlement date"
+    ],
+    "tags": ["transfer", "payment"]
+  },
+  {
+    "req_id": "REQ-BK-003",
+    "title": "Deposit Processing",
+    "description": "Customers should be able to deposit funds via multiple channels.",
+    "priority": "High",
+    "category": "Deposit Management",
+    "acceptance_criteria": [
+      "Customer can initiate a deposit through mobile, ATM, or branch channels",
+      "System validates deposit amount and displays confirmation before processing",
+      "Deposited funds are available in the account within the stated processing time"
+    ],
+    "tags": ["deposit", "banking"]
+  }
+]

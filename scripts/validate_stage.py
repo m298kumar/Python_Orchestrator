@@ -227,8 +227,171 @@ def check_stage_1():
     """Domain-Agnostic Test Generation."""
     check_stage_0()  # Cumulative
     print("\n--- Stage 1: Domain-Agnostic Test Generation ---")
-    # TODO: Add Stage 1 specific checks when implemented
-    print("  SKIP  Stage 1 checks not yet implemented")
+
+    # 1. LLM factory importable with all providers
+    _check_import(
+        "LLM factory import",
+        "from stlc_platform.core.llm import create_llm_client, OllamaClient, OpenAIClient, AnthropicClient",
+    )
+
+    # 2. OpenAI client importable
+    _check_import(
+        "OpenAI client import",
+        "from stlc_platform.core.llm.openai_client import OpenAIClient",
+    )
+
+    # 3. Anthropic client importable
+    _check_import(
+        "Anthropic client import",
+        "from stlc_platform.core.llm.anthropic_client import AnthropicClient",
+    )
+
+    # 4. AC Classifier importable
+    _check_import(
+        "AC Classifier import",
+        "from stlc_platform.agents.requirements_agent.classifier import ACClassifier, ClassificationResult",
+    )
+
+    # 5. Sanitiser importable
+    _check_import(
+        "Sanitiser import",
+        "from stlc_platform.agents.requirements_agent.sanitiser import TestCaseSanitiser, SanitiserConfig",
+    )
+
+    # 6. Synthesiser importable
+    _check_import(
+        "Synthesiser import",
+        "from stlc_platform.agents.requirements_agent.synthesiser import make_gwt, synthesise_steps, extract_steps",
+    )
+
+    # 7. Component resolver importable
+    _check_import(
+        "Component resolver import",
+        "from stlc_platform.agents.requirements_agent.component_resolver import ComponentResolver",
+    )
+
+    # 8. Prompt renderer importable
+    _check_import(
+        "Prompt renderer import",
+        "from stlc_platform.agents.requirements_agent.prompts import PromptRenderer",
+    )
+
+    # 9. Tech stack importable
+    _check_import(
+        "Tech stack import",
+        "from stlc_platform.agents.requirements_agent.tech_stack import TechStackContext",
+    )
+
+    # 10. Domain detector importable
+    _check_import(
+        "Domain detector import",
+        "from stlc_platform.agents.requirements_agent.domain_detector import DomainDetector",
+    )
+
+    # 11. Generator importable
+    _check_import(
+        "Generator import",
+        "from stlc_platform.agents.requirements_agent.generator import TestCaseGenerator",
+    )
+
+    # 12. Agent importable
+    _check_import(
+        "Agent import",
+        "from stlc_platform.agents.requirements_agent.agent import TestGenerationAgent",
+    )
+
+    # 13. Package __init__ exports all classes
+    _check_import(
+        "Package exports",
+        (
+            "from stlc_platform.agents.requirements_agent import "
+            "TestGenerationAgent, TestCaseGenerator, ACClassifier, "
+            "ComponentResolver, DomainDetector, PromptRenderer, "
+            "TestCaseSanitiser, TechStackContext"
+        ),
+    )
+
+    # 14. Factory dispatches correctly
+    _check_import(
+        "Factory dispatch - ollama",
+        (
+            "from stlc_platform.core.llm import create_llm_client; "
+            "from stlc_platform.core.llm.ollama_client import OllamaClient; "
+            "c = create_llm_client('ollama'); "
+            "assert isinstance(c, OllamaClient)"
+        ),
+    )
+
+    # 15. Multi-domain classifier check
+    _check_import(
+        "Multi-domain classifier",
+        (
+            "from stlc_platform.agents.requirements_agent.classifier import ACClassifier; "
+            "c = ACClassifier(); "
+            "assert c.classify('must authenticate via OTP').ac_type == 'security'; "
+            "assert c.classify('response within 3 seconds').ac_type == 'timing'; "
+            "assert c.classify('field must be validated').ac_type == 'data_valid'"
+        ),
+    )
+
+    # 16. Template completeness check
+    global _PASS, _FAIL
+    template_dir = _ROOT / "stlc_platform" / "agents" / "requirements_agent" / "prompts" / "templates"
+    required_templates = ["system_prompt.j2", "user_prompt.j2", "few_shot_block.j2"]
+    all_found = True
+    for t in required_templates:
+        if not (template_dir / t).exists():
+            all_found = False
+            break
+    if all_found:
+        _PASS += 1
+        print(f"  PASS  Template files exist ({len(required_templates)} required)")
+    else:
+        _FAIL += 1
+        print("  FAIL  Missing required template files")
+
+    # 17. No hardcoded domain terms in requirements_agent/
+    _run(
+        "No hardcoded domain terms",
+        [
+            sys.executable, "-c",
+            (
+                "import pathlib, re; "
+                "agent_dir = pathlib.Path('stlc_platform/agents/requirements_agent'); "
+                "bad = []; "
+                "[bad.append(f'{p.name}:{i+1}: {line.strip()}') "
+                " for p in agent_dir.rglob('*.py') if 'test' not in p.name "
+                " for i, line in enumerate(p.read_text().splitlines()) "
+                " if any(term in line.lower() for term in "
+                "   ['mobile banking app', 'patient registration screen', 'cheque-shaped'])"
+                "]; "
+                "assert len(bad) == 0, f'Found hardcoded terms: {bad}'"
+            ),
+        ],
+    )
+
+    # 18. Fixture files exist
+    fixtures_dir = _ROOT / "tests" / "fixtures"
+    fixture_files = [
+        "requirements_ecommerce.json",
+        "requirements_healthcare.json",
+        "requirements_banking.json",
+    ]
+    fixtures_ok = all((fixtures_dir / f).exists() for f in fixture_files)
+    if fixtures_ok:
+        _PASS += 1
+        print(f"  PASS  Domain fixture files exist ({len(fixture_files)} files)")
+    else:
+        _FAIL += 1
+        print("  FAIL  Missing domain fixture files")
+
+    # 19. Integration tests
+    integration_dir = _ROOT / "tests" / "integration"
+    if integration_dir.exists() and list(integration_dir.glob("test_stage1*.py")):
+        _run(
+            "Stage 1 integration tests",
+            [sys.executable, "-m", "pytest", str(integration_dir), "-v", "--tb=short", "-q"],
+        )
 
 
 def check_stage_2():

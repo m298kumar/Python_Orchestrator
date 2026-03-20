@@ -1,0 +1,31 @@
+Write test case {{ test_number }} of {{ total }} for this requirement.
+
+REQUIREMENT {{ requirement.req_id }}: {{ requirement.title }}
+{{ requirement.description }}
+
+ALL ACCEPTANCE CRITERIA:
+{{ all_ac_text }}
+
+TARGET ACCEPTANCE CRITERION (type: {{ ac_type_label }}):
+  {{ ac }}
+
+{{ type_context }}
+{{ context_block }}
+{{ few_shot_block }}
+{{ cot_instruction }}
+
+MANDATORY TITLE -- copy this exactly into the title field:
+  {{ slot.title }}
+
+Fill each field below with content specific to this requirement and AC.
+Do not copy the field label text into your answer.
+{{ gherkin_section }}
+description:      {{ hints.desc }}
+preconditions:    {{ hints.pre }}
+steps:
+{{ hints.steps }}
+expected_outcome: {{ hints.outcome }}
+component:        Name the specific screen or service relevant to this requirement
+                  (e.g. "Registration Screen", "Order Confirmation Screen",
+                  "OTP Verification Screen") -- not a generic app name
+tags:             ["{{ cat_tag }}", "{{ tt }}", "{{ req_tag }}"]

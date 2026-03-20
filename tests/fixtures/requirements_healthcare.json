@@ -1,0 +1,41 @@
+[
+  {
+    "req_id": "REQ-HC-001",
+    "title": "Patient Registration",
+    "description": "New patients must be registered in the system with demographic and insurance information.",
+    "priority": "High",
+    "category": "Patient Management",
+    "acceptance_criteria": [
+      "Receptionist can enter patient demographics including name, DOB, and address",
+      "System validates insurance policy number format before saving",
+      "Patient record is assigned a unique MRN upon successful registration"
+    ],
+    "tags": ["patient", "registration"]
+  },
+  {
+    "req_id": "REQ-HC-002",
+    "title": "Appointment Scheduling",
+    "description": "Patients should be able to schedule appointments with healthcare providers.",
+    "priority": "High",
+    "category": "Clinical Scheduling",
+    "acceptance_criteria": [
+      "Patient can view available time slots for a selected provider",
+      "System prevents double-booking the same provider for overlapping time slots",
+      "Confirmation notification is sent within 5 minutes of booking"
+    ],
+    "tags": ["appointment", "scheduling"]
+  },
+  {
+    "req_id": "REQ-HC-003",
+    "title": "Prescription Management",
+    "description": "Providers must be able to create and manage prescriptions electronically.",
+    "priority": "Critical",
+    "category": "Pharmacy",
+    "acceptance_criteria": [
+      "Provider can search for medications by name or NDC code",
+      "System checks for drug interactions before allowing prescription submission",
+      "Patient receives prescription notification via their preferred communication channel"
+    ],
+    "tags": ["prescription", "pharmacy"]
+  }
+]
