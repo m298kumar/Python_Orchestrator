@@ -1,0 +1,526 @@
+{
+  "schema_version": "1.1",
+  "base_url": "http://localhost",
+  "pages": [
+    {
+      "url": "http://localhost/login",
+      "title": "Login - MyApp",
+      "elements": [
+        {
+          "element_type": "input",
+          "name": "username",
+          "selector": "#username",
+          "text": "Enter username",
+          "attributes": {
+            "type": "text",
+            "placeholder": "Enter username"
+          }
+        },
+        {
+          "element_type": "input",
+          "name": "password",
+          "selector": "#password",
+          "text": "Enter password",
+          "attributes": {
+            "type": "password",
+            "placeholder": "Enter password"
+          }
+        },
+        {
+          "element_type": "button",
+          "name": "Sign In",
+          "selector": "[data-testid=\"login-btn\"]",
+          "text": "Sign In",
+          "attributes": {
+            "type": "submit",
+            "data-testid": "login-btn"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Dashboard",
+          "selector": "a",
+          "text": "Dashboard",
+          "attributes": {
+            "href": "/dashboard"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Products",
+          "selector": "a",
+          "text": "Products",
+          "attributes": {
+            "href": "/products"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Checkout",
+          "selector": "a",
+          "text": "Checkout",
+          "attributes": {
+            "href": "/checkout"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Forgot Password?",
+          "selector": "a",
+          "text": "Forgot Password?",
+          "attributes": {
+            "href": "/forgot-password"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Help",
+          "selector": "a",
+          "text": "Help",
+          "attributes": {
+            "href": "javascript:void(0)"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Contact Support",
+          "selector": "a",
+          "text": "Contact Support",
+          "attributes": {
+            "href": "mailto:support@myapp.com"
+          }
+        }
+      ],
+      "forms": [
+        {
+          "action": "/api/auth/login",
+          "method": "POST",
+          "fields": [
+            {
+              "name": "username",
+              "type": "text",
+              "required": "true"
+            },
+            {
+              "name": "password",
+              "type": "password",
+              "required": "true"
+            }
+          ]
+        }
+      ],
+      "api_calls": []
+    },
+    {
+      "url": "http://localhost/dashboard",
+      "title": "Dashboard - MyApp",
+      "elements": [
+        {
+          "element_type": "input",
+          "name": "q",
+          "selector": "[data-testid=\"search-input\"]",
+          "text": "Search products...",
+          "attributes": {
+            "type": "text",
+            "placeholder": "Search products...",
+            "data-testid": "search-input"
+          }
+        },
+        {
+          "element_type": "button",
+          "name": "search-btn",
+          "selector": "#search-btn",
+          "text": "Search",
+          "attributes": {
+            "type": "submit"
+          }
+        },
+        {
+          "element_type": "button",
+          "name": "logout-btn",
+          "selector": "#logout-btn",
+          "text": "Logout",
+          "attributes": {
+            "aria-label": "Logout"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Login",
+          "selector": "a",
+          "text": "Login",
+          "attributes": {
+            "href": "/login"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Products",
+          "selector": "a",
+          "text": "Products",
+          "attributes": {
+            "href": "/products"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Checkout",
+          "selector": "a",
+          "text": "Checkout",
+          "attributes": {
+            "href": "/checkout"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Profile",
+          "selector": "a",
+          "text": "Profile",
+          "attributes": {
+            "href": "/profile"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "External Help",
+          "selector": "a",
+          "text": "External Help",
+          "attributes": {
+            "href": "https://external-site.com/help"
+          }
+        }
+      ],
+      "forms": [
+        {
+          "action": "/search",
+          "method": "GET",
+          "fields": [
+            {
+              "name": "q",
+              "type": "text",
+              "required": "false"
+            }
+          ]
+        }
+      ],
+      "api_calls": []
+    },
+    {
+      "url": "http://localhost/products",
+      "title": "Products - MyApp",
+      "elements": [
+        {
+          "element_type": "input",
+          "name": "search",
+          "selector": "input[name=\"search\"]",
+          "text": "Filter products...",
+          "attributes": {
+            "type": "text",
+            "placeholder": "Filter products..."
+          }
+        },
+        {
+          "element_type": "button",
+          "name": "Filter",
+          "selector": "[data-testid=\"filter-btn\"]",
+          "text": "Filter",
+          "attributes": {
+            "type": "submit",
+            "data-testid": "filter-btn"
+          }
+        },
+        {
+          "element_type": "button",
+          "name": "Add to Cart",
+          "selector": "[data-testid=\"add-cart-1\"]",
+          "text": "Add to Cart",
+          "attributes": {
+            "data-testid": "add-cart-1"
+          }
+        },
+        {
+          "element_type": "button",
+          "name": "Add to Cart",
+          "selector": "[data-testid=\"add-cart-2\"]",
+          "text": "Add to Cart",
+          "attributes": {
+            "data-testid": "add-cart-2"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Login",
+          "selector": "a",
+          "text": "Login",
+          "attributes": {
+            "href": "/login"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Dashboard",
+          "selector": "a",
+          "text": "Dashboard",
+          "attributes": {
+            "href": "/dashboard"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Checkout",
+          "selector": "a",
+          "text": "Checkout",
+          "attributes": {
+            "href": "/checkout"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Laptop Pro",
+          "selector": "a",
+          "text": "Laptop Pro",
+          "attributes": {
+            "href": "/products/1"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Wireless Mouse",
+          "selector": "a",
+          "text": "Wireless Mouse",
+          "attributes": {
+            "href": "/products/2"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "1",
+          "selector": "a",
+          "text": "1",
+          "attributes": {
+            "href": "/products?page=1"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "2",
+          "selector": "a",
+          "text": "2",
+          "attributes": {
+            "href": "/products?page=2"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "3",
+          "selector": "a",
+          "text": "3",
+          "attributes": {
+            "href": "/products?page=3"
+          }
+        },
+        {
+          "element_type": "select",
+          "name": "category",
+          "selector": "select[name=\"category\"]",
+          "text": "All CategoriesElectronicsClothing",
+          "attributes": {}
+        }
+      ],
+      "forms": [
+        {
+          "action": "/products",
+          "method": "GET",
+          "fields": [
+            {
+              "name": "search",
+              "type": "text",
+              "required": "false"
+            },
+            {
+              "name": "category",
+              "type": "select",
+              "required": "false"
+            }
+          ]
+        }
+      ],
+      "api_calls": []
+    },
+    {
+      "url": "http://localhost/checkout",
+      "title": "Checkout - MyApp",
+      "elements": [
+        {
+          "element_type": "input",
+          "name": "card_number",
+          "selector": "input[name=\"card_number\"]",
+          "text": "Card Number",
+          "attributes": {
+            "type": "text",
+            "placeholder": "Card Number"
+          }
+        },
+        {
+          "element_type": "input",
+          "name": "expiry",
+          "selector": "input[name=\"expiry\"]",
+          "text": "MM/YY",
+          "attributes": {
+            "type": "text",
+            "placeholder": "MM/YY"
+          }
+        },
+        {
+          "element_type": "input",
+          "name": "cvv",
+          "selector": "input[name=\"cvv\"]",
+          "text": "CVV",
+          "attributes": {
+            "type": "text",
+            "placeholder": "CVV"
+          }
+        },
+        {
+          "element_type": "input",
+          "name": "address",
+          "selector": "input[name=\"address\"]",
+          "text": "Street Address",
+          "attributes": {
+            "type": "text",
+            "placeholder": "Street Address"
+          }
+        },
+        {
+          "element_type": "input",
+          "name": "city",
+          "selector": "input[name=\"city\"]",
+          "text": "City",
+          "attributes": {
+            "type": "text",
+            "placeholder": "City"
+          }
+        },
+        {
+          "element_type": "input",
+          "name": "zip",
+          "selector": "input[name=\"zip\"]",
+          "text": "ZIP Code",
+          "attributes": {
+            "type": "text",
+            "placeholder": "ZIP Code"
+          }
+        },
+        {
+          "element_type": "button",
+          "name": "Place Order",
+          "selector": "[data-testid=\"place-order-btn\"]",
+          "text": "Place Order",
+          "attributes": {
+            "type": "submit",
+            "data-testid": "place-order-btn"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Login",
+          "selector": "a",
+          "text": "Login",
+          "attributes": {
+            "href": "/login"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Dashboard",
+          "selector": "a",
+          "text": "Dashboard",
+          "attributes": {
+            "href": "/dashboard"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Products",
+          "selector": "a",
+          "text": "Products",
+          "attributes": {
+            "href": "/products"
+          }
+        },
+        {
+          "element_type": "link",
+          "name": "Back to Cart",
+          "selector": "a",
+          "text": "Back to Cart",
+          "attributes": {
+            "href": "/cart"
+          }
+        }
+      ],
+      "forms": [
+        {
+          "action": "/api/orders",
+          "method": "POST",
+          "fields": [
+            {
+              "name": "card_number",
+              "type": "text",
+              "required": "true"
+            },
+            {
+              "name": "expiry",
+              "type": "text",
+              "required": "true"
+            },
+            {
+              "name": "cvv",
+              "type": "text",
+              "required": "true"
+            },
+            {
+              "name": "address",
+              "type": "text",
+              "required": "false"
+            },
+            {
+              "name": "city",
+              "type": "text",
+              "required": "false"
+            },
+            {
+              "name": "zip",
+              "type": "text",
+              "required": "false"
+            }
+          ]
+        }
+      ],
+      "api_calls": []
+    }
+  ],
+  "navigation_graph": {
+    "http://localhost/login": [
+      "http://localhost/dashboard",
+      "http://localhost/products",
+      "http://localhost/checkout"
+    ],
+    "http://localhost/dashboard": [
+      "http://localhost/login",
+      "http://localhost/products",
+      "http://localhost/checkout"
+    ],
+    "http://localhost/products": [
+      "http://localhost/login",
+      "http://localhost/dashboard",
+      "http://localhost/checkout"
+    ],
+    "http://localhost/checkout": [
+      "http://localhost/login",
+      "http://localhost/dashboard",
+      "http://localhost/products"
+    ]
+  },
+  "crawl_timestamp": "2026-03-20T22:08:44.293695+00:00",
+  "discrepancies": null
+}

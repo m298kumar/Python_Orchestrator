@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Login - MyApp</title></head>
+<body>
+  <nav>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/products">Products</a>
+    <a href="/checkout">Checkout</a>
+  </nav>
+  <h1>Login</h1>
+  <form action="/api/auth/login" method="POST">
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username" placeholder="Enter username" required>
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" placeholder="Enter password" required>
+    <button type="submit" data-testid="login-btn">Sign In</button>
+  </form>
+  <a href="/forgot-password">Forgot Password?</a>
+  <a href="javascript:void(0)">Help</a>
+  <a href="mailto:support@myapp.com">Contact Support</a>
+</body>
+</html>

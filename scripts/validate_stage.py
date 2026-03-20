@@ -538,10 +538,131 @@ def check_stage_2():
 
 
 def check_stage_3():
-    """Web Crawler & API Test Generator."""
+    """Web Crawler & API Test Generator (Phase 1: Crawler Agent)."""
     check_stage_2()
     print("\n--- Stage 3: Web Crawler & API Test Generator ---")
-    print("  SKIP  Stage 3 checks not yet implemented")
+
+    global _PASS, _FAIL
+
+    # 1. CrawlerAgent package importable
+    _check_import(
+        "Crawler Agent package import",
+        "from stlc_platform.agents.crawler_agent import CrawlerAgent, PageParser, SiteModelBuilder, DiscrepancyDetector",
+    )
+
+    # 2. PageParser importable
+    _check_import(
+        "PageParser import",
+        "from stlc_platform.agents.crawler_agent.page_parser import PageParser",
+    )
+
+    # 3. SiteModelBuilder importable
+    _check_import(
+        "SiteModelBuilder import",
+        "from stlc_platform.agents.crawler_agent.site_model_builder import SiteModelBuilder",
+    )
+
+    # 4. DiscrepancyDetector importable
+    _check_import(
+        "DiscrepancyDetector import",
+        "from stlc_platform.agents.crawler_agent.discrepancy_detector import DiscrepancyDetector",
+    )
+
+    # 5. New contracts importable (DiscrepancyArtifact, DiscrepancyReportArtifact)
+    _check_import(
+        "Discrepancy contracts import",
+        "from stlc_platform.core.contracts import DiscrepancyArtifact, DiscrepancyReportArtifact",
+    )
+
+    # 6. HTML fixture files exist (4 files)
+    fixtures_dir = _ROOT / "tests" / "fixtures" / "html_pages"
+    html_fixtures = ["login.html", "dashboard.html", "product_list.html", "checkout.html"]
+    all_exist = all((fixtures_dir / f).exists() for f in html_fixtures)
+    if all_exist:
+        _PASS += 1
+        print(f"  PASS  HTML fixture files exist ({len(html_fixtures)} files)")
+    else:
+        _FAIL += 1
+        print("  FAIL  Missing HTML fixture files")
+
+    # 7. Site model fixture exists
+    site_model_fixture = _ROOT / "tests" / "fixtures" / "site_model_ecommerce.json"
+    if site_model_fixture.exists():
+        _PASS += 1
+        print("  PASS  site_model_ecommerce.json exists")
+    else:
+        _FAIL += 1
+        print("  FAIL  site_model_ecommerce.json missing")
+
+    # 8. CrawlerAgent smoke test (parse HTML, verify success)
+    _check_import(
+        "CrawlerAgent smoke test",
+        (
+            "from stlc_platform.agents.crawler_agent import CrawlerAgent; "
+            "agent = CrawlerAgent(); "
+            "html_pages = {'http://localhost/test': '<html><head><title>Test</title></head>"
+            "<body><form><input name=\"email\" type=\"text\"><button type=\"submit\">Go</button></form></body></html>'}; "
+            "r = agent.execute({'html_pages': html_pages}, {}); "
+            "assert r.success, f'CrawlerAgent failed: {r.errors}'; "
+            "assert r.metadata['total_pages'] == 1; "
+            "assert r.metadata['total_elements'] > 0"
+        ),
+    )
+
+    # 9. Discrepancy detection smoke test
+    _check_import(
+        "Discrepancy detection smoke test",
+        (
+            "from stlc_platform.agents.crawler_agent import CrawlerAgent; "
+            "from stlc_platform.core.contracts import RequirementArtifact; "
+            "agent = CrawlerAgent(); "
+            "html = {'http://localhost/login': '<html><head><title>Login</title></head>"
+            "<body><form><input name=\"username\"><button>Sign In</button></form></body></html>'}; "
+            "reqs = [RequirementArtifact(req_id=\"REQ-T\", title=\"Login\", description=\"Login page\", "
+            "acceptance_criteria=[\"User clicks Sign In button\"], priority=\"High\")]; "
+            "r = agent.execute({'html_pages': html, 'requirements': reqs}, {}); "
+            "assert r.success; "
+            "assert 'discrepancy_report' in r.artifacts; "
+            "assert 'gate_decision' in r.metadata"
+        ),
+    )
+
+    # 10. No hardcoded domain terms in crawler_agent/
+    _run(
+        "No hardcoded domain terms in crawler agent",
+        [
+            sys.executable, "-c",
+            (
+                "import pathlib; "
+                "agent_dir = pathlib.Path('stlc_platform/agents/crawler_agent'); "
+                "bad = []; "
+                "[bad.append(f'{p.name}:{i+1}: {line.strip()}') "
+                " for p in agent_dir.rglob('*.py') if 'test' not in p.name "
+                " for i, line in enumerate(p.read_text().splitlines()) "
+                " if any(term in line.lower() for term in "
+                "   ['mobile banking', 'patient registration', 'cheque-shaped'])"
+                "]; "
+                "assert len(bad) == 0, f'Found hardcoded terms: {bad}'"
+            ),
+        ],
+    )
+
+    # 11. Stage 3 unit tests pass
+    unit_test_dir = _ROOT / "tests" / "unit" / "agents" / "crawler_agent"
+    if unit_test_dir.exists():
+        _run(
+            "Stage 3 unit tests",
+            [sys.executable, "-m", "pytest", str(unit_test_dir), "-v", "--tb=short", "-q"],
+        )
+
+    # 12. Stage 3 integration tests pass
+    integration_dir = _ROOT / "tests" / "integration"
+    stage3_test = integration_dir / "test_stage3_validation.py"
+    if stage3_test.exists():
+        _run(
+            "Stage 3 integration tests",
+            [sys.executable, "-m", "pytest", str(stage3_test), "-v", "--tb=short", "-q"],
+        )
 
 
 def check_stage_4():

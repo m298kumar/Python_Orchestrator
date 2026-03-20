@@ -135,14 +135,42 @@ class CrawledPageArtifact(BaseModel):
     api_calls: List[Dict[str, Any]] = Field(default_factory=list)
 
 
+class DiscrepancyArtifact(BaseModel):
+    """A single discrepancy between requirements and the site model."""
+
+    schema_version: str = "1.0"
+    discrepancy_type: str  # missing_element | missing_page | missing_form_field
+    requirement_id: str
+    expected: str
+    actual: str
+    severity: str = "warning"  # show_stopper | warning | info
+    page_url: str = ""
+    details: str = ""
+
+
+class DiscrepancyReportArtifact(BaseModel):
+    """Aggregated report of all discrepancies found."""
+
+    schema_version: str = "1.0"
+    summary: str = ""
+    total_requirements: int = 0
+    total_discrepancies: int = 0
+    show_stoppers: int = 0
+    warnings: int = 0
+    infos: int = 0
+    items: List[DiscrepancyArtifact] = Field(default_factory=list)
+    gate_decision: str = "proceed"  # proceed | proceed_with_warnings | block
+
+
 class SiteModelArtifact(BaseModel):
     """Output of web crawler — full site structure."""
 
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
     base_url: str
     pages: List[CrawledPageArtifact] = Field(default_factory=list)
     navigation_graph: Dict[str, List[str]] = Field(default_factory=dict)
     crawl_timestamp: str = ""
+    discrepancies: Optional[DiscrepancyReportArtifact] = None
 
 
 class APIEndpointArtifact(BaseModel):

@@ -375,3 +375,62 @@ Added 6 new checks to `scripts/validate_stage.py`:
 ### Next Steps
 - Commit Stage 2 and tag `stage-2-complete`
 - Stage 3: Web Crawler & API Test Generator
+
+---
+
+## Session 006 — 2026-03-20
+
+### Context
+- Stage 2 complete (50/50 validation, tagged `stage-2-complete`)
+- User shared LinkedIn discussion screenshots with community insights on multi-agent AI testing
+
+### Work Completed
+
+#### 1. SPEC_WORKFLOW.md v1.1 Update
+- Analyzed 9 LinkedIn screenshots from industry practitioners
+- Added 3 new workflow principles: Test Pyramid Integrity, Institutional Knowledge, Failure Classification
+- Stage 3 additions: 4 design principles, discrepancy detection, ChromaDB embedding, test level classification, failure classification metadata, section 3.5 (Discrepancy Report Generator), 6 new validation checks, 4 new exit criteria
+- Stage 4 additions: 5 design principles, sections 4.5-4.8 (Domain Knowledge Skill Files, Tiered Model Router, Execution Profiles, CI/CD Integration Hook), 8 new validation checks, 5 new exit criteria
+
+#### 2. Stage 3 Phase 1: Crawler Agent Implementation
+- **Approach**: Static HTML parser using BeautifulSoup (`html.parser` backend), no Playwright
+- **Phase scope**: Crawler Agent only (page parser, site model builder, discrepancy detector)
+
+##### New Contracts
+- `DiscrepancyArtifact`: discrepancy_type, requirement_id, expected, actual, severity, page_url, details
+- `DiscrepancyReportArtifact`: summary, total_requirements, total_discrepancies, show_stoppers, warnings, infos, items, gate_decision
+- `SiteModelArtifact` v1.1: added optional `discrepancies` field
+
+##### New Modules
+- `page_parser.py` — PageParser: HTML -> CrawledPageArtifact (elements, forms, links)
+  - CSS selector priority: #id > [data-testid] > [name] > .class > tag
+  - Composite dedup key: (element_type, selector, name, text)
+- `site_model_builder.py` — SiteModelBuilder: pages -> SiteModelArtifact with nav graph
+  - Navigation graph: internal links only, relative URL resolution via urljoin
+- `discrepancy_detector.py` — DiscrepancyDetector: site model + requirements -> DiscrepancyReport
+  - Keyword/regex matching, bidirectional name comparison
+  - Severity: Critical->show_stopper, High->warning, Medium/Low->info
+  - Gate: show_stopper=block, warning=proceed_with_warnings, else=proceed
+- `agent.py` — CrawlerAgent(BaseAgent): orchestrates full pipeline
+  - Two input modes: html_pages (full) or site_model (discrepancy-only)
+
+##### Test Files
+- 4 HTML fixtures: login, dashboard, product_list, checkout
+- 1 JSON fixture: site_model_ecommerce.json
+- 4 unit test files: 46 tests
+- 1 integration test file: 15 tests
+- **Total: 61 Stage 3 tests passing in 0.33s**
+
+##### Validation Gate
+- 12 new checks in check_stage_3()
+- **62/62 Stage 3 checks pass** (58 cumulative + 4 pre-existing failures from Stages 0/1)
+
+### Bugs Fixed
+1. **Element deduplication**: Generic elements (links without id/name/class) shared selector `a`, so dedup by selector kept only first. Fixed with composite key (type, selector, name, text).
+2. **Navigation graph empty**: Relative hrefs (`/products`) not resolved against page URL before comparing to known URLs. Fixed with `urljoin(page.url, href)`.
+3. **Discrepancy false positives**: Regex captured too much context ("User clicks Submit" instead of "Submit"). Fixed with bidirectional matching `(name in e or e in name)`.
+4. **Lint cleanup**: Removed unused imports (re, Optional), removed unused variable assignment.
+
+### Next Steps
+- Stage 3 Phase 2: API Discovery + API Test Generator
+- Stage 3 Phase 3: Integration tests across crawler + API, full validation gate

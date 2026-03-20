@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Checkout - MyApp</title></head>
+<body>
+  <nav>
+    <a href="/login">Login</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/products">Products</a>
+  </nav>
+  <h1>Checkout</h1>
+  <div class="order-summary">
+    <h2>Order Summary</h2>
+    <span>Total: $1,029.98</span>
+  </div>
+  <form action="/api/orders" method="POST" id="payment-form">
+    <h3>Payment Details</h3>
+    <input type="text" name="card_number" placeholder="Card Number" required>
+    <input type="text" name="expiry" placeholder="MM/YY" required>
+    <input type="text" name="cvv" placeholder="CVV" required>
+    <h3>Billing Address</h3>
+    <input type="text" name="address" placeholder="Street Address">
+    <input type="text" name="city" placeholder="City">
+    <input type="text" name="zip" placeholder="ZIP Code">
+    <button type="submit" data-testid="place-order-btn">Place Order</button>
+  </form>
+  <a href="/cart">Back to Cart</a>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Dashboard - MyApp</title></head>
+<body>
+  <nav>
+    <a href="/login">Login</a>
+    <a href="/products">Products</a>
+    <a href="/checkout">Checkout</a>
+    <a href="/profile">Profile</a>
+  </nav>
+  <h1>Dashboard</h1>
+  <form action="/search" method="GET">
+    <input type="text" name="q" placeholder="Search products..." data-testid="search-input">
+    <button type="submit" id="search-btn">Search</button>
+  </form>
+  <div class="summary-cards">
+    <div class="card">Orders: 12</div>
+    <div class="card">Wishlist: 5</div>
+  </div>
+  <button id="logout-btn" aria-label="Logout">Logout</button>
+  <a href="https://external-site.com/help">External Help</a>
+</body>
+</html>

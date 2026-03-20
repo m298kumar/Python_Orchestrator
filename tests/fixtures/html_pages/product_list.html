@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Products - MyApp</title></head>
+<body>
+  <nav>
+    <a href="/login">Login</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/checkout">Checkout</a>
+  </nav>
+  <h1>Products</h1>
+  <form action="/products" method="GET">
+    <input type="text" name="search" placeholder="Filter products...">
+    <select name="category">
+      <option value="">All Categories</option>
+      <option value="electronics">Electronics</option>
+      <option value="clothing">Clothing</option>
+    </select>
+    <button type="submit" data-testid="filter-btn">Filter</button>
+  </form>
+  <div class="product-grid">
+    <div class="product-card">
+      <a href="/products/1">Laptop Pro</a>
+      <span>$999.99</span>
+      <button class="add-to-cart" data-testid="add-cart-1">Add to Cart</button>
+    </div>
+    <div class="product-card">
+      <a href="/products/2">Wireless Mouse</a>
+      <span>$29.99</span>
+      <button class="add-to-cart" data-testid="add-cart-2">Add to Cart</button>
+    </div>
+  </div>
+  <nav class="pagination">
+    <a href="/products?page=1">1</a>
+    <a href="/products?page=2">2</a>
+    <a href="/products?page=3">3</a>
+  </nav>
+</body>
+</html>

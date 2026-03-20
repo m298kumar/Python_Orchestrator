@@ -1,8 +1,13 @@
 # STLC Automation Platform — Specification Workflow Model
 
-> Version: 1.0
+> Version: 1.1
 > Created: 2026-03-15
+> Updated: 2026-03-20
 > Status: DRAFT
+>
+> Changelog v1.1: Incorporated community insights from industry practitioners
+> (RAG retrieval, test pyramid guardrails, failure classification, domain
+> knowledge skill files, tiered model routing, execution profiles, CI hooks).
 
 ---
 
@@ -13,6 +18,9 @@
 3. **Validation at Every Gate** — After each stage: run unit tests, integration tests, linting, and type checks. All must pass before proceeding.
 4. **Incremental Deployment** — Each completed stage produces a usable, standalone capability.
 5. **Contract-Driven** — Agents exchange data via defined schemas (JSON/YAML). Changing a schema requires a version bump and backward-compatible migration.
+6. **Test Pyramid Integrity** — AI-generated tests must respect the test pyramid: most checks stay at unit/API levels, E2E tests focus on real business journeys, not tiny validations. The goal is coverage that ships faster, not more tests.
+7. **Institutional Knowledge Over Instructions** — Each agent loads domain-specific context (skill files, data catalogs, conventions) at runtime rather than relying purely on generic prompts. This transforms a generic agent into a domain-aware specialist.
+8. **Failure Classification** — When tests fail, the system classifies failures as app bugs vs test bugs and refuses to mask broken product behavior by adjusting the test.
 
 ---
 
@@ -146,7 +154,18 @@ Python_Orchestrator/
 │
 ├── config/
 │   ├── stlc_config.yaml              # Master config file
-│   └── stlc_config.schema.json       # JSON Schema for validation
+│   ├── stlc_config.schema.json       # JSON Schema for validation
+│   ├── profiles/                     # Execution profiles (Stage 4)
+│   │   ├── smoke.yaml
+│   │   ├── targeted.yaml
+│   │   └── regression.yaml
+│   └── skills/                       # Domain knowledge skill files (Stage 4)
+│       ├── common/
+│       │   ├── coding_standards.yaml
+│       │   └── test_design_principles.yaml
+│       └── {domain}/                 # User-created per domain
+│           ├── data_catalog.yaml
+│           └── locator_conventions.yaml
 │
 ├── frontend/                         # Stage 5: React app
 │
@@ -169,14 +188,16 @@ Python_Orchestrator/
 Define the data schemas that flow between agents in `core/contracts.py`:
 
 ```
-RequirementArtifact    — output of requirements parsing
-TestCaseArtifact       — output of test case generation
-FeatureFileArtifact    — output of BDD agent
-StepDefinitionArtifact — output of BDD agent
-SiteModelArtifact      — output of web crawler
-APIModelArtifact       — output of API discovery
-APITestArtifact        — output of API test generator
-PipelineRunArtifact    — metadata about a pipeline execution
+RequirementArtifact       — output of requirements parsing
+TestCaseArtifact          — output of test case generation (includes test_level field)
+FeatureFileArtifact       — output of BDD agent
+StepDefinitionArtifact    — output of BDD agent
+SiteModelArtifact         — output of web crawler (includes discrepancies)
+APIModelArtifact          — output of API discovery
+APITestArtifact           — output of API test generator (includes failure_type metadata)
+DiscrepancyReportArtifact — output of discrepancy detector (Stage 3, pre-test-gen gate)
+PipelineRunArtifact       — metadata about a pipeline execution
+AgentFeedbackArtifact     — stored corrections/learnings for feedback persistence (Stage 4)
 ```
 
 Each contract is versioned (`schema_version: "1.0"`). Consumers validate on load.
@@ -374,10 +395,16 @@ Tests:
 ## Stage 3: Web Crawler & API Test Generator Agents
 
 ### Purpose
-Auto-discover application structure via web crawling and generate targeted API tests.
+Auto-discover application structure via web crawling and generate targeted API tests. This stage also introduces discrepancy detection (comparing live app state against requirements) and test-level classification to maintain test pyramid integrity.
 
 ### Entry Criteria
 - Stage 1 exit criteria met (Stage 2 can run in parallel with Stage 3)
+
+### Design Principles (from Industry Learnings)
+1. **Start from Acceptance Criteria, not exploration** — AC from requirements is the baseline. The crawler validates against AC and avoids duplicating what unit/API tests already cover.
+2. **Discrepancy-first reporting** — Before generating any test code, the crawler compares live app findings against requirement artifacts and surfaces mismatches. Show-stoppers get flagged; non-blockers get documented atop the test plan.
+3. **Test level tagging** — Every generated test artifact gets a `test_level` field (unit | api | integration | e2e) to preserve the test pyramid. E2E tests target business journeys only; smaller validations stay at API/unit level.
+4. **RAG-based context retrieval** — Crawled page structures, API schemas, and locator patterns are embedded into ChromaDB for contextual retrieval rather than dumping everything into agent prompts. This reduces token usage and improves latency.
 
 ### Tasks
 
@@ -390,6 +417,7 @@ Auto-discover application structure via web crawling and generate targeted API t
   - Screenshot each page (optional, for visual regression baseline)
   - Handle SPAs: wait for network idle, detect client-side routing
   - Authentication: login flow support (form-based, OAuth redirect)
+  - **Discrepancy detection**: compare crawled elements/flows against RequirementArtifacts — flag missing fields, unexpected behavior, features not yet implemented
 - **Output**: `SiteModelArtifact` — JSON containing:
   ```json
   {
@@ -408,10 +436,20 @@ Auto-discover application structure via web crawling and generate targeted API t
         ]
       }
     ],
-    "navigation_graph": {"adjacency": {...}}
+    "navigation_graph": {"adjacency": {...}},
+    "discrepancies": [
+      {
+        "type": "missing_element",
+        "requirement_id": "REQ-001",
+        "expected": "Password reset link on login page",
+        "actual": "Not found in crawled DOM",
+        "severity": "show_stopper"
+      }
+    ]
   }
   ```
 - **POM Auto-Generator**: use crawled selectors to pre-fill POM locators (feeds into Stage 2 stubs)
+- **ChromaDB Embedding**: crawled page structures and element metadata are embedded into ChromaDB so downstream agents can retrieve only relevant context per requirement
 
 #### 3.2 — API Discovery Agent
 - **Input sources** (priority order):
@@ -457,11 +495,43 @@ Auto-discover application structure via web crawling and generate targeted API t
   - **Schema validation**: response matches defined schema
 - Generate test data factories (Faker-based for realistic data)
 - Generate environment config (base URL, auth tokens, test user credentials placeholder)
+- **Test level classification**: each generated test is tagged with `test_level`:
+  - `api` — contract validation, auth checks, field validation (bulk of generated tests)
+  - `integration` — multi-endpoint CRUD sequences
+  - `e2e` — full business journeys only (login -> action -> verify -> logout)
+- **Failure classification metadata**: test templates include structured `failure_type` field:
+  - `app_bug` — the application returned unexpected behavior per spec
+  - `test_bug` — the test itself has incorrect assertions or data
+  - `env_issue` — infrastructure/timeout/connectivity failure
+  This prevents masking real product bugs by adjusting tests.
 
 #### 3.4 — Cross-Layer Integration
-- Crawler's `api_calls` per page → link UI actions to API endpoints
+- Crawler's `api_calls` per page -> link UI actions to API endpoints
 - Generate tests that validate both UI state AND API response for same action
 - Site model feeds real selectors into Stage 2 POM classes
+
+#### 3.5 — Discrepancy Report Generator
+- **Input**: `SiteModelArtifact` + `List[RequirementArtifact]`
+- **Purpose**: Before any test code is generated, compare crawled reality against requirements and produce a discrepancy report
+- **Output**: `DiscrepancyReportArtifact`:
+  ```json
+  {
+    "summary": {"total": 12, "show_stoppers": 2, "warnings": 7, "info": 3},
+    "items": [
+      {
+        "id": "DISC-001",
+        "requirement_id": "REQ-003",
+        "severity": "show_stopper",
+        "category": "missing_feature",
+        "expected": "User can reset password from login page",
+        "actual": "No password reset link found in crawled login page",
+        "recommendation": "Block test generation for REQ-003 until feature is implemented"
+      }
+    ],
+    "gate_decision": "proceed_with_warnings"
+  }
+  ```
+- **Gate behavior**: if any `show_stopper` discrepancies exist, the pipeline pauses and surfaces them to the user before generating tests for affected requirements. This prevents generating tests for features that don't exist yet.
 
 ### Validation Gate
 ```bash
@@ -471,15 +541,25 @@ Tests:
 - Unit: Crawler extracts elements correctly from known HTML fixtures
 - Unit: API model parser handles OpenAPI 3.0 and Swagger 2.0 specs
 - Unit: Generated API tests have correct syntax per framework
+- Unit: Discrepancy report correctly identifies missing elements vs requirements
+- Unit: Test level classification assigns correct levels (api/integration/e2e)
+- Unit: Failure classification metadata is present in all generated test templates
 - Integration: Crawl a local test app (spin up Flask/Express fixture), verify site model completeness
 - Integration: Generate API tests from a public OpenAPI spec, verify tests are syntactically valid
 - Integration: REST Assured, Karate, and Pytest+Requests outputs all validate
+- Integration: Discrepancy report surfaces known missing features when crawling against requirements
+- Integration: ChromaDB stores and retrieves crawled page context for downstream agents
+- Integration: Test pyramid distribution check — E2E tests < 20% of total generated tests
 
 ### Exit Criteria
 - [ ] Crawler produces valid `SiteModelArtifact` for test apps
 - [ ] API discovery works from OpenAPI spec and from crawled requests
 - [ ] API tests generated for 3+ frameworks, all syntactically valid
 - [ ] Cross-layer linking produces POM classes with real selectors
+- [ ] Discrepancy report generated before test code, show-stoppers block generation
+- [ ] All generated tests have `test_level` tag (test pyramid preserved)
+- [ ] Failure classification metadata present in test templates
+- [ ] Crawled artifacts embedded in ChromaDB for RAG retrieval
 - [ ] `validate_stage.py --stage 3` passes
 - [ ] Git commit with tag `stage-3-complete`
 
@@ -488,10 +568,17 @@ Tests:
 ## Stage 4: Agent Orchestration & Integration Layer
 
 ### Purpose
-Wire all agents into a unified pipeline with DAG-based execution, shared state, and a single configuration file.
+Wire all agents into a unified pipeline with DAG-based execution, shared state, a single configuration file, intelligent model routing, and domain knowledge injection. The orchestrator is the "brain" that decides which agent runs when, with what context, and using which model tier.
 
 ### Entry Criteria
 - Stages 1, 2, and 3 exit criteria all met
+
+### Design Principles (from Industry Learnings)
+1. **Domain knowledge skill files** — Each agent loads domain-specific context files (data catalogs, permission matrices, locator conventions, coding standards) at runtime. Agents get only the context they need rather than everything.
+2. **Tiered model routing** — Simple tasks (step definition generation, file scaffolding) use lighter/local models (Ollama). Complex tasks (requirement analysis, discrepancy detection) use more capable models (Claude, GPT-4). A task complexity router selects the appropriate tier.
+3. **Execution profiles** — Support scope-based test execution: smoke (critical paths only), targeted (specific requirements), full regression (everything). Scope and risk drive what gets run.
+4. **Memory and feedback persistence** — Agent corrections persist across sessions via ChromaDB. When a user corrects an agent (e.g., "don't hardcode IDs"), that feedback is stored and auto-loaded in future runs.
+5. **CI/CD integration** — Pipeline can be triggered from CI systems (GitHub Actions, Jenkins, GitLab CI) via CLI or webhook.
 
 ### Tasks
 
@@ -591,6 +678,85 @@ stlc validate --stage 2
 stlc agents list
 ```
 
+#### 4.5 — Domain Knowledge Skill Files
+- Each agent can load one or more **skill files** from `config/skills/`:
+  ```
+  config/skills/
+  ├── ecommerce/
+  │   ├── data_catalog.yaml      # seed data, test accounts, product IDs
+  │   ├── permission_matrix.yaml # which roles see which features
+  │   └── locator_conventions.yaml # naming patterns for CSS selectors
+  ├── healthcare/
+  │   ├── data_catalog.yaml
+  │   └── compliance_rules.yaml  # HIPAA constraints for test data
+  └── common/
+      ├── coding_standards.yaml  # POM patterns, naming conventions
+      └── test_design_principles.yaml
+  ```
+- Skill files are loaded via `config_loader.py` and injected into agent prompts at runtime
+- Each agent declares which skill categories it needs via `get_capabilities().required_skills`
+- Users can create custom skill files for their domain without modifying agent code
+
+#### 4.6 — Tiered Model Router
+- **Purpose**: Route tasks to the appropriate LLM based on complexity
+- **Configuration**:
+  ```yaml
+  model_routing:
+    tiers:
+      - name: lightweight
+        provider: ollama
+        model: llama3.2
+        use_for: [step_definition_gen, scaffolding, file_formatting]
+      - name: standard
+        provider: ollama
+        model: deepseek-coder-v2
+        use_for: [test_case_gen, bdd_generation, api_test_gen]
+      - name: advanced
+        provider: anthropic
+        model: claude-sonnet
+        use_for: [requirement_analysis, discrepancy_detection, failure_triage]
+    fallback: standard
+  ```
+- Each agent declares its default tier; the orchestrator can override based on input complexity
+- **Complexity heuristic**: input token count, number of requirements, domain novelty score
+- Cost tracking: log tokens used per tier per pipeline run
+
+#### 4.7 — Execution Profiles
+- Support scope-based test execution to avoid generating/running everything:
+  ```yaml
+  execution_profiles:
+    smoke:
+      description: "Critical path only"
+      filter: {priority: [critical, high], test_level: [e2e]}
+      max_tests: 20
+    targeted:
+      description: "Specific requirements"
+      filter: {requirement_ids: ["REQ-001", "REQ-005"]}
+    regression:
+      description: "Full suite"
+      filter: {}  # no filtering, run everything
+    risk_based:
+      description: "Risk-weighted selection"
+      filter: {risk_score_min: 0.7}
+  ```
+- Profiles are selected at pipeline invocation: `stlc run --profile smoke`
+- Agents respect the profile filter when generating/selecting tests
+
+#### 4.8 — CI/CD Integration Hook
+- **CLI trigger**: `stlc run --ci` — machine-readable output (JSON), non-interactive, exit codes for CI
+- **Webhook endpoint** (via Stage 5 API): POST `/api/pipeline/trigger` with config payload
+- **GitHub Actions example**:
+  ```yaml
+  - name: Run STLC Pipeline
+    run: stlc run --profile smoke --ci --output results/
+  - name: Upload Test Artifacts
+    uses: actions/upload-artifact@v4
+    with:
+      name: stlc-results
+      path: results/
+  ```
+- **Pipeline result artifact**: JSON summary with pass/fail counts, discrepancy report, generated file manifest
+
 ### Validation Gate
 ```bash
 python scripts/validate_stage.py --stage 4
@@ -599,10 +765,16 @@ Tests:
 - Unit: DAG resolver correctly orders stages, detects cycles
 - Unit: Artifact references (`$stage.output`) resolve correctly
 - Unit: Config loader merges profiles and env overrides correctly
+- Unit: Skill file loader discovers and injects correct files per agent
+- Unit: Model router selects correct tier based on task type and complexity
+- Unit: Execution profile filters tests correctly (smoke/targeted/regression)
 - Integration: Full pipeline runs end-to-end with mock agents (fast)
 - Integration: Full pipeline runs with real agents on sample data
 - Integration: Resume-from-stage works correctly
 - Integration: Parallel stages actually execute concurrently
+- Integration: Skill files from different domains produce different agent behavior
+- Integration: Model routing falls back correctly when a tier is unavailable
+- Integration: CI mode produces machine-readable JSON output with correct exit codes
 
 ### Exit Criteria
 - [ ] All agents implement `BaseAgent` interface
@@ -610,6 +782,11 @@ Tests:
 - [ ] Resume from any stage works
 - [ ] Single config file drives all agents
 - [ ] CLI entry point functional
+- [ ] Domain knowledge skill files loaded per agent
+- [ ] Tiered model routing selects correct LLM per task complexity
+- [ ] Execution profiles (smoke/targeted/regression) filter correctly
+- [ ] CI/CD integration produces machine-readable output
+- [ ] Feedback persistence stores and retrieves agent corrections via ChromaDB
 - [ ] `validate_stage.py --stage 4` passes
 - [ ] Git commit with tag `stage-4-complete`
 
@@ -683,11 +860,19 @@ Tests:
 | Import smoke test | Yes | Yes | Yes | Yes | Yes | Yes |
 | Contract schema valid | Yes | Yes | Yes | Yes | Yes | Yes |
 | Existing tests pass | Yes | Yes | Yes | Yes | Yes | Yes |
-| Multi-domain test | — | Yes | — | — | Yes | — |
-| Gherkin parse test | — | — | Yes | — | — | — |
-| Crawler fixture test | — | — | — | Yes | — | — |
-| E2E pipeline test | — | — | — | — | Yes | Yes |
-| Frontend render test | — | — | — | — | — | Yes |
+| Multi-domain test | -- | Yes | -- | -- | Yes | -- |
+| Gherkin parse test | -- | -- | Yes | -- | -- | -- |
+| Crawler fixture test | -- | -- | -- | Yes | -- | -- |
+| Discrepancy report test | -- | -- | -- | Yes | -- | -- |
+| Test pyramid check | -- | -- | -- | Yes | Yes | -- |
+| Failure classification | -- | -- | -- | Yes | -- | -- |
+| ChromaDB RAG retrieval | -- | -- | -- | Yes | Yes | -- |
+| Skill file loading | -- | -- | -- | -- | Yes | -- |
+| Model routing test | -- | -- | -- | -- | Yes | -- |
+| Execution profile test | -- | -- | -- | -- | Yes | -- |
+| CI mode output test | -- | -- | -- | -- | Yes | -- |
+| E2E pipeline test | -- | -- | -- | -- | Yes | Yes |
+| Frontend render test | -- | -- | -- | -- | -- | Yes |
 
 Exit code `0` = all pass, `1` = failures (with detailed report).
 
@@ -712,6 +897,11 @@ All contracts start at `1.0`. Rules for versioning:
 | Large requirements files | Batch processing, progress streaming |
 | Config complexity | JSON Schema validation, sensible defaults, profile presets |
 | Stage regression | Every gate re-runs ALL previous stage tests |
+| Test suite bloat / noisy tests | Test pyramid guardrails (E2E < 20%), execution profiles, test level tagging |
+| Token cost explosion at scale | Tiered model routing (local models for simple tasks), RAG retrieval (only relevant context) |
+| Masking app bugs with test fixes | Failure classification (app_bug vs test_bug vs env_issue), agents refuse to adjust tests for broken behavior |
+| Agent lacks domain context | Skill files loaded per agent; institutional knowledge encoded as YAML configs, not hardcoded |
+| Stale agent behavior | Feedback persistence via ChromaDB; corrections from previous sessions auto-loaded |
 
 ---
 
