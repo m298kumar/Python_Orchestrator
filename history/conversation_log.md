@@ -480,3 +480,63 @@ Added 6 new checks to `scripts/validate_stage.py`:
 
 ### Next Steps
 - Stage 3 Phase 3: REST Assured/Karate/Supertest templates, cross-layer integration, full validation
+
+---
+
+## Session 008 — 2026-03-20
+
+### Context
+- Stage 3 Phase 2 complete (74/74 validation, 153 tests)
+- Phase 3 goal: Focused closure — 3+ frameworks, cross-stage integration, pyramid validation, stage-3-complete tag
+- Deferred to Stage 4: ChromaDB embedding, POM generation, cross-layer UI→API linking
+
+### Changes Made
+
+#### Step 1: REST Assured + Karate Templates
+- Created `stlc_platform/agents/api_test_agent/templates/rest_assured.java.j2`
+  - Java JUnit 5 + REST Assured test class per endpoint
+  - `@Tag` annotations, `@DisplayName`, `@BeforeAll`, `// failure_type:` comments
+  - REST Assured fluent API: `given().when().get().then().statusCode(200)`
+  - All 5 test types: happy_path, auth_missing, auth_invalid, validation, boundary, schema_validation
+- Created `stlc_platform/agents/api_test_agent/templates/karate.feature.j2`
+  - Karate DSL `.feature` file per endpoint
+  - `Feature:`, `Background: * url`, `Scenario:` blocks
+  - `@happy_path`, `@auth` tags, `# failure_type:` comments
+  - All 5 test types with Karate syntax
+
+#### Step 2: Generator Changes (`test_generator.py`)
+- Expanded `SUPPORTED_FRAMEWORKS` to 3: pytest_requests, rest_assured, karate
+- Added `_LANGUAGE_MAP` for framework → language mapping
+- Updated `_make_filename()`: `.py` for Python, `.java` for Java, `.feature` for Karate
+- Updated `_generate_endpoint_tests()` to use `_LANGUAGE_MAP` for language field
+- Conftest generation skipped for non-Python frameworks
+
+#### Step 3: Unit Tests (+14 new tests)
+- `TestRestAssuredGeneration` (6 tests): syntax, filename, language, auth, no conftest, petstore
+- `TestKarateGeneration` (6 tests): syntax, filename, language, auth, no conftest, petstore
+- `TestMultiFrameworkSupport` (2 tests): 3 frameworks supported, all produce output
+- **Total: 35 generator unit tests passing**
+
+#### Step 4: Cross-Stage Integration Tests (+10 new tests)
+- `tests/integration/test_stage3p3_validation.py`
+- `TestCrossStageIntegration` (4 tests): both agents succeed, combined artifacts, distinct types, coexistence
+- `TestMultiFrameworkEndToEnd` (3 tests): REST Assured pipeline, Karate pipeline, all 3 from same spec
+- `TestPyramidDistributionValidation` (3 tests): E2E < 20%, API > 80%, metadata present
+
+#### Step 5: Validation Gate (+8 new checks, 25-32)
+- 25: REST Assured template exists
+- 26: Karate template exists
+- 27: 3 frameworks in SUPPORTED_FRAMEWORKS
+- 28: REST Assured smoke test (heuristic)
+- 29: Karate smoke test (heuristic)
+- 30: Test pyramid E2E < 20% on petstore
+- 31: Phase 3 integration tests pass
+- 32: Lint check on api_test_agent
+
+##### Final Metrics
+- **177 Stage 3 tests** (61 crawler + 92 API Phase 2 + 24 Phase 3) — all passing
+- **79/82 cumulative validation checks** (3 pre-existing Stages 0/1 failures)
+- All 32 Stage 3 checks pass
+
+### Next Steps
+- Stage 4: Agent Orchestration & Integration

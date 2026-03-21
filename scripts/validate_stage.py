@@ -790,6 +790,102 @@ def check_stage_3():
             [sys.executable, "-m", "pytest", str(stage3p2_test), "-v", "--tb=short", "-q"],
         )
 
+    # ── Phase 3: Multi-Framework + Cross-Stage ───────────────────────────
+
+    # 25. REST Assured template exists
+    ra_template = _ROOT / "stlc_platform" / "agents" / "api_test_agent" / "templates" / "rest_assured.java.j2"
+    if ra_template.exists():
+        _PASS += 1
+        print("  PASS  REST Assured template exists")
+    else:
+        _FAIL += 1
+        print("  FAIL  REST Assured template missing")
+
+    # 26. Karate template exists
+    karate_template = _ROOT / "stlc_platform" / "agents" / "api_test_agent" / "templates" / "karate.feature.j2"
+    if karate_template.exists():
+        _PASS += 1
+        print("  PASS  Karate template exists")
+    else:
+        _FAIL += 1
+        print("  FAIL  Karate template missing")
+
+    # 27. 3 frameworks in SUPPORTED_FRAMEWORKS
+    _check_import(
+        "3 frameworks in SUPPORTED_FRAMEWORKS",
+        (
+            "from stlc_platform.agents.api_test_agent.test_generator import SUPPORTED_FRAMEWORKS; "
+            "assert len(SUPPORTED_FRAMEWORKS) == 3, f'Expected 3, got {len(SUPPORTED_FRAMEWORKS)}'; "
+            "assert 'rest_assured' in SUPPORTED_FRAMEWORKS; "
+            "assert 'karate' in SUPPORTED_FRAMEWORKS"
+        ),
+    )
+
+    # 28. REST Assured smoke test (heuristic syntax check)
+    _check_import(
+        "REST Assured smoke test",
+        (
+            "from stlc_platform.agents.api_test_agent import APITestAgent; "
+            "spec = {'openapi': '3.0.0', 'info': {'title': 'T'}, "
+            "'paths': {'/x': {'get': {'operationId': 'getX', "
+            "'responses': {'200': {'description': 'OK'}}}}}}; "
+            "r = APITestAgent().execute({'openapi_spec': spec}, {'framework': 'rest_assured'}); "
+            "assert r.success; "
+            "c = r.artifacts['test_files'][0].content; "
+            "assert 'import io.restassured' in c; "
+            "assert '@Test' in c; "
+            "assert 'given()' in c"
+        ),
+    )
+
+    # 29. Karate smoke test (heuristic syntax check)
+    _check_import(
+        "Karate smoke test",
+        (
+            "from stlc_platform.agents.api_test_agent import APITestAgent; "
+            "spec = {'openapi': '3.0.0', 'info': {'title': 'T'}, "
+            "'paths': {'/x': {'get': {'operationId': 'getX', "
+            "'responses': {'200': {'description': 'OK'}}}}}}; "
+            "r = APITestAgent().execute({'openapi_spec': spec}, {'framework': 'karate'}); "
+            "assert r.success; "
+            "c = r.artifacts['test_files'][0].content; "
+            "assert 'Feature:' in c; "
+            "assert 'Scenario:' in c; "
+            "assert 'Given path' in c"
+        ),
+    )
+
+    # 30. Test pyramid E2E < 20% on petstore
+    _check_import(
+        "Test pyramid E2E < 20%",
+        (
+            "import json; "
+            "from stlc_platform.agents.api_test_agent import APITestAgent; "
+            "spec = json.loads(open('tests/fixtures/openapi_petstore.json').read()); "
+            "r = APITestAgent().execute({'openapi_spec': spec}, {}); "
+            "d = r.metadata['test_level_distribution']; "
+            "total = sum(d.values()); "
+            "e2e = d.get('e2e', 0); "
+            "assert e2e / total < 0.2, f'E2E ratio too high: {e2e}/{total}'"
+        ),
+    )
+
+    # 31. Phase 3 cross-stage integration tests pass
+    stage3p3_test = integration_dir / "test_stage3p3_validation.py"
+    if stage3p3_test.exists():
+        _run(
+            "Phase 3 integration tests",
+            [sys.executable, "-m", "pytest", str(stage3p3_test), "-v", "--tb=short", "-q"],
+        )
+
+    # 32. Lint check on api_test_agent
+    _run(
+        "Lint check on api_test_agent",
+        [sys.executable, "-m", "ruff", "check",
+         "stlc_platform/agents/api_test_agent/", "--select=E,F", "--ignore=E501,E402"],
+        allow_fail=True,
+    )
+
 
 def check_stage_4():
     """Agent Orchestration & Integration."""

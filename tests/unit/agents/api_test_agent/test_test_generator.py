@@ -8,7 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from stlc_platform.agents.api_test_agent.test_generator import APITestGenerator
+from stlc_platform.agents.api_test_agent.test_generator import (
+    APITestGenerator,
+    SUPPORTED_FRAMEWORKS,
+)
 from stlc_platform.core.contracts import APIEndpointArtifact, APIModelArtifact
 
 _FIXTURES = Path(__file__).resolve().parent.parent.parent.parent / "fixtures"
@@ -307,3 +310,127 @@ class TestFilterTestTypes:
         test_file = artifacts[1]
         assert test_file.test_count == 1
         assert "auth_missing" not in test_file.content
+
+
+# ── REST Assured Generation ─────────────────────────────────────────────────
+
+
+class TestRestAssuredGeneration:
+    def test_happy_path_generates_rest_assured_syntax(self):
+        gen = APITestGenerator(framework="rest_assured")
+        endpoint = _make_endpoint(method="GET")
+        model = _make_model([endpoint])
+        artifacts = gen.generate(model)
+        # No conftest for Java
+        assert all(a.filename != "conftest.py" for a in artifacts)
+        test_file = artifacts[0]
+        assert "import io.restassured" in test_file.content
+        assert "@Test" in test_file.content
+        assert "given()" in test_file.content
+
+    def test_filename_is_java(self):
+        gen = APITestGenerator(framework="rest_assured")
+        endpoint = _make_endpoint(path="/pets", method="GET")
+        model = _make_model([endpoint])
+        artifacts = gen.generate(model)
+        test_file = artifacts[0]
+        assert test_file.filename.endswith(".java")
+        assert test_file.filename == "TestGetPets.java"
+
+    def test_language_is_java(self):
+        gen = APITestGenerator(framework="rest_assured")
+        endpoint = _make_endpoint()
+        model = _make_model([endpoint])
+        artifacts = gen.generate(model)
+        assert artifacts[0].language == "java"
+
+    def test_auth_tests_present(self):
+        gen = APITestGenerator(framework="rest_assured")
+        endpoint = _make_endpoint(auth_required=True, auth_type="bearer")
+        model = _make_model([endpoint])
+        artifacts = gen.generate(model)
+        test_file = artifacts[0]
+        assert "401" in test_file.content
+        assert "invalid_token" in test_file.content
+
+    def test_no_conftest_generated(self):
+        gen = APITestGenerator(framework="rest_assured")
+        model = _make_model([_make_endpoint()])
+        artifacts = gen.generate(model)
+        filenames = [a.filename for a in artifacts]
+        assert "conftest.py" not in filenames
+
+    def test_petstore_produces_8_test_files(self, petstore_model):
+        gen = APITestGenerator(framework="rest_assured")
+        artifacts = gen.generate(petstore_model)
+        assert len(artifacts) == 8
+
+
+# ── Karate Generation ───────────────────────────────────────────────────────
+
+
+class TestKarateGeneration:
+    def test_happy_path_generates_karate_syntax(self):
+        gen = APITestGenerator(framework="karate")
+        endpoint = _make_endpoint(method="GET")
+        model = _make_model([endpoint])
+        artifacts = gen.generate(model)
+        test_file = artifacts[0]
+        assert "Feature:" in test_file.content
+        assert "Scenario:" in test_file.content
+        assert "Given path" in test_file.content
+        assert "When method" in test_file.content
+
+    def test_filename_is_feature(self):
+        gen = APITestGenerator(framework="karate")
+        endpoint = _make_endpoint(path="/pets", method="GET")
+        model = _make_model([endpoint])
+        artifacts = gen.generate(model)
+        test_file = artifacts[0]
+        assert test_file.filename.endswith(".feature")
+        assert test_file.filename == "get_pets.feature"
+
+    def test_language_is_karate(self):
+        gen = APITestGenerator(framework="karate")
+        endpoint = _make_endpoint()
+        model = _make_model([endpoint])
+        artifacts = gen.generate(model)
+        assert artifacts[0].language == "karate"
+
+    def test_auth_scenarios_present(self):
+        gen = APITestGenerator(framework="karate")
+        endpoint = _make_endpoint(auth_required=True, auth_type="bearer")
+        model = _make_model([endpoint])
+        artifacts = gen.generate(model)
+        test_file = artifacts[0]
+        assert "status 401" in test_file.content
+        assert "invalid_token" in test_file.content
+
+    def test_no_conftest_generated(self):
+        gen = APITestGenerator(framework="karate")
+        model = _make_model([_make_endpoint()])
+        artifacts = gen.generate(model)
+        filenames = [a.filename for a in artifacts]
+        assert "conftest.py" not in filenames
+
+    def test_petstore_produces_8_test_files(self, petstore_model):
+        gen = APITestGenerator(framework="karate")
+        artifacts = gen.generate(petstore_model)
+        assert len(artifacts) == 8
+
+
+# ── Multi-Framework Support ─────────────────────────────────────────────────
+
+
+class TestMultiFrameworkSupport:
+    def test_three_frameworks_supported(self):
+        assert len(SUPPORTED_FRAMEWORKS) == 3
+        assert "pytest_requests" in SUPPORTED_FRAMEWORKS
+        assert "rest_assured" in SUPPORTED_FRAMEWORKS
+        assert "karate" in SUPPORTED_FRAMEWORKS
+
+    def test_all_frameworks_produce_output(self, petstore_model):
+        for fw in SUPPORTED_FRAMEWORKS:
+            gen = APITestGenerator(framework=fw)
+            artifacts = gen.generate(petstore_model)
+            assert len(artifacts) >= 8, f"{fw} produced too few artifacts"

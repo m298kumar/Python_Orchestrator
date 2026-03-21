@@ -3,8 +3,10 @@ API Test Generator
 ==================
 Generates API test code from an APIModelArtifact using Jinja2 templates.
 
-Currently supports:
+Supported frameworks:
   - pytest_requests (Pytest + Requests library, Python)
+  - rest_assured (JUnit 5 + REST Assured, Java)
+  - karate (Karate DSL, .feature files)
 
 Extension: Add new frameworks by placing a .j2 template in the templates/
 directory and adding an entry to SUPPORTED_FRAMEWORKS.
@@ -32,9 +34,18 @@ _DEFAULT_OVERRIDES = Path(__file__).resolve().parent / "template_overrides"
 # Framework name -> template filename
 SUPPORTED_FRAMEWORKS: Dict[str, str] = {
     "pytest_requests": "pytest_requests.py.j2",
+    "rest_assured": "rest_assured.java.j2",
+    "karate": "karate.feature.j2",
 }
 
-# Conftest template (shared across frameworks for now)
+# Framework name -> language
+_LANGUAGE_MAP: Dict[str, str] = {
+    "pytest_requests": "python",
+    "rest_assured": "java",
+    "karate": "karate",
+}
+
+# Conftest template (Python frameworks only)
 _CONFTEST_TEMPLATE = "conftest.py.j2"
 
 
@@ -91,9 +102,10 @@ class APITestGenerator:
 
         artifacts: List[APITestArtifact] = []
 
-        # Generate conftest
-        conftest = self._generate_conftest(api_model)
-        artifacts.append(conftest)
+        # Generate conftest (Python frameworks only)
+        if _LANGUAGE_MAP.get(self.framework) == "python":
+            conftest = self._generate_conftest(api_model)
+            artifacts.append(conftest)
 
         # Generate test file per endpoint
         for endpoint in api_model.endpoints:
@@ -177,7 +189,7 @@ class APITestGenerator:
 
         return APITestArtifact(
             framework=self.framework,
-            language="python",
+            language=_LANGUAGE_MAP.get(self.framework, "python"),
             filename=self._make_filename(endpoint),
             content=content,
             endpoint_path=endpoint.path,
@@ -345,10 +357,23 @@ class APITestGenerator:
     # ------------------------------------------------------------------
 
     def _make_filename(self, endpoint: APIEndpointArtifact) -> str:
-        """Generate a filename like test_api_get_pets.py."""
+        """Generate a filename appropriate for the framework.
+
+        - pytest_requests: test_api_get_pets.py
+        - rest_assured: TestGetPets.java
+        - karate: get_pets.feature
+        """
         slug = re.sub(r"[^a-zA-Z0-9]", "_", endpoint.path.strip("/"))
         slug = re.sub(r"_+", "_", slug).strip("_").lower()
-        return f"test_api_{endpoint.method.lower()}_{slug}.py"
+
+        lang = _LANGUAGE_MAP.get(self.framework, "python")
+        if lang == "java":
+            class_name = self._make_class_name(endpoint)
+            return f"{class_name}.java"
+        elif lang == "karate":
+            return f"{endpoint.method.lower()}_{slug}.feature"
+        else:
+            return f"test_api_{endpoint.method.lower()}_{slug}.py"
 
     def _make_class_name(self, endpoint: APIEndpointArtifact) -> str:
         """Generate a class name like TestGetPets."""
