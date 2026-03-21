@@ -1,0 +1,15 @@
+# API Test Only Pipeline
+# ======================
+# Minimal pipeline: OpenAPI spec → API test code
+#
+# Usage:
+#   stlc run --pipeline config/pipelines/api_test_only.yaml
+
+pipeline: api_test_only
+
+stages:
+  - id: generate_api_tests
+    agent: api_test_agent
+    input:
+      openapi_spec: "$config.openapi_spec"
+    output: [api_model, test_files]

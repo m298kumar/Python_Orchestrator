@@ -540,3 +540,69 @@ Added 6 new checks to `scripts/validate_stage.py`:
 
 ### Next Steps
 - Stage 4: Agent Orchestration & Integration
+
+---
+
+## Session 009 — 2026-03-21
+
+### Context
+- Stages 0-3 complete (79/82 cumulative, 3 pre-existing failures)
+- User requested audit of completed stages, then planning and implementation of Stage 4
+
+### Stage 4 Phase 1: Pipeline DAG Engine + Agent Registry + CLI
+
+#### Design Decision: Sync-First with ThreadPoolExecutor
+All 4 existing agents are synchronous. Going async would require pytest-asyncio, refactoring 4 agents, and rewriting 500+ tests for zero benefit. Solution: keep BaseAgent synchronous, use `concurrent.futures.ThreadPoolExecutor` to parallelize independent DAG waves.
+
+#### Step 1: Enhanced AgentResult + PipelineRunArtifact
+- `base_agent.py`: Added `duration_seconds: float = 0.0` and `tokens_used: int = 0` to AgentResult
+- `contracts.py`: Bumped PipelineRunArtifact to v1.1, added `stages_skipped`, `total_duration_seconds`, `total_tokens_used`, `stage_durations`
+
+#### Step 2: DAG Data Structure (`stlc_platform/pipeline/dag.py`)
+- `StageNode` dataclass: stage_id, agent_id, depends_on, input_map, output_keys, config_overrides, retry_count, optional
+- `PipelineDAG`: Kahn's algorithm topological sort producing execution waves, cycle detection, validation
+- 10 unit tests in `tests/unit/pipeline/test_dag.py`
+
+#### Step 3: Artifact Store + Resolver (`stlc_platform/pipeline/artifact_store.py`)
+- `ArtifactStore`: in-memory with optional disk persistence (manifest.json + per-stage JSON)
+- `ArtifactResolver`: resolves `$stage_id.key`, `$config.dotted.path`, literal passthrough
+- 8 unit tests (store) + 7 unit tests (resolver)
+
+#### Step 4: Agent Registry (`stlc_platform/pipeline/agent_registry.py`)
+- `AgentRegistry`: register/get/has/list_agents with `default()` factory
+- Maps 4 agents with both agent_id and alias: requirements_agent, bdd_agent, crawler_agent, api_test_agent
+- 5 unit tests
+
+#### Step 5: Pipeline YAML Loader (`stlc_platform/pipeline/pipeline_loader.py`)
+- `load_pipeline(path)` and `load_pipeline_from_dict(data)`
+- 8 unit tests
+
+#### Step 6: Pipeline Orchestrator (`stlc_platform/pipeline/orchestrator.py`)
+- `PipelineOrchestrator`: DAG-based executor with ThreadPoolExecutor parallelism
+- Resume support via disk-persisted artifacts
+- Retry logic, failure propagation (skip downstream of non-optional failures)
+- Callbacks: on_stage_start, on_stage_complete
+
+#### Step 7: CLI Entry Point (`stlc_platform/cli.py`)
+- Click-based: `stlc run` (--pipeline/--agent), `stlc validate`, `stlc agents list`
+- CI mode (--ci) for JSON output
+
+#### Step 8: Pipeline YAML Configs
+- `config/pipelines/full_stlc.yaml`: 5-stage pipeline (requirements → crawl → BDD → API discovery → API tests)
+- `config/pipelines/api_test_only.yaml`: single-stage minimal pipeline
+
+#### Step 9: Integration Tests (`tests/integration/test_stage4p1_validation.py`)
+- 9 tests: wave ordering, parallel execution, resume, CLI, failure handling, optional stages, retry, CI mode
+
+#### Step 10: Validation Gate
+- 12 Stage 4 checks added to `scripts/validate_stage.py`
+- Bumped `__stage__ = 4` in `stlc_platform/__init__.py`
+
+##### Final Metrics
+- **47 new Stage 4 tests** (38 unit + 9 integration) — all passing
+- **91/94 cumulative validation checks** (3 pre-existing Stages 0/1 failures)
+- All 12 Stage 4 Phase 1 checks pass
+- All 450 existing tests still passing
+
+### Next Steps
+- Stage 4 Phase 2+: Config profiles, model router, execution profiles, skill files, feedback persistence, CI/CD, full pipeline E2E

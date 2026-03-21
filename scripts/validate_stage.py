@@ -891,7 +891,110 @@ def check_stage_4():
     """Agent Orchestration & Integration."""
     check_stage_3()
     print("\n--- Stage 4: Agent Orchestration & Integration ---")
-    print("  SKIP  Stage 4 checks not yet implemented")
+
+    global _PASS, _FAIL
+
+    # 1. Pipeline package importable
+    _check_import(
+        "Pipeline package import",
+        "from stlc_platform.pipeline import PipelineDAG, PipelineOrchestrator, ArtifactStore, AgentRegistry, load_pipeline",
+    )
+
+    # 2. DAG module importable
+    _check_import(
+        "DAG module import",
+        "from stlc_platform.pipeline.dag import PipelineDAG, StageNode",
+    )
+
+    # 3. Orchestrator importable
+    _check_import(
+        "Orchestrator import",
+        "from stlc_platform.pipeline.orchestrator import PipelineOrchestrator, StageResult",
+    )
+
+    # 4. ArtifactStore importable
+    _check_import(
+        "ArtifactStore import",
+        "from stlc_platform.pipeline.artifact_store import ArtifactStore, ArtifactResolver",
+    )
+
+    # 5. AgentRegistry default has 4+ agents
+    _check_import(
+        "AgentRegistry default has 4+ agents",
+        (
+            "from stlc_platform.pipeline.agent_registry import AgentRegistry; "
+            "r = AgentRegistry.default(); "
+            "caps = r.list_agents(); "
+            "assert len(caps) >= 4, f'Expected 4+, got {len(caps)}'"
+        ),
+    )
+
+    # 6. CLI entry point importable
+    _check_import(
+        "CLI entry point import",
+        "from stlc_platform.cli import main",
+    )
+
+    # 7. Pipeline YAML fixture exists
+    full_stlc = _ROOT / "config" / "pipelines" / "full_stlc.yaml"
+    if full_stlc.exists():
+        _PASS += 1
+        print("  PASS  full_stlc.yaml pipeline config exists")
+    else:
+        _FAIL += 1
+        print("  FAIL  full_stlc.yaml pipeline config missing")
+
+    # 8. DAG cycle detection works (smoke test)
+    _check_import(
+        "DAG cycle detection smoke test",
+        (
+            "from stlc_platform.pipeline.dag import PipelineDAG, StageNode; "
+            "dag = PipelineDAG([StageNode(stage_id='a', agent_id='x', depends_on=['b']), "
+            "StageNode(stage_id='b', agent_id='x', depends_on=['a'])]); "
+            "errors = dag.validate(); "
+            "assert len(errors) == 1; "
+            "assert 'cycle' in errors[0].lower()"
+        ),
+    )
+
+    # 9. AgentResult has duration_seconds field
+    _check_import(
+        "AgentResult has duration_seconds",
+        (
+            "from stlc_platform.core.base_agent import AgentResult; "
+            "r = AgentResult(success=True, duration_seconds=1.5, tokens_used=100); "
+            "assert r.duration_seconds == 1.5; "
+            "assert r.tokens_used == 100"
+        ),
+    )
+
+    # 10. PipelineRunArtifact has stages_skipped field
+    _check_import(
+        "PipelineRunArtifact has stages_skipped",
+        (
+            "from stlc_platform.core.contracts import PipelineRunArtifact; "
+            "p = PipelineRunArtifact(run_id='t', pipeline_name='t', stages_skipped=['x']); "
+            "assert p.stages_skipped == ['x']; "
+            "assert p.schema_version == '1.1'"
+        ),
+    )
+
+    # 11. Stage 4 unit tests pass
+    unit_dir = _ROOT / "tests" / "unit" / "pipeline"
+    if unit_dir.exists():
+        _run(
+            "Stage 4 unit tests",
+            [sys.executable, "-m", "pytest", str(unit_dir), "-v", "--tb=short", "-q"],
+        )
+
+    # 12. Stage 4 integration tests pass
+    integration_dir = _ROOT / "tests" / "integration"
+    stage4_test = integration_dir / "test_stage4p1_validation.py"
+    if stage4_test.exists():
+        _run(
+            "Stage 4 Phase 1 integration tests",
+            [sys.executable, "-m", "pytest", str(stage4_test), "-v", "--tb=short", "-q"],
+        )
 
 
 def check_stage_5():

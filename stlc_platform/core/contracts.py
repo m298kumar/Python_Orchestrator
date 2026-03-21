@@ -227,7 +227,7 @@ class APITestArtifact(BaseModel):
 class PipelineRunArtifact(BaseModel):
     """Metadata about a pipeline execution."""
 
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
     run_id: str
     pipeline_name: str
     started_at: str = ""
@@ -235,5 +235,9 @@ class PipelineRunArtifact(BaseModel):
     status: str = "pending"  # pending, running, completed, failed
     stages_completed: List[str] = Field(default_factory=list)
     stages_failed: List[str] = Field(default_factory=list)
+    stages_skipped: List[str] = Field(default_factory=list)
     artifacts: Dict[str, str] = Field(default_factory=dict)  # stage_id -> artifact path
     error_message: str = ""
+    total_duration_seconds: float = 0.0
+    total_tokens_used: int = 0
+    stage_durations: Dict[str, float] = Field(default_factory=dict)

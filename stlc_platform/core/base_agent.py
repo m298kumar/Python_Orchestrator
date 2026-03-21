@@ -42,6 +42,8 @@ class AgentResult:
     artifacts: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
+    duration_seconds: float = 0.0
+    tokens_used: int = 0
 
 
 class BaseAgent(ABC):

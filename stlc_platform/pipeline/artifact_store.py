@@ -1,0 +1,195 @@
+"""
+Artifact Store
+==============
+In-memory + on-disk artifact persistence for pipeline runs.
+Includes ArtifactResolver for resolving $stage.key and $config.key references.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel
+
+
+class ArtifactStore:
+    """In-memory artifact store with optional disk persistence."""
+
+    def __init__(self, run_dir: Optional[Path] = None) -> None:
+        self._artifacts: Dict[str, Dict[str, Any]] = {}
+        self._metadata: Dict[str, Dict[str, Any]] = {}
+        self._run_dir = run_dir
+        self._completed_order: List[str] = []
+
+    def store(
+        self,
+        stage_id: str,
+        artifacts: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Store stage output artifacts."""
+        self._artifacts[stage_id] = artifacts
+        self._metadata[stage_id] = metadata or {}
+        if stage_id not in self._completed_order:
+            self._completed_order.append(stage_id)
+
+    def get(self, stage_id: str, key: str) -> Any:
+        """Get a specific artifact by stage_id and key."""
+        if stage_id not in self._artifacts:
+            raise KeyError(f"No artifacts for stage '{stage_id}'.")
+        stage_artifacts = self._artifacts[stage_id]
+        if key not in stage_artifacts:
+            raise KeyError(
+                f"Artifact '{key}' not found in stage '{stage_id}'. "
+                f"Available: {list(stage_artifacts.keys())}"
+            )
+        return stage_artifacts[key]
+
+    def get_all(self, stage_id: str) -> Dict[str, Any]:
+        """Get all artifacts for a stage."""
+        if stage_id not in self._artifacts:
+            raise KeyError(f"No artifacts for stage '{stage_id}'.")
+        return self._artifacts[stage_id]
+
+    def has_stage(self, stage_id: str) -> bool:
+        """Check if a stage has completed artifacts."""
+        return stage_id in self._artifacts
+
+    @property
+    def completed_stages(self) -> List[str]:
+        """Return completed stage IDs in order."""
+        return list(self._completed_order)
+
+    def persist_to_disk(self) -> None:
+        """Flush all in-memory artifacts to run_dir as JSON."""
+        if self._run_dir is None:
+            return
+        self._run_dir.mkdir(parents=True, exist_ok=True)
+
+        manifest: Dict[str, Any] = {
+            "completed_order": self._completed_order,
+            "stages": {},
+        }
+
+        for stage_id in self._completed_order:
+            stage_data = self._serialize_artifacts(self._artifacts[stage_id])
+            stage_meta = self._metadata.get(stage_id, {})
+            stage_file = self._run_dir / f"{stage_id}.json"
+            stage_file.write_text(
+                json.dumps(
+                    {"artifacts": stage_data, "metadata": stage_meta},
+                    indent=2,
+                    default=str,
+                ),
+                encoding="utf-8",
+            )
+            manifest["stages"][stage_id] = str(stage_file.name)
+
+        manifest_file = self._run_dir / "manifest.json"
+        manifest_file.write_text(
+            json.dumps(manifest, indent=2), encoding="utf-8"
+        )
+
+    def load_from_disk(self, up_to_stage: Optional[str] = None) -> List[str]:
+        """Load persisted artifacts from disk. Returns list of loaded stage_ids."""
+        if self._run_dir is None:
+            return []
+
+        manifest_file = self._run_dir / "manifest.json"
+        if not manifest_file.exists():
+            return []
+
+        manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+        loaded: List[str] = []
+
+        for stage_id in manifest.get("completed_order", []):
+            stage_file = self._run_dir / manifest["stages"][stage_id]
+            if stage_file.exists():
+                data = json.loads(stage_file.read_text(encoding="utf-8"))
+                self._artifacts[stage_id] = data.get("artifacts", {})
+                self._metadata[stage_id] = data.get("metadata", {})
+                if stage_id not in self._completed_order:
+                    self._completed_order.append(stage_id)
+                loaded.append(stage_id)
+
+            if up_to_stage and stage_id == up_to_stage:
+                break
+
+        return loaded
+
+    @staticmethod
+    def _serialize_artifacts(artifacts: Dict[str, Any]) -> Dict[str, Any]:
+        """Serialize artifacts, handling Pydantic models."""
+        result: Dict[str, Any] = {}
+        for key, value in artifacts.items():
+            if isinstance(value, BaseModel):
+                result[key] = value.model_dump()
+            elif isinstance(value, list):
+                result[key] = [
+                    v.model_dump() if isinstance(v, BaseModel) else v
+                    for v in value
+                ]
+            else:
+                try:
+                    json.dumps(value, default=str)
+                    result[key] = value
+                except (TypeError, ValueError):
+                    result[key] = str(value)
+        return result
+
+
+class ArtifactResolver:
+    """Resolves $stage.output and $config.key references in input maps."""
+
+    def __init__(self, store: ArtifactStore, config: Dict[str, Any]) -> None:
+        self._store = store
+        self._config = config
+
+    def resolve(self, input_map: Dict[str, str]) -> Dict[str, Any]:
+        """Resolve all references in an input_map to actual values."""
+        resolved: Dict[str, Any] = {}
+        for key, ref in input_map.items():
+            resolved[key] = self.resolve_single(ref)
+        return resolved
+
+    def resolve_single(self, ref: str) -> Any:
+        """Resolve a single reference string.
+
+        Patterns:
+            $stage_id.artifact_key  -> store.get(stage_id, artifact_key)
+            $config.dotted.path     -> nested config lookup
+            literal_value           -> pass through
+        """
+        if not isinstance(ref, str) or not ref.startswith("$"):
+            return ref
+
+        ref_body = ref[1:]  # strip leading $
+
+        if ref_body.startswith("config."):
+            config_path = ref_body[len("config."):]
+            return self._resolve_config_path(config_path)
+
+        # $stage_id.artifact_key
+        parts = ref_body.split(".", 1)
+        if len(parts) != 2:
+            raise ValueError(
+                f"Invalid reference '{ref}'. Expected '$stage_id.key' or '$config.path'."
+            )
+        stage_id, artifact_key = parts
+        return self._store.get(stage_id, artifact_key)
+
+    def _resolve_config_path(self, dotted_path: str) -> Any:
+        """Resolve a dotted config path like 'llm.model'."""
+        parts = dotted_path.split(".")
+        current: Any = self._config
+        for part in parts:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                raise KeyError(
+                    f"Config path '{dotted_path}' not found "
+                    f"(failed at '{part}')."
+                )
+        return current

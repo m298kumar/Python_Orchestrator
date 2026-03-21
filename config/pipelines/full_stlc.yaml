@@ -1,0 +1,46 @@
+# Full STLC Pipeline
+# ==================
+# End-to-end pipeline: requirements → test cases → BDD code → crawl → API tests → assemble
+#
+# Usage:
+#   stlc run --pipeline config/pipelines/full_stlc.yaml --config config/stlc_config.yaml
+
+pipeline: full_stlc
+
+stages:
+  - id: parse_requirements
+    agent: requirements_agent
+    input:
+      requirements: "$config.requirements"
+      llm_client: "$runtime.llm_client"
+    output: [test_cases]
+
+  - id: crawl_application
+    agent: crawler_agent
+    input:
+      html_pages: "$config.html_pages"
+    output: [site_model, discrepancy_report]
+    optional: true
+
+  - id: generate_bdd_code
+    agent: bdd_agent
+    depends_on: [parse_requirements]
+    input:
+      test_cases: "$parse_requirements.test_cases"
+    output: [feature_files, step_definitions]
+
+  - id: discover_apis
+    agent: api_test_agent
+    depends_on: [crawl_application]
+    input:
+      openapi_spec: "$config.openapi_spec"
+    output: [api_model, test_files]
+    optional: true
+
+  - id: generate_api_tests
+    agent: api_test_agent
+    depends_on: [discover_apis]
+    input:
+      api_model: "$discover_apis.api_model"
+    output: [test_files]
+    optional: true
