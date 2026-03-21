@@ -185,3 +185,23 @@ class TestGraphQLEdgeCases:
             introspection_schema, endpoint_url="/api/graphql"
         )
         assert all(ep.path == "/api/graphql" for ep in result.endpoints)
+
+    def test_preserves_example_request(self, gql_parser, introspection_schema):
+        """Bug fix: example_request was silently dropped before contract v1.2."""
+        result = gql_parser.parse(introspection_schema)
+        for ep in result.endpoints:
+            assert ep.example_request is not None
+            assert "query" in ep.example_request
+
+    def test_preserves_example_response(self, gql_parser, introspection_schema):
+        """Bug fix: example_response was silently dropped before contract v1.2."""
+        result = gql_parser.parse(introspection_schema)
+        for ep in result.endpoints:
+            assert ep.example_response is not None
+
+    def test_sdl_preserves_examples(self, gql_parser, sample_sdl):
+        """SDL-parsed endpoints should also have example request/response."""
+        result = gql_parser.parse_sdl(sample_sdl)
+        for ep in result.endpoints:
+            assert ep.example_request is not None
+            assert ep.example_response is not None

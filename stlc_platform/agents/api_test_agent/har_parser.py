@@ -226,7 +226,7 @@ class HARParser:
                 auth_type="bearer" if auth_required else "none",
                 example_request=request_body,
                 example_response=response_body,
-                status_codes=[str(status)],
+                status_codes=[status],
                 tags=[],
             )
             seen_signatures[sig] = endpoint

@@ -788,4 +788,41 @@ Implement deferred Stage 3 enhancements: Playwright dynamic crawler, HAR file pa
 - Lint clean
 
 ### Next Steps
+- Audit + bug fixes
+
+---
+
+## Session 012 — 2026-03-21 — Audit + Bug Fix Wave A
+
+### Objective
+Full spec audit (SPEC_WORKFLOW.md vs codebase) to identify gaps, then fix critical bugs.
+
+### Audit Findings
+- **93% spec compliance** (31/33 requirements fully implemented)
+- **2 bugs found** (B1/B2: example_request/example_response silently dropped)
+- **2 niche spec gaps** (Supertest JS framework, gRPC proto parsing — deferred)
+- **5 untested modules** (orchestrator, chroma_store, cli, exporters, ollama_client)
+- **4 quality improvements** identified (Scenario Outline, coverage threshold, etc.)
+
+### Bug Fixes (Wave A)
+
+#### B1+B2: APIEndpointArtifact missing example_request/example_response
+- **Root cause**: HAR parser and GraphQL parser passed `example_request` and `example_response` kwargs to `APIEndpointArtifact`, but those fields didn't exist in the Pydantic model. Pydantic silently dropped them → data loss.
+- **Fix**: Added `example_request: Optional[Dict[str, Any]] = None` and `example_response: Optional[Dict[str, Any]] = None` to `APIEndpointArtifact` in contracts.py (v1.2 fields, backward compatible).
+- **Also fixed**: Reverted unnecessary `str(status)` in HAR parser — contract `status_codes` is `List[int]`, Pydantic coerces strings fine but native `int` is cleaner.
+
+#### New Tests Added
+- `tests/unit/test_contracts.py` — 6 new tests for `APIEndpointArtifact`
+- `tests/unit/agents/api_test_agent/test_har_parser.py` — 3 new tests
+- `tests/unit/agents/api_test_agent/test_graphql_parser.py` — 3 new tests
+
+### Final Metrics
+- **12 new tests** (6 contract + 3 HAR + 3 GraphQL)
+- **871 total tests** (870 pass, 1 pre-existing Stage 0 failure)
+- Zero regressions
+- Lint clean
+
+### Next Steps
+- Wave B: Critical test coverage gaps (orchestrator, chroma_store, CLI)
+- Wave C: Spec compliance (Supertest, Scenario Outline, ChromaDB RAG)
 - Stage 5: Frontend UI

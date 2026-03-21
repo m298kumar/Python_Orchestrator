@@ -190,6 +190,9 @@ class APIEndpointArtifact(BaseModel):
     tags: List[str] = Field(default_factory=list)
     status_codes: List[int] = Field(default_factory=list)
     examples: Dict[str, Any] = Field(default_factory=dict)
+    # v1.2 fields (backward compatible)
+    example_request: Optional[Dict[str, Any]] = None
+    example_response: Optional[Dict[str, Any]] = None
 
 
 class APIModelArtifact(BaseModel):

@@ -153,3 +153,30 @@ class TestHAREdgeCases:
         }
         result = har_parser.parse(har)
         assert "{uuid}" in result.endpoints[0].path
+
+    def test_preserves_example_request(self, har_parser, sample_har):
+        """Bug fix: example_request was silently dropped before contract v1.2."""
+        result = har_parser.parse(sample_har)
+        post_ep = next(
+            (ep for ep in result.endpoints if ep.method == "POST"), None
+        )
+        assert post_ep is not None
+        assert post_ep.example_request is not None
+        assert "name" in post_ep.example_request
+
+    def test_preserves_example_response(self, har_parser, sample_har):
+        """Bug fix: example_response was silently dropped before contract v1.2."""
+        result = har_parser.parse(sample_har)
+        get_ep = next(
+            (ep for ep in result.endpoints if ep.method == "GET" and "users" in ep.path),
+            None,
+        )
+        assert get_ep is not None
+        assert get_ep.example_response is not None
+
+    def test_status_codes_are_ints(self, har_parser, sample_har):
+        """Status codes should be stored as integers in the contract."""
+        result = har_parser.parse(sample_har)
+        for ep in result.endpoints:
+            for code in ep.status_codes:
+                assert isinstance(code, int)

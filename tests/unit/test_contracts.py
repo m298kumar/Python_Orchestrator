@@ -12,6 +12,7 @@ from stlc_platform.core.contracts import (
     TestStepArtifact,
     FeatureFileArtifact,
     SiteModelArtifact,
+    APIEndpointArtifact,
     APIModelArtifact,
     PipelineRunArtifact,
 )
@@ -135,6 +136,73 @@ class TestSiteModelArtifact:
     def test_create_empty(self):
         sm = SiteModelArtifact(base_url="https://example.com")
         assert sm.pages == []
+
+
+class TestAPIEndpointArtifact:
+    def test_create_minimal(self):
+        ep = APIEndpointArtifact(path="/api/users", method="GET")
+        assert ep.path == "/api/users"
+        assert ep.method == "GET"
+        assert ep.path_params == []
+        assert ep.query_params == []
+        assert ep.auth_required is False
+        assert ep.status_codes == []
+        assert ep.example_request is None
+        assert ep.example_response is None
+
+    def test_example_request_response_preserved(self):
+        """Bug fix: example_request/example_response were silently dropped."""
+        req = {"name": "John", "email": "john@test.com"}
+        resp = {"id": 1, "name": "John", "email": "john@test.com"}
+        ep = APIEndpointArtifact(
+            path="/api/users",
+            method="POST",
+            example_request=req,
+            example_response=resp,
+        )
+        assert ep.example_request == req
+        assert ep.example_response == resp
+
+    def test_status_codes_accepts_ints(self):
+        ep = APIEndpointArtifact(
+            path="/api/users", method="GET", status_codes=[200, 404]
+        )
+        assert ep.status_codes == [200, 404]
+
+    def test_status_codes_coerces_strings_to_ints(self):
+        """Pydantic coerces string status codes to int."""
+        ep = APIEndpointArtifact(
+            path="/api/users", method="GET", status_codes=["200", "404"]
+        )
+        assert ep.status_codes == [200, 404]
+
+    def test_serialization_roundtrip(self):
+        ep = APIEndpointArtifact(
+            path="/api/users/{id}",
+            method="GET",
+            path_params=[{"name": "id", "type": "integer"}],
+            status_codes=[200, 404],
+            example_request={"id": 1},
+            example_response={"name": "John"},
+            auth_required=True,
+            auth_type="bearer",
+        )
+        json_str = ep.model_dump_json()
+        ep2 = APIEndpointArtifact.model_validate_json(json_str)
+        assert ep2.path == ep.path
+        assert ep2.example_request == {"id": 1}
+        assert ep2.example_response == {"name": "John"}
+        assert ep2.status_codes == [200, 404]
+        assert ep2.auth_required is True
+
+    def test_backward_compatible_without_new_fields(self):
+        """Old data without example_request/response still loads fine."""
+        ep = APIEndpointArtifact.model_validate({
+            "path": "/api/test",
+            "method": "GET",
+        })
+        assert ep.example_request is None
+        assert ep.example_response is None
 
 
 class TestAPIModelArtifact:
