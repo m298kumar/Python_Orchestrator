@@ -17,6 +17,8 @@ from stlc_platform.core.base_agent import (
 )
 from stlc_platform.agents.bdd_agent.feature_generator import FeatureFileGenerator
 from stlc_platform.agents.bdd_agent.gherkin_validator import GherkinValidator
+from stlc_platform.agents.bdd_agent.pom_generator import POMGenerator
+from stlc_platform.agents.bdd_agent.scaffolder import ProjectScaffolder
 from stlc_platform.agents.bdd_agent.step_parser import StepParser
 from stlc_platform.agents.bdd_agent.step_def_generator import StepDefinitionGenerator
 
@@ -32,8 +34,9 @@ class BDDAgent(BaseAgent):
       3. get_capabilities() -- describe input/output types
 
     Config keys:
-      - framework: "behave" or "pytest_bdd" (default: "behave")
-      - language: "python" (default: "python")
+      - framework: "behave", "pytest_bdd", "cucumber_java", or "cucumberjs"
+                    (default: "behave")
+      - language: "python", "java", or "javascript" (default: "python")
       - automation_lib: "playwright" or "selenium" (default: "playwright")
     """
 
@@ -94,7 +97,11 @@ class BDDAgent(BaseAgent):
 
         test_cases = artifacts["test_cases"]
         framework = config.get("framework", "behave")
-        language = config.get("language", "python")
+        # Auto-detect language from framework if not explicitly set
+        language = config.get(
+            "language",
+            StepDefinitionGenerator.SUPPORTED_FRAMEWORKS.get(framework, "python"),
+        )
         automation_lib = config.get("automation_lib", "playwright")
 
         try:
@@ -137,19 +144,58 @@ class BDDAgent(BaseAgent):
                 parameterized_steps, feature_files
             )
 
+            # Step 5: Generate POM stubs (optional, for web/mobile)
+            pom_stubs = []
+            generate_pom = config.get("generate_pom", True)
+            if generate_pom and language in POMGenerator.SUPPORTED_LANGUAGES:
+                pom_gen = POMGenerator(
+                    language=language,
+                    automation_lib=automation_lib,
+                    template_dir=config.get("template_dir"),
+                    override_dir=config.get("override_dir"),
+                )
+                crawled_pages = artifacts.get("crawled_pages")
+                pom_stubs = pom_gen.generate(
+                    test_cases,
+                    crawled_pages=crawled_pages,
+                )
+
+            # Step 6: Scaffold complete project (optional)
+            project = None
+            generate_project = config.get("generate_project", False)
+            if generate_project:
+                scaffolder = ProjectScaffolder(framework=framework)
+                project_name = config.get("project_name", "bdd_tests")
+                base_url = config.get("base_url", "http://localhost:8080")
+                project = scaffolder.scaffold(
+                    project_name=project_name,
+                    features=feature_files,
+                    step_defs=step_defs,
+                    pom_stubs=pom_stubs or None,
+                    base_url=base_url,
+                )
+
             total_scenarios = sum(ff.scenario_count for ff in feature_files)
             total_step_defs = sum(sd.step_count for sd in step_defs)
 
+            result_artifacts = {
+                "feature_files": feature_files,
+                "step_definitions": step_defs,
+            }
+            if pom_stubs:
+                result_artifacts["pom_stubs"] = pom_stubs
+            if project:
+                result_artifacts["project"] = project
+
             return AgentResult(
                 success=True,
-                artifacts={
-                    "feature_files": feature_files,
-                    "step_definitions": step_defs,
-                },
+                artifacts=result_artifacts,
                 metadata={
                     "total_features": len(feature_files),
                     "total_scenarios": total_scenarios,
                     "total_step_defs": total_step_defs,
+                    "total_pom_stubs": len(pom_stubs),
+                    "project_generated": project is not None,
                     "framework": framework,
                     "language": language,
                     "automation_lib": automation_lib,
@@ -169,10 +215,16 @@ class BDDAgent(BaseAgent):
             agent_id=self.agent_id,
             agent_version=self.agent_version,
             input_types=["TestCaseArtifact"],
-            output_types=["FeatureFileArtifact", "StepDefinitionArtifact"],
+            output_types=[
+                "FeatureFileArtifact",
+                "StepDefinitionArtifact",
+                "PageObjectStub",
+                "ScaffoldedProject",
+            ],
             description=(
                 "Generates BDD feature files and step definition skeletons "
-                "from test case artifacts. Supports Behave and Pytest-BDD."
+                "from test case artifacts. Supports Behave, Pytest-BDD, "
+                "Cucumber (Java), and Cucumber.js."
             ),
             required_skills=["coding_standards", "test_design_principles"],
             default_model_tier="lightweight",

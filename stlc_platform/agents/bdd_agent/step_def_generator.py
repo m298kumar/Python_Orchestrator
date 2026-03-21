@@ -1,8 +1,9 @@
 """
 Step Definition Generator
 =========================
-Generates step definition skeleton code for Python Behave and Pytest-BDD
-from parameterized step patterns using Jinja2 templates.
+Generates step definition skeleton code for Python (Behave, Pytest-BDD),
+Java (Cucumber), and JavaScript (Cucumber.js) from parameterized step
+patterns using Jinja2 templates.
 """
 
 from __future__ import annotations
@@ -42,6 +43,22 @@ class StepDefinitionGenerator:
     SUPPORTED_FRAMEWORKS: ClassVar[Dict[str, str]] = {
         "behave": "python",
         "pytest_bdd": "python",
+        "cucumber_java": "java",
+        "cucumberjs": "javascript",
+    }
+
+    _TEMPLATE_MAP: ClassVar[Dict[str, str]] = {
+        "behave": "behave_steps.py.j2",
+        "pytest_bdd": "pytest_bdd_steps.py.j2",
+        "cucumber_java": "cucumber_java.java.j2",
+        "cucumberjs": "cucumberjs_steps.js.j2",
+    }
+
+    _FILENAME_MAP: ClassVar[Dict[str, str]] = {
+        "behave": "steps.py",
+        "pytest_bdd": "test_steps.py",
+        "cucumber_java": "StepDefinitions.java",
+        "cucumberjs": "steps.js",
     }
 
     def __init__(
@@ -89,6 +106,8 @@ class StepDefinitionGenerator:
             return self._generate_behave(steps)
         elif self.framework == "pytest_bdd":
             return self._generate_pytest_bdd(steps, features or [])
+        elif self.framework in ("cucumber_java", "cucumberjs"):
+            return self._generate_generic(steps)
         else:
             raise ValueError(f"Unknown framework: {self.framework}")
 
@@ -175,6 +194,61 @@ class StepDefinitionGenerator:
                 language=self.language,
                 framework=self.framework,
                 filename="test_steps.py",
+                content=content,
+                step_count=total,
+            )
+        ]
+
+    def _generate_generic(
+        self, steps: List[ParameterizedStep]
+    ) -> List[StepDefinitionArtifact]:
+        """Generate step definitions for Java Cucumber or Cucumber.js."""
+        seen_names: set = set()
+        given_steps = self._prepare_steps(
+            [s for s in steps if s.keyword == "given"], seen_names
+        )
+        when_steps = self._prepare_steps(
+            [s for s in steps if s.keyword == "when"], seen_names
+        )
+        then_steps = self._prepare_steps(
+            [s for s in steps if s.keyword == "then"], seen_names
+        )
+
+        # Java/JS templates need {param} → {string} for Cucumber expressions
+        # and also pass param names list for method/function signatures
+        for step_list in (given_steps, when_steps, then_steps):
+            for step in step_list:
+                # Convert Python-style {param} to Cucumber expression {string}
+                param_names = []
+                if step["has_params"]:
+                    import re as _re
+                    params_found = _re.findall(r"\{([^}]+)\}", step["pattern"])
+                    param_names = params_found
+                    # Replace {paramN} with {string} for Cucumber expression
+                    step["cucumber_pattern"] = _re.sub(
+                        r"\{[^}]+\}", "{string}", step["pattern"]
+                    )
+                else:
+                    step["cucumber_pattern"] = step["pattern"]
+                step["param_names"] = param_names
+
+        template_name = self._TEMPLATE_MAP[self.framework]
+        template = self._env.get_template(template_name)
+        content = template.render(
+            automation_lib=self.automation_lib,
+            given_steps=given_steps,
+            when_steps=when_steps,
+            then_steps=then_steps,
+        )
+
+        total = len(given_steps) + len(when_steps) + len(then_steps)
+        filename = self._FILENAME_MAP[self.framework]
+
+        return [
+            StepDefinitionArtifact(
+                language=self.SUPPORTED_FRAMEWORKS[self.framework],
+                framework=self.framework,
+                filename=filename,
                 content=content,
                 step_count=total,
             )

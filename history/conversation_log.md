@@ -673,3 +673,58 @@ All 4 existing agents are synchronous. Going async would require pytest-asyncio,
 
 ### Next Steps
 - Stage 5: Frontend UI
+
+---
+
+## Session 010 — 2026-03-21
+
+### Context
+- Stages 0-4 complete, audit revealed 2 missing spec items in Stage 2
+- User requested gap closure before Stage 5
+
+### Gap Closure Wave 1: Stage 2 BDD Agent Completions
+
+#### A1 + A2: Multi-Language Step Definition Templates
+- `cucumber_java.java.j2` — Java Cucumber step defs with @Given/@When/@Then annotations, PendingException bodies
+- `cucumberjs_steps.js.j2` — JS Cucumber.js step defs with Given/When/Then functions, async/await pattern
+- `StepDefinitionGenerator.SUPPORTED_FRAMEWORKS` expanded: 2 → 4 frameworks
+- Added `_TEMPLATE_MAP` and `_FILENAME_MAP` class variables
+- Added `_generate_generic()` method with Cucumber expression conversion ({param} → {string})
+- 19 unit tests (test_multi_framework.py)
+
+#### A3: POM Generator
+- New `stlc_platform/agents/bdd_agent/pom_generator.py` — POMGenerator class
+- Extracts page/screen names from TestCaseArtifact.component fields
+- Extracts UI elements from quoted strings and element-type patterns in GWT steps
+- Extracts action methods from verb patterns (click, enter, navigate, etc.)
+- Optional selector merge from CrawledPageArtifact (real selectors replace TODO placeholders)
+- Supports Python (Playwright/Selenium) and Java (Selenium) output via Jinja2 templates
+- Templates: `pom_python.py.j2`, `pom_java.java.j2`
+- 16 unit tests (test_pom_generator.py)
+
+#### A4: Project Scaffolder
+- New `stlc_platform/agents/bdd_agent/scaffolder.py` — ProjectScaffolder class
+- Assembles features + step defs + POM stubs into complete runnable projects
+- 4 framework-specific project structures:
+  - Behave: behave.ini, requirements.txt, environment.py, features/steps/
+  - Pytest-BDD: pytest.ini, requirements.txt, conftest.py, tests/
+  - Cucumber Java: pom.xml, RunCucumberTest.java, src/test/resources/features/
+  - Cucumber.js: package.json, cucumber.js, step_definitions/
+- `write_to_disk()` method for persisting to filesystem
+- Auto-generated README with setup/run instructions
+- 25 unit tests (test_scaffolder.py)
+
+#### BDD Agent Wiring
+- `agent.py` updated: Steps 5+6 added to execute() for POM generation and project scaffolding
+- `__init__.py` updated: exports POMGenerator, PageObjectStub, ProjectScaffolder, ScaffoldedProject
+- `get_capabilities()` updated: output_types includes PageObjectStub, ScaffoldedProject
+
+##### Final Metrics
+- **60 new tests** (19 multi-framework + 16 POM + 25 scaffolder) — all passing
+- **812 total tests** (811 pass, 1 pre-existing Stage 0 failure)
+- **105/108 cumulative validation checks** (same 3 pre-existing failures)
+- Zero regressions
+
+### Next Steps
+- Gap Closure Wave 2: Stage 3 enhancements (optional — Playwright crawler, HAR, GraphQL)
+- Stage 5: Frontend UI

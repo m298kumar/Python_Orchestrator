@@ -137,4 +137,4 @@ class TestFunctionNaming:
 class TestUnsupportedFramework:
     def test_raises_for_unknown_framework(self):
         with pytest.raises(ValueError, match="Unsupported framework"):
-            StepDefinitionGenerator(framework="cucumber_java")
+            StepDefinitionGenerator(framework="rspec")
