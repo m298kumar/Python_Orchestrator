@@ -174,4 +174,6 @@ class BDDAgent(BaseAgent):
                 "Generates BDD feature files and step definition skeletons "
                 "from test case artifacts. Supports Behave and Pytest-BDD."
             ),
+            required_skills=["coding_standards", "test_design_principles"],
+            default_model_tier="lightweight",
         )

@@ -167,4 +167,6 @@ class APITestAgent(BaseAgent):
                 "and generates framework-specific API test code with "
                 "test level classification and failure type metadata."
             ),
+            required_skills=["coding_standards", "data_catalog"],
+            default_model_tier="standard",
         )

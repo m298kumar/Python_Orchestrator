@@ -224,6 +224,18 @@ class APITestArtifact(BaseModel):
 # ── Stage 4: Pipeline ───────────────────────────────────────────────────────
 
 
+class AgentFeedbackArtifact(BaseModel):
+    """Feedback from users to improve agent behavior over time."""
+
+    schema_version: str = "1.0"
+    agent_id: str
+    feedback_type: str = "correction"  # correction | preference | constraint
+    message: str
+    context: Dict[str, Any] = Field(default_factory=dict)
+    created_at: str = ""
+    applied_count: int = 0
+
+
 class PipelineRunArtifact(BaseModel):
     """Metadata about a pipeline execution."""
 

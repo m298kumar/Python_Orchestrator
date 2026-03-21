@@ -44,6 +44,23 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
         return {}
 
 
+def deep_merge(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Recursively merge overlay into base.
+
+    - Dict values are merged recursively
+    - All other values in overlay overwrite base
+    - Keys in base not present in overlay are preserved
+    """
+    result = dict(base)
+    for key, value in overlay.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
 def _deep_get(d: Dict[str, Any], keys: List[str], default: Any = None) -> Any:
     """Nested dict access: _deep_get(d, ['llm', 'model']) -> d['llm']['model']."""
     for key in keys:
@@ -242,6 +259,36 @@ def load_config() -> AppConfig:
     cfg.project_domain = project.get("domain", cfg.project_domain)
 
     return cfg
+
+
+def load_config_yaml(profile: str = "") -> Dict[str, Any]:
+    """
+    Load raw YAML config dict with optional profile overlay.
+
+    Args:
+        profile: Optional profile name (e.g., "web", "api").
+                 Loads config/stlc_config.{profile}.yaml and deep-merges
+                 onto the base config/stlc_config.yaml.
+
+    Returns:
+        Merged config dict.
+
+    Raises:
+        FileNotFoundError: If the profile overlay file doesn't exist.
+    """
+    root = _find_project_root()
+    base = _load_yaml(root / "config" / "stlc_config.yaml")
+
+    if profile:
+        overlay_path = root / "config" / f"stlc_config.{profile}.yaml"
+        if not overlay_path.exists():
+            raise FileNotFoundError(
+                f"Config profile '{profile}' not found at {overlay_path}"
+            )
+        overlay = _load_yaml(overlay_path)
+        base = deep_merge(base, overlay)
+
+    return base
 
 
 # Singleton — loaded once, importable everywhere

@@ -1,0 +1,41 @@
+# Test Design Principles Skill File
+# ==================================
+# Universal test design knowledge applicable across all domains.
+
+principles:
+  - name: "Arrange-Act-Assert"
+    description: "Structure tests with clear setup, action, and verification phases"
+  - name: "Single Responsibility"
+    description: "Each test should verify exactly one behavior"
+  - name: "Independence"
+    description: "Tests must not depend on execution order or shared state"
+  - name: "Determinism"
+    description: "Tests must produce the same result every run"
+  - name: "Fast Feedback"
+    description: "Prefer unit tests over integration tests where possible"
+
+boundary_analysis:
+  techniques:
+    - "Test at exact boundary values (min, max)"
+    - "Test one above and one below boundary"
+    - "Test empty/null inputs"
+    - "Test maximum length/size inputs"
+  common_boundaries:
+    - "0, 1, -1 for numeric inputs"
+    - "Empty string, max-length string for text"
+    - "Start/end of valid date ranges"
+    - "Min/max quantity for business rules"
+
+negative_testing:
+  categories:
+    - "Invalid input formats"
+    - "Missing required fields"
+    - "Out-of-range values"
+    - "Unauthorized access attempts"
+    - "Concurrent modification conflicts"
+    - "Network failure scenarios"
+
+test_pyramid:
+  unit: "70% — fast, isolated, test single functions"
+  api: "20% — test service contracts and integrations"
+  e2e: "10% — critical user journeys only"

@@ -19,6 +19,8 @@ from stlc_platform.core.contracts import PipelineRunArtifact
 from stlc_platform.pipeline.agent_registry import AgentRegistry
 from stlc_platform.pipeline.artifact_store import ArtifactResolver, ArtifactStore
 from stlc_platform.pipeline.dag import PipelineDAG
+from stlc_platform.pipeline.skill_loader import SkillLoader
+from stlc_platform.pipeline.profile_loader import ExecutionProfile, ProfileLoader
 
 
 @dataclass
@@ -45,6 +47,8 @@ class PipelineOrchestrator:
         max_workers: int = 4,
         on_stage_start: Optional[Callable[[str], None]] = None,
         on_stage_complete: Optional[Callable[[StageResult], None]] = None,
+        skill_loader: Optional[SkillLoader] = None,
+        execution_profile: Optional[ExecutionProfile] = None,
     ) -> None:
         self._dag = dag
         self._registry = registry
@@ -52,6 +56,9 @@ class PipelineOrchestrator:
         self._max_workers = max_workers
         self._on_stage_start = on_stage_start
         self._on_stage_complete = on_stage_complete
+        self._skill_loader = skill_loader
+        self._execution_profile = execution_profile
+        self._profile_loader = ProfileLoader()
 
         self._run_id = str(uuid.uuid4())[:8]
         self._store = ArtifactStore(run_dir=run_dir)
@@ -224,9 +231,31 @@ class PipelineOrchestrator:
             # Resolve input references
             resolved_inputs = self._resolver.resolve(stage.input_map)
 
+            # Apply execution profile filter to inputs
+            if self._execution_profile:
+                resolved_inputs = self._profile_loader.apply_filter(
+                    self._execution_profile, resolved_inputs
+                )
+
             # Get agent and execute
             agent = self._registry.get(stage.agent_id)
             stage_config = {**self._config, **stage.config_overrides}
+
+            # Inject skill context if skill loader is available
+            if self._skill_loader:
+                caps = agent.get_capabilities()
+                skills_context = self._skill_loader.load_for_agent(caps)
+                if skills_context:
+                    stage_config["skills"] = skills_context
+
+            # Inject execution profile into config for agent awareness
+            if self._execution_profile:
+                stage_config["execution_profile"] = {
+                    "name": self._execution_profile.name,
+                    "filters": self._execution_profile.filters,
+                    "max_tests": self._execution_profile.max_tests,
+                }
+
             result = agent.execute(resolved_inputs, stage_config)
             duration = time.monotonic() - t0
             result.duration_seconds = duration

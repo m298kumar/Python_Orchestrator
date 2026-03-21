@@ -604,5 +604,72 @@ All 4 existing agents are synchronous. Going async would require pytest-asyncio,
 - All 12 Stage 4 Phase 1 checks pass
 - All 450 existing tests still passing
 
+### Stage 4 Phase 2: Skill Files, Model Router, Profiles, Feedback, CI/CD
+
+#### Wave A (parallel): Skill Files + Execution Profiles + Config Merging
+
+##### P2.1: Domain Knowledge Skill Files
+- `stlc_platform/pipeline/skill_loader.py` — SkillLoader: discovers YAML in `config/skills/`, merges common + domain layers
+- `config/skills/common/coding_standards.yaml` — Universal coding conventions
+- `config/skills/common/test_design_principles.yaml` — Test design patterns
+- `config/skills/ecommerce/data_catalog.yaml` — Domain-specific entity knowledge
+- `AgentCapabilities` extended: `required_skills: List[str]`, `default_model_tier: str`
+- All 4 agents updated with `required_skills` and `default_model_tier` in `get_capabilities()`
+- Orchestrator injects skill context via config dict (backward compatible)
+- 18 unit tests
+
+##### P2.3: Execution Profiles
+- `stlc_platform/pipeline/profile_loader.py` — ProfileLoader + ExecutionProfile
+- `config/profiles/smoke.yaml` — Critical path, high/critical only, max 20 tests
+- `config/profiles/targeted.yaml` — Specific req IDs or tags
+- `config/profiles/regression.yaml` — Full run, no filters
+- Profile filters applied to artifacts before agent execution
+- CLI `--profile` option added
+- 12 unit tests
+
+##### P2.4: Config Profile Merging
+- `stlc_platform/core/config_loader.py` — Added `deep_merge()` + `load_config_yaml(profile=)`
+- `config/stlc_config.web.yaml` — Web-focused overlay (deeper crawl, playwright)
+- `config/stlc_config.api.yaml` — API-focused overlay (disable crawler)
+- CLI `--config-profile` option added
+- 12 unit tests
+
+#### Wave B (parallel): Model Router + Feedback Loop
+
+##### P2.2: Tiered Model Router
+- `stlc_platform/pipeline/model_router.py` — ModelRouter, ModelTier, ComplexitySignals
+- 3 tiers: lightweight (template-driven), standard (general), advanced (complex reasoning)
+- Complexity heuristic: input size + item count → potential tier promotion
+- Returns config dict (not LLM instances) — decoupled from lifecycle
+- 13 unit tests
+
+##### P2.5: Feedback Loop / Persistence
+- `stlc_platform/pipeline/feedback_store.py` — FeedbackStore with JSON persistence
+- `stlc_platform/core/contracts.py` — Added `AgentFeedbackArtifact` model
+- CLI `stlc feedback add` and `stlc feedback list` commands
+- 13 unit tests
+
+#### Wave C (sequential): CI/CD + E2E Tests
+
+##### P2.6: CI/CD Enhancement
+- `.github/workflows/stlc_ci.yml` — GitHub Actions: lint, tests, validation, pipeline smoke test
+
+##### P2.7: Full Pipeline E2E Tests
+- `tests/integration/test_stage4p2_validation.py` — 13 integration tests:
+  - Skill injection into agents (common + domain overlays)
+  - Execution profile propagation
+  - Model router tier selection for all built-in agents
+  - Feedback roundtrip persistence
+  - Config profile merging
+  - CI JSON output serialization
+  - Full 5-stage pipeline with mock agents + skills + profiles
+  - API-only pipeline
+
+##### Final Metrics
+- **131 Stage 4 tests total** (47 P1 + 84 P2) — all passing
+- **105/108 cumulative validation checks** (3 pre-existing Stages 0/1 failures)
+- All 26 Stage 4 checks pass (12 P1 + 14 P2)
+- All 450 existing tests still passing
+
 ### Next Steps
-- Stage 4 Phase 2+: Config profiles, model router, execution profiles, skill files, feedback persistence, CI/CD, full pipeline E2E
+- Stage 5: Frontend UI

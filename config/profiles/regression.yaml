@@ -1,0 +1,7 @@
+# Regression Execution Profile
+# ==============================
+# Full regression — no filters, process everything.
+
+name: regression
+description: "Full regression — all priorities, all test levels, no limits"
+filters: {}

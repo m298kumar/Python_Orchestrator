@@ -1,0 +1,17 @@
+# Web-Focused Config Profile Overlay
+# ====================================
+# Overlays onto stlc_config.yaml when --config-profile web is used.
+# Only specify keys that differ from the base config.
+
+project:
+  tech_stack:
+    platform: web
+    backend: rest
+
+bdd:
+  automation_lib: playwright
+
+crawler:
+  max_depth: 5
+  max_pages: 200
+  wait_for_network_idle: true

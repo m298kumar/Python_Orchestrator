@@ -180,4 +180,6 @@ class TestGenerationAgent(BaseAgent):
                 "prompt templates with AC classification, sanitisation, "
                 "and domain-agnostic output."
             ),
+            required_skills=["data_catalog", "coding_standards", "test_design_principles"],
+            default_model_tier="advanced",
         )

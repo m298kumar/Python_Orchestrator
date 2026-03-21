@@ -1,0 +1,52 @@
+# E-Commerce Domain Data Catalog
+# ================================
+# Domain-specific knowledge for e-commerce applications.
+# This overlays on common skills when project.domain = "ecommerce".
+
+entities:
+  product:
+    fields: ["sku", "name", "price", "description", "category", "stock_quantity", "images"]
+    business_rules:
+      - "Price must be positive"
+      - "SKU must be unique"
+      - "Stock cannot go negative"
+  cart:
+    fields: ["user_id", "items", "subtotal", "discount", "tax", "total"]
+    business_rules:
+      - "Cart total = sum(item.price * item.quantity) - discount + tax"
+      - "Empty cart cannot proceed to checkout"
+      - "Max items per cart: 100"
+  order:
+    fields: ["order_id", "user_id", "items", "shipping_address", "payment_method", "status"]
+    statuses: ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "refunded"]
+    business_rules:
+      - "Order cannot be cancelled after shipping"
+      - "Refund only within 30 days of delivery"
+  user:
+    fields: ["user_id", "email", "name", "shipping_addresses", "payment_methods"]
+    business_rules:
+      - "Email must be unique"
+      - "Password minimum 8 characters"
+
+test_data:
+  valid_products:
+    - {sku: "SKU-001", name: "Widget A", price: 29.99, stock: 100}
+    - {sku: "SKU-002", name: "Gadget B", price: 149.50, stock: 25}
+  valid_users:
+    - {email: "test@example.com", name: "Test User"}
+  invalid_inputs:
+    - {field: "price", value: -10, reason: "Negative price"}
+    - {field: "price", value: 0, reason: "Zero price"}
+    - {field: "email", value: "not-an-email", reason: "Invalid email format"}
+    - {field: "stock", value: -1, reason: "Negative stock"}
+
+common_flows:
+  critical_path:
+    - "Browse products"
+    - "Add to cart"
+    - "View cart"
+    - "Proceed to checkout"
+    - "Enter shipping info"
+    - "Enter payment info"
+    - "Place order"
+    - "Order confirmation"

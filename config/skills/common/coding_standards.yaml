@@ -1,0 +1,34 @@
+# Common Coding Standards Skill File
+# ===================================
+# Institutional knowledge about coding conventions that applies to all domains.
+# Agents use this context to generate more consistent, maintainable output.
+
+naming_conventions:
+  test_functions: "test_{feature}_{scenario}"
+  step_definitions: "step_{action}_{target}"
+  feature_files: "{req_id}_{feature_name}.feature"
+  variables: snake_case
+  classes: PascalCase
+
+documentation:
+  require_docstrings: true
+  max_line_length: 120
+  comment_threshold: "Complex logic blocks require inline comments"
+
+test_design:
+  prefer_data_driven: true
+  max_steps_per_test: 10
+  assertion_style: "single assertion per test when possible"
+  setup_teardown: "Use fixtures/hooks, not inline setup"
+
+locator_strategy:
+  preferred_order:
+    - data-testid
+    - id
+    - name
+    - css_selector
+    - xpath
+  avoid:
+    - absolute_xpath
+    - index_based_selectors
+    - text_based_selectors_for_dynamic_content

@@ -1,0 +1,10 @@
+# Targeted Execution Profile
+# ===========================
+# Run only specific requirement IDs or tagged items.
+# Customize the requirement_ids and tags lists for your needs.
+
+name: targeted
+description: "Run only specified requirements or tagged items"
+filters:
+  requirement_ids: []  # Populate with specific IDs, e.g., ["REQ-001", "REQ-005"]
+  tags: []             # Populate with specific tags, e.g., ["authentication", "checkout"]

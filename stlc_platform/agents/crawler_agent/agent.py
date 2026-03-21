@@ -189,4 +189,6 @@ class CrawlerAgent(BaseAgent):
                 "elements, forms, and navigation graph. Optionally detects "
                 "discrepancies between the site model and requirements."
             ),
+            required_skills=["coding_standards"],
+            default_model_tier="lightweight",
         )

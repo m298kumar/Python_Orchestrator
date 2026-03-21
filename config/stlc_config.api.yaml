@@ -1,0 +1,17 @@
+# API-Focused Config Profile Overlay
+# ====================================
+# Overlays onto stlc_config.yaml when --config-profile api is used.
+# Only specify keys that differ from the base config.
+
+project:
+  tech_stack:
+    platform: api
+    backend: rest
+
+api_testing:
+  framework: pytest_requests
+
+# Disable web-specific features
+crawler:
+  max_depth: 0
+  max_pages: 0

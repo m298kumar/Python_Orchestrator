@@ -987,13 +987,160 @@ def check_stage_4():
             [sys.executable, "-m", "pytest", str(unit_dir), "-v", "--tb=short", "-q"],
         )
 
-    # 12. Stage 4 integration tests pass
+    # 12. Stage 4 Phase 1 integration tests pass
     integration_dir = _ROOT / "tests" / "integration"
     stage4_test = integration_dir / "test_stage4p1_validation.py"
     if stage4_test.exists():
         _run(
             "Stage 4 Phase 1 integration tests",
             [sys.executable, "-m", "pytest", str(stage4_test), "-v", "--tb=short", "-q"],
+        )
+
+    # ── Phase 2 checks ───────────────────────────────────────────────────
+
+    # 13. SkillLoader importable
+    _check_import(
+        "SkillLoader import",
+        "from stlc_platform.pipeline.skill_loader import SkillLoader",
+    )
+
+    # 14. Common skill files exist
+    skills_dir = _ROOT / "config" / "skills" / "common"
+    skill_files_exist = (
+        skills_dir.is_dir()
+        and (skills_dir / "coding_standards.yaml").exists()
+        and (skills_dir / "test_design_principles.yaml").exists()
+    )
+    if skill_files_exist:
+        _PASS += 1
+        print("  PASS  Common skill files exist")
+    else:
+        _FAIL += 1
+        print("  FAIL  Common skill files missing")
+
+    # 15. Agents declare required_skills
+    _check_import(
+        "Agents declare required_skills",
+        (
+            "from stlc_platform.pipeline.agent_registry import AgentRegistry; "
+            "r = AgentRegistry.default(); "
+            "caps = r.list_agents(); "
+            "assert all(len(c.required_skills) >= 1 for c in caps), "
+            "'All agents should declare at least 1 required_skill'"
+        ),
+    )
+
+    # 16. ModelRouter importable
+    _check_import(
+        "ModelRouter import",
+        "from stlc_platform.pipeline.model_router import ModelRouter, ModelTier",
+    )
+
+    # 17. Router selects tier smoke test
+    _check_import(
+        "Router selects tier smoke test",
+        (
+            "from stlc_platform.pipeline.model_router import ModelRouter; "
+            "from stlc_platform.core.base_agent import AgentCapabilities; "
+            "r = ModelRouter.default(); "
+            "c = AgentCapabilities(agent_id='t', agent_version='1.0', default_model_tier='standard'); "
+            "tier = r.select_tier(c); "
+            "assert tier.name == 'standard'"
+        ),
+    )
+
+    # 18. ProfileLoader importable
+    _check_import(
+        "ProfileLoader import",
+        "from stlc_platform.pipeline.profile_loader import ProfileLoader, ExecutionProfile",
+    )
+
+    # 19. Profile YAML files exist
+    profiles_dir = _ROOT / "config" / "profiles"
+    profiles_exist = (
+        profiles_dir.is_dir()
+        and (profiles_dir / "smoke.yaml").exists()
+        and (profiles_dir / "regression.yaml").exists()
+        and (profiles_dir / "targeted.yaml").exists()
+    )
+    if profiles_exist:
+        _PASS += 1
+        print("  PASS  Profile YAML files exist (smoke, regression, targeted)")
+    else:
+        _FAIL += 1
+        print("  FAIL  Profile YAML files missing")
+
+    # 20. Config profile merge smoke test
+    _check_import(
+        "Config profile merge smoke test",
+        (
+            "from stlc_platform.core.config_loader import deep_merge, load_config_yaml; "
+            "base = {'a': {'b': 1}}; "
+            "overlay = {'a': {'c': 2}}; "
+            "result = deep_merge(base, overlay); "
+            "assert result == {'a': {'b': 1, 'c': 2}}; "
+            "cfg = load_config_yaml(profile='web'); "
+            "assert cfg['crawler']['max_depth'] == 5"
+        ),
+    )
+
+    # 21. AgentFeedbackArtifact importable
+    _check_import(
+        "AgentFeedbackArtifact import",
+        (
+            "from stlc_platform.core.contracts import AgentFeedbackArtifact; "
+            "f = AgentFeedbackArtifact(agent_id='test', message='hi'); "
+            "assert f.schema_version == '1.0'"
+        ),
+    )
+
+    # 22. FeedbackStore importable
+    _check_import(
+        "FeedbackStore import",
+        "from stlc_platform.pipeline.feedback_store import FeedbackStore",
+    )
+
+    # 23. GitHub Actions workflow exists
+    gh_workflow = _ROOT / ".github" / "workflows" / "stlc_ci.yml"
+    if gh_workflow.exists():
+        _PASS += 1
+        print("  PASS  GitHub Actions workflow exists")
+    else:
+        _FAIL += 1
+        print("  FAIL  GitHub Actions workflow missing")
+
+    # 24. CLI --profile option recognized
+    _check_import(
+        "CLI --profile option recognized",
+        (
+            "from click.testing import CliRunner; "
+            "from stlc_platform.cli import main; "
+            "runner = CliRunner(); "
+            "result = runner.invoke(main, ['run', '--help']); "
+            "assert '--profile' in result.output"
+        ),
+    )
+
+    # 25. Stage 4 Phase 2 unit tests pass
+    _run(
+        "Stage 4 Phase 2 unit tests",
+        [
+            sys.executable, "-m", "pytest",
+            str(_ROOT / "tests" / "unit" / "pipeline" / "test_skill_loader.py"),
+            str(_ROOT / "tests" / "unit" / "pipeline" / "test_profile_loader.py"),
+            str(_ROOT / "tests" / "unit" / "pipeline" / "test_config_profiles.py"),
+            str(_ROOT / "tests" / "unit" / "pipeline" / "test_model_router.py"),
+            str(_ROOT / "tests" / "unit" / "pipeline" / "test_feedback_store.py"),
+            "-v", "--tb=short", "-q",
+        ],
+    )
+
+    # 26. Stage 4 Phase 2 integration tests pass
+    stage4p2_test = integration_dir / "test_stage4p2_validation.py"
+    if stage4p2_test.exists():
+        _run(
+            "Stage 4 Phase 2 integration tests",
+            [sys.executable, "-m", "pytest", str(stage4p2_test), "-v", "--tb=short", "-q"],
         )
 
 

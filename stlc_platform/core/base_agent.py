@@ -23,6 +23,8 @@ class AgentCapabilities:
     input_types: List[str] = field(default_factory=list)
     output_types: List[str] = field(default_factory=list)
     description: str = ""
+    required_skills: List[str] = field(default_factory=list)
+    default_model_tier: str = "standard"
 
 
 @dataclass

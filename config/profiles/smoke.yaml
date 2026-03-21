@@ -1,0 +1,12 @@
+# Smoke Execution Profile
+# ========================
+# Critical path only — high/critical priority, limited output.
+# Use for quick validation that the system works end-to-end.
+
+name: smoke
+description: "Critical path only — high/critical priority items"
+filters:
+  priority:
+    - critical
+    - high
+max_tests: 20

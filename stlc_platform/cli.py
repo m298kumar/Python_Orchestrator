@@ -62,6 +62,14 @@ def main() -> None:
     "--ci", is_flag=True,
     help="CI mode: JSON output, non-interactive.",
 )
+@click.option(
+    "--profile", default=None,
+    help="Execution profile (smoke, targeted, regression).",
+)
+@click.option(
+    "--config-profile", default=None,
+    help="Config profile overlay (web, api).",
+)
 def run(
     config: str,
     pipeline: Optional[str],
@@ -71,12 +79,17 @@ def run(
     output: str,
     max_workers: int,
     ci: bool,
+    profile: Optional[str],
+    config_profile: Optional[str],
 ) -> None:
     """Run a pipeline or single agent."""
     if agent:
         _run_single_agent(agent, input_file, config, output, ci)
     elif pipeline:
-        _run_pipeline(pipeline, config, resume_from, output, max_workers, ci)
+        _run_pipeline(
+            pipeline, config, resume_from, output, max_workers, ci,
+            profile=profile, config_profile=config_profile,
+        )
     else:
         click.echo("Error: Specify --pipeline or --agent.", err=True)
         raise SystemExit(1)
@@ -138,11 +151,15 @@ def _run_pipeline(
     output_dir: str,
     max_workers: int,
     ci: bool,
+    profile: Optional[str] = None,
+    config_profile: Optional[str] = None,
 ) -> None:
     """Execute a full pipeline."""
     from stlc_platform.pipeline.agent_registry import AgentRegistry
     from stlc_platform.pipeline.orchestrator import PipelineOrchestrator
     from stlc_platform.pipeline.pipeline_loader import load_pipeline
+    from stlc_platform.pipeline.skill_loader import SkillLoader
+    from stlc_platform.pipeline.profile_loader import ProfileLoader
 
     # Load pipeline
     try:
@@ -150,6 +167,30 @@ def _run_pipeline(
     except (FileNotFoundError, ValueError) as e:
         click.echo(f"Error loading pipeline: {e}", err=True)
         raise SystemExit(1)
+
+    # Load config (with optional profile overlay)
+    pipeline_config: dict = {}
+    if config_profile:
+        try:
+            from stlc_platform.core.config_loader import load_config_yaml
+            pipeline_config = load_config_yaml(profile=config_profile)
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}", err=True)
+            raise SystemExit(1)
+
+    # Load execution profile
+    execution_profile = None
+    if profile:
+        try:
+            loader = ProfileLoader()
+            execution_profile = loader.load(profile)
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}", err=True)
+            raise SystemExit(1)
+
+    # Set up skill loader
+    domain = pipeline_config.get("project", {}).get("domain", "")
+    skill_loader = SkillLoader(domain=domain)
 
     registry = AgentRegistry.default()
     run_dir = Path(output_dir) / ".stlc_runs" / "latest"
@@ -166,15 +207,21 @@ def _run_pipeline(
     orchestrator = PipelineOrchestrator(
         dag=dag,
         registry=registry,
-        config={},
+        config=pipeline_config,
         run_dir=run_dir,
         max_workers=max_workers,
         on_stage_start=on_start,
         on_stage_complete=on_complete,
+        skill_loader=skill_loader,
+        execution_profile=execution_profile,
     )
 
     if not ci:
         click.echo(f"Running pipeline: {dag.pipeline_name}")
+        if profile:
+            click.echo(f"  Profile: {profile}")
+        if config_profile:
+            click.echo(f"  Config: {config_profile}")
 
     result = orchestrator.run(resume_from=resume_from)
 
@@ -225,3 +272,58 @@ def agents_list() -> None:
     for cap in caps:
         click.echo(f"{cap.agent_id:<25} {cap.agent_version:<10} {cap.description[:44]}")
     click.echo(f"\n{len(caps)} agents registered.")
+
+
+@main.group()
+def feedback() -> None:
+    """Feedback management commands."""
+
+
+@feedback.command("add")
+@click.option("--agent", "-a", required=True, help="Agent ID to add feedback for.")
+@click.option(
+    "--type", "-t", "feedback_type", default="correction",
+    type=click.Choice(["correction", "preference", "constraint"]),
+    help="Feedback type.",
+)
+@click.option("--message", "-m", required=True, help="Feedback message.")
+@click.option("--output", "-o", default="./feedback", help="Feedback store path.")
+def feedback_add(
+    agent: str,
+    feedback_type: str,
+    message: str,
+    output: str,
+) -> None:
+    """Add feedback for an agent to improve future runs."""
+    from stlc_platform.core.contracts import AgentFeedbackArtifact
+    from stlc_platform.pipeline.feedback_store import FeedbackStore
+
+    store = FeedbackStore(persist_path=Path(output))
+    entry = AgentFeedbackArtifact(
+        agent_id=agent,
+        feedback_type=feedback_type,
+        message=message,
+    )
+    store.store(entry)
+    click.echo(f"Feedback stored for '{agent}' ({store.count} total entries).")
+
+
+@feedback.command("list")
+@click.option("--agent", "-a", default=None, help="Filter by agent ID.")
+@click.option("--output", "-o", default="./feedback", help="Feedback store path.")
+def feedback_list(agent: Optional[str], output: str) -> None:
+    """List stored feedback entries."""
+    from stlc_platform.pipeline.feedback_store import FeedbackStore
+
+    store = FeedbackStore(persist_path=Path(output))
+    entries = store.list_all(agent_id=agent)
+
+    if not entries:
+        click.echo("No feedback entries found.")
+        return
+
+    for entry in entries:
+        click.echo(
+            f"  [{entry.feedback_type}] {entry.agent_id}: {entry.message}"
+            f" (applied {entry.applied_count}x)"
+        )
