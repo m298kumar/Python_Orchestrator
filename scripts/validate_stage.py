@@ -664,6 +664,132 @@ def check_stage_3():
             [sys.executable, "-m", "pytest", str(stage3_test), "-v", "--tb=short", "-q"],
         )
 
+    # ── Phase 2: API Discovery + API Test Generator ──────────────────────
+
+    # 13. APITestAgent package importable
+    _check_import(
+        "APITestAgent package import",
+        "from stlc_platform.agents.api_test_agent import APITestAgent, OpenAPIParser, APITestGenerator, TestClassifier",
+    )
+
+    # 14. OpenAPIParser importable
+    _check_import(
+        "OpenAPIParser import",
+        "from stlc_platform.agents.api_test_agent.openapi_parser import OpenAPIParser",
+    )
+
+    # 15. APITestGenerator importable
+    _check_import(
+        "APITestGenerator import",
+        "from stlc_platform.agents.api_test_agent.test_generator import APITestGenerator",
+    )
+
+    # 16. TestClassifier importable
+    _check_import(
+        "TestClassifier import",
+        "from stlc_platform.agents.api_test_agent.test_classifier import TestClassifier",
+    )
+
+    # 17. Enhanced API contracts (new v1.1 fields)
+    _check_import(
+        "Enhanced API contracts",
+        (
+            "from stlc_platform.core.contracts import APIEndpointArtifact, APITestArtifact; "
+            "e = APIEndpointArtifact(path='/test', method='GET', operation_id='getTest', tags=['test']); "
+            "t = APITestArtifact(framework='pytest_requests', language='python', filename='test.py', "
+            "  content='pass', test_level='api', failure_type='app_bug')"
+        ),
+    )
+
+    # 18. Jinja2 templates exist
+    template_dir = _ROOT / "stlc_platform" / "agents" / "api_test_agent" / "templates"
+    templates = ["pytest_requests.py.j2", "conftest.py.j2"]
+    all_found = all((template_dir / t).exists() for t in templates)
+    if all_found:
+        _PASS += 1
+        print(f"  PASS  API test templates exist ({len(templates)} files)")
+    else:
+        _FAIL += 1
+        print("  FAIL  Missing API test template files")
+
+    # 19. OpenAPI fixture files exist
+    api_fixtures = ["openapi_petstore.json", "swagger_petstore.json", "openapi_minimal.json"]
+    fixtures_dir = _ROOT / "tests" / "fixtures"
+    api_fixtures_ok = all((fixtures_dir / f).exists() for f in api_fixtures)
+    if api_fixtures_ok:
+        _PASS += 1
+        print(f"  PASS  OpenAPI fixture files exist ({len(api_fixtures)} files)")
+    else:
+        _FAIL += 1
+        print("  FAIL  Missing OpenAPI fixture files")
+
+    # 20. APITestAgent smoke test (parse OpenAPI -> generate tests -> ast.parse)
+    _check_import(
+        "APITestAgent smoke test",
+        (
+            "import ast, json; "
+            "from stlc_platform.agents.api_test_agent import APITestAgent; "
+            "spec = {'openapi': '3.0.0', 'info': {'title': 'Test'}, "
+            "'paths': {'/health': {'get': {'operationId': 'healthCheck', "
+            "'responses': {'200': {'description': 'OK', 'content': {'application/json': "
+            "{'schema': {'type': 'object', 'properties': {'status': {'type': 'string'}}}}}}}}}}}; "
+            "r = APITestAgent().execute({'openapi_spec': spec}, {}); "
+            "assert r.success, f'Agent failed: {r.errors}'; "
+            "[ast.parse(t.content) for t in r.artifacts['test_files']]"
+        ),
+    )
+
+    # 21. Generated tests have correct marks
+    _check_import(
+        "Generated tests have pytest marks",
+        (
+            "from stlc_platform.agents.api_test_agent import APITestAgent; "
+            "spec = {'openapi': '3.0.0', 'info': {'title': 'T'}, "
+            "'paths': {'/x': {'get': {'operationId': 'getX', "
+            "'responses': {'200': {'description': 'OK'}}}}}}; "
+            "r = APITestAgent().execute({'openapi_spec': spec}, {}); "
+            "content = r.artifacts['test_files'][0].content; "
+            "assert '@pytest.mark.api' in content; "
+            "assert '# failure_type:' in content"
+        ),
+    )
+
+    # 22. No hardcoded domain terms in api_test_agent/
+    _run(
+        "No hardcoded domain terms in API test agent",
+        [
+            sys.executable, "-c",
+            (
+                "import pathlib; "
+                "agent_dir = pathlib.Path('stlc_platform/agents/api_test_agent'); "
+                "bad = []; "
+                "[bad.append(f'{p.name}:{i+1}: {line.strip()}') "
+                " for p in agent_dir.rglob('*.py') if 'test' not in p.name "
+                " for i, line in enumerate(p.read_text().splitlines()) "
+                " if any(term in line.lower() for term in "
+                "   ['mobile banking', 'patient registration', 'cheque-shaped'])"
+                "]; "
+                "assert len(bad) == 0, f'Found hardcoded terms: {bad}'"
+            ),
+        ],
+    )
+
+    # 23. Phase 2 unit tests pass
+    api_unit_dir = _ROOT / "tests" / "unit" / "agents" / "api_test_agent"
+    if api_unit_dir.exists():
+        _run(
+            "Phase 2 unit tests",
+            [sys.executable, "-m", "pytest", str(api_unit_dir), "-v", "--tb=short", "-q"],
+        )
+
+    # 24. Phase 2 integration tests pass
+    stage3p2_test = integration_dir / "test_stage3p2_validation.py"
+    if stage3p2_test.exists():
+        _run(
+            "Phase 2 integration tests",
+            [sys.executable, "-m", "pytest", str(stage3p2_test), "-v", "--tb=short", "-q"],
+        )
+
 
 def check_stage_4():
     """Agent Orchestration & Integration."""

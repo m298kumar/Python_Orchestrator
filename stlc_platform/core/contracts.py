@@ -184,27 +184,41 @@ class APIEndpointArtifact(BaseModel):
     response_schema: Optional[Dict[str, Any]] = None
     auth_required: bool = False
     auth_type: str = ""
+    # v1.1 fields (backward compatible)
+    operation_id: str = ""
+    summary: str = ""
+    tags: List[str] = Field(default_factory=list)
+    status_codes: List[int] = Field(default_factory=list)
+    examples: Dict[str, Any] = Field(default_factory=dict)
 
 
 class APIModelArtifact(BaseModel):
     """Output of API discovery — all endpoints."""
 
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
     endpoints: List[APIEndpointArtifact] = Field(default_factory=list)
     base_url: str = ""
     auth_type: str = ""
+    # v1.1 fields (backward compatible)
+    spec_format: str = ""
+    spec_title: str = ""
 
 
 class APITestArtifact(BaseModel):
     """Output of API test generation."""
 
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
     framework: str
     language: str
     filename: str
     content: str
     endpoint_path: str = ""
     test_count: int = 0
+    # v1.1 fields (backward compatible)
+    test_level: str = "api"
+    failure_type: str = "app_bug"
+    tags: List[str] = Field(default_factory=list)
+    test_type: str = ""
 
 
 # ── Stage 4: Pipeline ───────────────────────────────────────────────────────

@@ -434,3 +434,49 @@ Added 6 new checks to `scripts/validate_stage.py`:
 ### Next Steps
 - Stage 3 Phase 2: API Discovery + API Test Generator
 - Stage 3 Phase 3: Integration tests across crawler + API, full validation gate
+
+---
+
+## Session 007 — 2026-03-20
+
+### Context
+- Stage 3 Phase 1 complete (62/62 validation, 61 crawler tests)
+- Starting Phase 2: API Discovery + API Test Generator
+
+### Work Completed
+
+#### Stage 3 Phase 2: API Discovery + API Test Generator
+
+##### Contract Enhancements (backward compatible v1.1)
+- APIEndpointArtifact: added operation_id, summary, tags, status_codes, examples
+- APITestArtifact: added test_level, failure_type, tags, test_type
+- APIModelArtifact: added spec_format, spec_title
+
+##### New Modules (stlc_platform/agents/api_test_agent/)
+- `openapi_parser.py` — OpenAPIParser: OpenAPI 3.x / Swagger 2.0 spec → APIModelArtifact
+  - Auto-detects format, resolves $ref pointers, extracts params/body/schema/auth
+  - Bidirectional: operation-level security overrides global security
+- `test_generator.py` — APITestGenerator: APIModelArtifact → List[APITestArtifact]
+  - Jinja2 ChoiceLoader (builtin + override dir), per-endpoint test files + conftest
+  - 5 test types: happy_path, auth (missing/invalid), validation, boundary, schema_validation
+  - Extension: SUPPORTED_FRAMEWORKS dict for adding REST Assured/Karate/Supertest
+- `test_classifier.py` — TestClassifier: test level + failure type classification
+  - Test pyramid validation (warns if E2E > 20%)
+- `agent.py` — APITestAgent(BaseAgent): orchestrates parser → generator → classifier
+  - Two input modes: openapi_spec (full pipeline) or api_model (generate-only)
+- `templates/pytest_requests.py.j2` — Pytest+Requests test template
+- `templates/conftest.py.j2` — Shared fixtures template
+
+##### Test Files
+- 3 JSON fixtures: openapi_petstore.json (8 endpoints), swagger_petstore.json, openapi_minimal.json
+- 4 unit test files: 76 tests (28 parser + 14 classifier + 21 generator + 13 agent)
+- 1 integration test file: 16 tests
+- **Total Phase 2: 92 tests passing in 0.73s**
+
+##### Validation Gate
+- 12 new checks (13-24) in check_stage_3()
+- **71/74 cumulative checks pass** (3 pre-existing failures from Stages 0/1)
+- All 24 Stage 3 checks pass (12 Phase 1 + 12 Phase 2)
+
+### Next Steps
+- Stage 3 Phase 3: REST Assured/Karate/Supertest templates, cross-layer integration, full validation

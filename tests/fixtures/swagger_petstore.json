@@ -1,0 +1,285 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Petstore API",
+    "version": "1.0.0",
+    "description": "A sample Petstore API in Swagger 2.0 format."
+  },
+  "host": "localhost:8080",
+  "basePath": "/api/v1",
+  "schemes": ["http"],
+  "securityDefinitions": {
+    "BearerAuth": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header"
+    }
+  },
+  "security": [
+    {"BearerAuth": []}
+  ],
+  "paths": {
+    "/pets": {
+      "get": {
+        "operationId": "listPets",
+        "summary": "List all pets",
+        "tags": ["pets"],
+        "security": [],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of pets",
+            "schema": {
+              "type": "array",
+              "items": {"$ref": "#/definitions/Pet"}
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPet",
+        "summary": "Create a new pet",
+        "tags": ["pets"],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {"$ref": "#/definitions/NewPet"}
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Pet created",
+            "schema": {"$ref": "#/definitions/Pet"}
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/pets/{petId}": {
+      "get": {
+        "operationId": "getPet",
+        "summary": "Get a pet by ID",
+        "tags": ["pets"],
+        "security": [],
+        "parameters": [
+          {
+            "name": "petId",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A single pet",
+            "schema": {"$ref": "#/definitions/Pet"}
+          },
+          "404": {
+            "description": "Pet not found"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updatePet",
+        "summary": "Update an existing pet",
+        "tags": ["pets"],
+        "parameters": [
+          {
+            "name": "petId",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {"$ref": "#/definitions/NewPet"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pet updated",
+            "schema": {"$ref": "#/definitions/Pet"}
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Pet not found"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deletePet",
+        "summary": "Delete a pet",
+        "tags": ["pets"],
+        "parameters": [
+          {
+            "name": "petId",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Pet deleted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Pet not found"
+          }
+        }
+      }
+    },
+    "/pets/{petId}/vaccinations": {
+      "get": {
+        "operationId": "listVaccinations",
+        "summary": "List vaccinations for a pet",
+        "tags": ["vaccinations"],
+        "parameters": [
+          {
+            "name": "petId",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of vaccinations",
+            "schema": {
+              "type": "array",
+              "items": {"$ref": "#/definitions/Vaccination"}
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Pet not found"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Authenticate and get a token",
+        "tags": ["auth"],
+        "security": [],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["username", "password"],
+              "properties": {
+                "username": {"type": "string"},
+                "password": {"type": "string"}
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "token": {"type": "string"},
+                "expires_in": {"type": "integer"}
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "summary": "Health check endpoint",
+        "tags": ["system"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {"type": "string"},
+                "uptime": {"type": "number"}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Pet": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": {"type": "integer"},
+        "name": {"type": "string", "maxLength": 100},
+        "tag": {"type": "string", "maxLength": 50},
+        "age": {"type": "integer", "minimum": 0, "maximum": 30},
+        "created_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "NewPet": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "maxLength": 100},
+        "tag": {"type": "string", "maxLength": 50},
+        "age": {"type": "integer", "minimum": 0, "maximum": 30}
+      }
+    },
+    "Vaccination": {
+      "type": "object",
+      "required": ["id", "vaccine_name", "date"],
+      "properties": {
+        "id": {"type": "integer"},
+        "vaccine_name": {"type": "string"},
+        "date": {"type": "string", "format": "date"},
+        "veterinarian": {"type": "string"}
+      }
+    }
+  }
+}
