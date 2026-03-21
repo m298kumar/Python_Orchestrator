@@ -18,6 +18,10 @@ from stlc_platform.core.base_agent import (
 from stlc_platform.agents.crawler_agent.page_parser import PageParser
 from stlc_platform.agents.crawler_agent.site_model_builder import SiteModelBuilder
 from stlc_platform.agents.crawler_agent.discrepancy_detector import DiscrepancyDetector
+from stlc_platform.agents.crawler_agent.dynamic_crawler import (
+    DynamicCrawler,
+    is_playwright_available,
+)
 from stlc_platform.core.contracts import SiteModelArtifact
 
 
@@ -32,7 +36,8 @@ class CrawlerAgent(BaseAgent):
       3. get_capabilities() -- describe input/output types
 
     Input modes:
-      - html_pages: Dict[str, str] mapping URL -> HTML string (full pipeline)
+      - base_url: str (dynamic Playwright crawl — requires Playwright installed)
+      - html_pages: Dict[str, str] mapping URL -> HTML string (static parsing)
       - site_model: SiteModelArtifact (discrepancy-only mode)
 
     Optional input:
@@ -40,6 +45,10 @@ class CrawlerAgent(BaseAgent):
 
     Config keys:
       - max_pages: int (default: 100) -- limit how many pages to parse
+      - max_depth: int (default: 3) -- max link depth for dynamic crawl
+      - headless: bool (default: True) -- browser visibility
+      - capture_screenshots: bool (default: False) -- save screenshots
+      - auth_config: dict -- authentication configuration for dynamic crawl
     """
 
     agent_id: str = "web_crawler"
@@ -50,14 +59,23 @@ class CrawlerAgent(BaseAgent):
         errors: List[str] = []
         warnings: List[str] = []
 
+        base_url = artifacts.get("base_url")
         html_pages = artifacts.get("html_pages")
         site_model = artifacts.get("site_model")
 
-        if html_pages is None and site_model is None:
+        if base_url is None and html_pages is None and site_model is None:
             errors.append(
-                "'html_pages' (Dict[str, str]) or 'site_model' "
-                "(SiteModelArtifact) is required."
+                "'base_url' (str), 'html_pages' (Dict[str, str]), or "
+                "'site_model' (SiteModelArtifact) is required."
             )
+        elif base_url is not None:
+            if not isinstance(base_url, str) or not base_url.startswith("http"):
+                errors.append("'base_url' must be a valid HTTP/HTTPS URL.")
+            elif not is_playwright_available():
+                warnings.append(
+                    "Playwright not installed. Dynamic crawling unavailable. "
+                    "Install with: pip install playwright && playwright install chromium"
+                )
         elif html_pages is not None:
             if not isinstance(html_pages, dict):
                 errors.append("'html_pages' must be a dict mapping URL to HTML string.")
@@ -111,20 +129,48 @@ class CrawlerAgent(BaseAgent):
             site_model = artifacts.get("site_model")
 
             if site_model is None:
-                # Full pipeline: parse HTML -> build site model
-                html_pages = artifacts["html_pages"]
-                parser = PageParser()
-                builder = SiteModelBuilder()
+                base_url_input = artifacts.get("base_url")
 
-                # Parse each HTML page (respecting max_pages limit)
-                parsed_pages = []
-                for url, html in list(html_pages.items())[:max_pages]:
-                    page = parser.parse(html, url=url)
-                    parsed_pages.append(page)
+                if base_url_input and is_playwright_available():
+                    # Dynamic crawl mode (Playwright)
+                    max_depth = config.get("max_depth", 3)
+                    crawler = DynamicCrawler(
+                        base_url=base_url_input,
+                        max_depth=max_depth,
+                        max_pages=max_pages,
+                        headless=config.get("headless", True),
+                        capture_screenshots=config.get("capture_screenshots", False),
+                        auth_config=config.get("auth_config"),
+                    )
+                    crawl_result = crawler.crawl()
 
-                # Build the site model
-                base_url = config.get("base_url", "")
-                site_model = builder.build(parsed_pages, base_url=base_url)
+                    # Build site model from crawled pages
+                    builder = SiteModelBuilder()
+                    site_model = builder.build(
+                        crawl_result.pages, base_url=base_url_input
+                    )
+
+                    # Store captured API requests in metadata for cross-layer use
+                    if crawl_result.captured_requests:
+                        config["_captured_requests"] = crawl_result.captured_requests
+                else:
+                    # Static parsing mode (BeautifulSoup)
+                    html_pages = artifacts.get("html_pages", {})
+                    if not html_pages:
+                        return AgentResult(
+                            success=False,
+                            errors=["No html_pages provided and dynamic crawl unavailable."],
+                        )
+                    parser = PageParser()
+                    builder = SiteModelBuilder()
+
+                    parsed_pages = []
+                    for url, html in list(html_pages.items())[:max_pages]:
+                        page = parser.parse(html, url=url)
+                        parsed_pages.append(page)
+
+                    base_url = config.get("base_url", "")
+                    site_model = builder.build(parsed_pages, base_url=base_url)
 
             # Optionally run discrepancy detection
             requirements = artifacts.get("requirements")
@@ -178,15 +224,16 @@ class CrawlerAgent(BaseAgent):
         return AgentCapabilities(
             agent_id=self.agent_id,
             agent_version=self.agent_version,
-            input_types=["html_pages", "SiteModelArtifact", "RequirementArtifact"],
+            input_types=["base_url", "html_pages", "SiteModelArtifact", "RequirementArtifact"],
             output_types=[
                 "SiteModelArtifact",
                 "CrawledPageArtifact",
                 "DiscrepancyReportArtifact",
             ],
             description=(
-                "Parses static HTML pages into a structured site model with "
-                "elements, forms, and navigation graph. Optionally detects "
+                "Crawls web applications (dynamic via Playwright or static via "
+                "BeautifulSoup) into a structured site model with elements, "
+                "forms, API calls, and navigation graph. Optionally detects "
                 "discrepancies between the site model and requirements."
             ),
             required_skills=["coding_standards"],

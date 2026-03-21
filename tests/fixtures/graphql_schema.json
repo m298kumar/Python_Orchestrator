@@ -1,0 +1,103 @@
+{
+  "data": {
+    "__schema": {
+      "queryType": {"name": "Query"},
+      "mutationType": {"name": "Mutation"},
+      "types": [
+        {
+          "name": "Query",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "user",
+              "description": "Get a user by ID",
+              "args": [
+                {
+                  "name": "id",
+                  "type": {"kind": "NON_NULL", "name": null, "ofType": {"kind": "SCALAR", "name": "ID"}}
+                }
+              ],
+              "type": {"kind": "OBJECT", "name": "User"}
+            },
+            {
+              "name": "users",
+              "description": "List all users",
+              "args": [
+                {
+                  "name": "limit",
+                  "type": {"kind": "SCALAR", "name": "Int"}
+                },
+                {
+                  "name": "offset",
+                  "type": {"kind": "SCALAR", "name": "Int"}
+                }
+              ],
+              "type": {"kind": "LIST", "name": null, "ofType": {"kind": "OBJECT", "name": "User"}}
+            },
+            {
+              "name": "product",
+              "description": "Get a product by ID",
+              "args": [
+                {
+                  "name": "id",
+                  "type": {"kind": "NON_NULL", "name": null, "ofType": {"kind": "SCALAR", "name": "ID"}}
+                }
+              ],
+              "type": {"kind": "OBJECT", "name": "Product"}
+            }
+          ]
+        },
+        {
+          "name": "Mutation",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "createUser",
+              "description": "Create a new user",
+              "args": [
+                {
+                  "name": "name",
+                  "type": {"kind": "NON_NULL", "name": null, "ofType": {"kind": "SCALAR", "name": "String"}}
+                },
+                {
+                  "name": "email",
+                  "type": {"kind": "NON_NULL", "name": null, "ofType": {"kind": "SCALAR", "name": "String"}}
+                }
+              ],
+              "type": {"kind": "OBJECT", "name": "User"}
+            },
+            {
+              "name": "deleteUser",
+              "description": "Delete a user",
+              "args": [
+                {
+                  "name": "id",
+                  "type": {"kind": "NON_NULL", "name": null, "ofType": {"kind": "SCALAR", "name": "ID"}}
+                }
+              ],
+              "type": {"kind": "SCALAR", "name": "Boolean"}
+            }
+          ]
+        },
+        {
+          "name": "User",
+          "kind": "OBJECT",
+          "fields": [
+            {"name": "id", "type": {"kind": "SCALAR", "name": "ID"}},
+            {"name": "name", "type": {"kind": "SCALAR", "name": "String"}},
+            {"name": "email", "type": {"kind": "SCALAR", "name": "String"}}
+          ]
+        },
+        {
+          "name": "Product",
+          "kind": "OBJECT",
+          "fields": [
+            {"name": "id", "type": {"kind": "SCALAR", "name": "ID"}},
+            {"name": "name", "type": {"kind": "SCALAR", "name": "String"}},
+            {"name": "price", "type": {"kind": "SCALAR", "name": "Float"}}
+          ]
+        }
+      ]
+    }
+  }
+}

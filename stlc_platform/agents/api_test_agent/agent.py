@@ -16,6 +16,8 @@ from stlc_platform.core.base_agent import (
     ValidationResult,
 )
 from stlc_platform.agents.api_test_agent.openapi_parser import OpenAPIParser
+from stlc_platform.agents.api_test_agent.har_parser import HARParser
+from stlc_platform.agents.api_test_agent.graphql_parser import GraphQLParser
 from stlc_platform.agents.api_test_agent.test_generator import APITestGenerator
 from stlc_platform.agents.api_test_agent.test_classifier import TestClassifier
 from stlc_platform.core.contracts import APIModelArtifact
@@ -30,8 +32,10 @@ class APITestAgent(BaseAgent):
       2. execute() -- parse spec, generate tests, classify
       3. get_capabilities() -- describe input/output types
 
-    Input modes:
-      - openapi_spec: str or dict (raw spec -> full pipeline)
+    Input modes (priority order):
+      - openapi_spec: str or dict (OpenAPI/Swagger spec -> full pipeline)
+      - har_data: str or dict (HAR file -> API discovery -> test gen)
+      - graphql_schema: str or dict (GraphQL introspection/SDL -> test gen)
       - api_model: APIModelArtifact (skip parsing -> generate tests only)
 
     Config keys:
@@ -48,16 +52,24 @@ class APITestAgent(BaseAgent):
         warnings: List[str] = []
 
         openapi_spec = artifacts.get("openapi_spec")
+        har_data = artifacts.get("har_data")
+        graphql_schema = artifacts.get("graphql_schema")
         api_model = artifacts.get("api_model")
 
-        if openapi_spec is None and api_model is None:
+        if all(v is None for v in [openapi_spec, har_data, graphql_schema, api_model]):
             errors.append(
-                "'openapi_spec' (str or dict) or 'api_model' "
-                "(APIModelArtifact) is required."
+                "'openapi_spec', 'har_data', 'graphql_schema', or 'api_model' "
+                "is required."
             )
         elif openapi_spec is not None:
             if not isinstance(openapi_spec, (str, dict)):
                 errors.append("'openapi_spec' must be a string or dict.")
+        elif har_data is not None:
+            if not isinstance(har_data, (str, dict)):
+                errors.append("'har_data' must be a string or dict.")
+        elif graphql_schema is not None:
+            if not isinstance(graphql_schema, (str, dict)):
+                errors.append("'graphql_schema' must be a string or dict.")
         elif api_model is not None:
             if not isinstance(api_model, APIModelArtifact):
                 errors.append("'api_model' must be an APIModelArtifact instance.")
@@ -94,8 +106,20 @@ class APITestAgent(BaseAgent):
 
             if api_model is None:
                 # Full pipeline: parse spec -> API model
-                parser = OpenAPIParser()
-                api_model = parser.parse(artifacts["openapi_spec"])
+                if artifacts.get("openapi_spec") is not None:
+                    parser = OpenAPIParser()
+                    api_model = parser.parse(artifacts["openapi_spec"])
+                elif artifacts.get("har_data") is not None:
+                    har_parser = HARParser()
+                    api_model = har_parser.parse(artifacts["har_data"])
+                elif artifacts.get("graphql_schema") is not None:
+                    gql_parser = GraphQLParser()
+                    schema = artifacts["graphql_schema"]
+                    # Detect if it's SDL string vs introspection JSON
+                    if isinstance(schema, str) and "type " in schema:
+                        api_model = gql_parser.parse_sdl(schema)
+                    else:
+                        api_model = gql_parser.parse(schema)
 
             # Generate tests
             framework = config.get("framework", "pytest_requests")
@@ -160,10 +184,10 @@ class APITestAgent(BaseAgent):
         return AgentCapabilities(
             agent_id=self.agent_id,
             agent_version=self.agent_version,
-            input_types=["openapi_spec", "APIModelArtifact"],
+            input_types=["openapi_spec", "har_data", "graphql_schema", "APIModelArtifact"],
             output_types=["APIModelArtifact", "APITestArtifact"],
             description=(
-                "Parses OpenAPI/Swagger specifications into API models "
+                "Parses OpenAPI/Swagger specs, HAR files, and GraphQL schemas into API models "
                 "and generates framework-specific API test code with "
                 "test level classification and failure type metadata."
             ),

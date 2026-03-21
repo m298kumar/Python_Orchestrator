@@ -728,3 +728,64 @@ All 4 existing agents are synchronous. Going async would require pytest-asyncio,
 ### Next Steps
 - Gap Closure Wave 2: Stage 3 enhancements (optional — Playwright crawler, HAR, GraphQL)
 - Stage 5: Frontend UI
+
+---
+
+## Session 011 — 2026-03-21 — Gap Closure Wave 2: Stage 3 Enhancements
+
+### Objective
+Implement deferred Stage 3 enhancements: Playwright dynamic crawler, HAR file parser, and GraphQL introspection parser.
+
+### Changes Made
+
+#### B1: Playwright Dynamic Crawler
+- **Created** `stlc_platform/agents/crawler_agent/dynamic_crawler.py`
+  - `DynamicCrawler` class: headless Chromium BFS crawl with Playwright
+  - Graceful import: `_PLAYWRIGHT_AVAILABLE` flag, `is_playwright_available()` function
+  - Features: max_depth, max_pages, network idle wait, XHR/Fetch capture, auth support, screenshots
+  - Data classes: `CapturedRequest`, `CrawlResult`
+- **Modified** `stlc_platform/agents/crawler_agent/agent.py` — added `base_url` input mode
+- **Modified** `stlc_platform/agents/crawler_agent/__init__.py` — new exports
+
+#### B3: HAR File Parser
+- **Created** `stlc_platform/agents/api_test_agent/har_parser.py`
+  - `HARParser` class: parses HAR 1.2 JSON into `APIModelArtifact`
+  - Filters static assets by MIME type, parameterizes numeric IDs and UUIDs
+  - Deduplicates endpoints by method+path, detects auth from headers
+  - Wraps list JSON responses in `{"items": [...]}` for Pydantic dict compat
+
+#### B4: GraphQL Introspection Parser
+- **Created** `stlc_platform/agents/api_test_agent/graphql_parser.py`
+  - `GraphQLParser` class: parses introspection JSON and SDL strings
+  - Each query/mutation becomes an `APIEndpointArtifact` (POST /graphql)
+  - Supports both `{"data": {"__schema": ...}}` and direct `{"__schema": ...}` formats
+  - SDL parsing via regex for type Query/Mutation blocks
+
+#### API Test Agent Integration
+- **Modified** `stlc_platform/agents/api_test_agent/agent.py` — added `har_data` and `graphql_schema` input modes
+- **Modified** `stlc_platform/agents/api_test_agent/__init__.py` — new exports
+
+#### Test Fixtures
+- **Created** `tests/fixtures/sample.har` — HAR 1.2 with 5 entries
+- **Created** `tests/fixtures/graphql_schema.json` — Introspection result (3 queries + 2 mutations)
+
+#### Tests
+- **Created** `tests/unit/agents/crawler_agent/test_dynamic_crawler.py` — 8 tests
+- **Created** `tests/unit/agents/api_test_agent/test_har_parser.py` — 17 tests
+- **Created** `tests/unit/agents/api_test_agent/test_graphql_parser.py` — 22 tests
+
+### Bug Fixes During Implementation
+- `status_codes` passed as `[int]` → fixed to `[str(status)]` for Pydantic
+- `query_params[].required` passed as `bool` → fixed to `str(is_required).lower()`
+- `response_schema` got `list` from JSON arrays → wrapped in `{"items": [...]}`
+- Multiple F401/F841 lint fixes in dynamic_crawler.py and graphql_parser.py
+- `Page` type hint → `Any` since Playwright imports are conditional
+
+### Final Metrics
+- **47 new tests** (8 crawler + 17 HAR + 22 GraphQL) — all passing
+- **859 total tests** (858 pass, 1 pre-existing Stage 0 failure)
+- Zero regressions
+- Lint clean
+
+### Next Steps
+- Stage 5: Frontend UI
