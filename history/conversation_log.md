@@ -823,6 +823,60 @@ Full spec audit (SPEC_WORKFLOW.md vs codebase) to identify gaps, then fix critic
 - Lint clean
 
 ### Next Steps
-- Wave B: Critical test coverage gaps (orchestrator, chroma_store, CLI)
+- Wave B: Critical test coverage gaps
+
+---
+
+## Session 012b — 2026-03-21 — Wave B: Test Coverage Gaps
+
+### Objective
+Add unit tests for 5 previously untested modules: orchestrator, CLI, exporters, OllamaClient, ChromaDB store.
+
+### New Test Files
+
+#### `tests/unit/pipeline/test_orchestrator.py` — 17 tests
+- StageResult dataclass defaults and error handling
+- Invalid DAG raises ValueError
+- Linear pipeline: all stages complete, failure skips downstream, optional stage
+- Parallel execution: stages in same wave, concurrency timing
+- Retry logic: retry on failure, retry exhausted
+- Callbacks: on_stage_start, on_stage_complete
+- run_single_stage: success and exception capture
+- Run metadata: run_id, timing, stage_durations
+- Exception handling: agent crash captured gracefully
+
+#### `tests/unit/test_cli.py` — 13 tests
+- Main group help and version
+- Run without args fails, unknown agent, missing input file, missing pipeline
+- Validate command help
+- Agents list: registered agents, table header
+- Feedback: add, list empty, add+list roundtrip, invalid type
+
+#### `tests/unit/test_exporters.py` — 19 tests
+- CSVExporter: creates file, correct headers, row count, step data, custom filename, empty, no steps
+- ZephyrScaleExporter: creates file, headers, priority mapping, folder, labels, GWT in plain text
+- JSONReportExporter: creates file, summary, breakdown by type/priority, test case entries, model used
+
+#### `tests/unit/core/test_ollama_client.py` — 17 tests
+- Constructor: explicit params, defaults from config
+- check_connection: success, failure, bad status
+- list_models: success, empty, connection error
+- generate: success, system prompt, JSON schema, timeout, connection error, HTTP error, custom temp
+- pull_model: success, failure
+
+#### `tests/unit/core/test_chroma_store.py` — 23 tests
+- _extract_vocab: screen names, elements, acceptance criteria, empty, category
+- _tc_to_doc: basic, steps, empty, string steps
+- RequirementsVectorStore: init state, collection names
+- Mock store: add requirements, empty, search similar, store TC, retrieve examples, vocab, lookup, stats
+
+### Final Metrics
+- **89 new tests** across 5 test files — all passing
+- **960 total tests** (959 pass, 1 pre-existing Stage 0 failure)
+- Zero regressions
+- Lint clean
+
+### Next Steps
 - Wave C: Spec compliance (Supertest, Scenario Outline, ChromaDB RAG)
+- Wave D: Nice-to-haves (Faker factories, CRUD sequences, coverage threshold)
 - Stage 5: Frontend UI
