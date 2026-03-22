@@ -85,6 +85,7 @@ class TestCaseArtifact(BaseModel):
     when: str = ""
     then: str = ""
     estimated_duration: str = "5"
+    test_level: str = "unit"  # unit | api | integration | e2e (v1.1 test pyramid)
 
 
 # ── Stage 2: BDD Code Generation ────────────────────────────────────────────

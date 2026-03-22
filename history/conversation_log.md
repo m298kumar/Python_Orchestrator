@@ -1134,5 +1134,124 @@ Implemented **Phase 3: Advanced Frontend Pages + Real-Time Features** (commit `3
 - Zero regressions
 
 ### Next Steps
-- Phase 4: Frontend tests (Vitest + React Testing Library) + E2E Playwright tests + Stage 5 validation gate
+- Stage 5 complete. All 6 stages implemented.
+
+---
+
+## Session: 2026-03-22 — Stage 5 Phase 4: Tests + Validation Gate (commit `18baebc`)
+
+### What Was Done
+Implemented **Phase 4: Testing, Validation Gate, and Stage Bump**:
+
+#### Backend Tests (+65 tests, 1208 total)
+1. **test_test_case_routes.py** (13 tests) — GET list with filters, GET/PUT by ID, approve/reject, 404 handling
+2. **test_bdd_routes.py** (8 tests) — GET features list, GET by filename, download ZIP
+3. **test_crawler_routes.py** (6 tests) — GET site-model, GET pages list, seeded data
+4. **test_api_test_routes.py** (7 tests) — GET list, GET by filename, seeded files
+5. **test_config_routes.py** (7 tests) — GET config keys, PUT update with dot notation
+6. **test_stage5_validation.py** (24 tests) — API completeness (10), frontend files (10), schema imports (4)
+
+#### Frontend Tests (46 tests, ready for `npm test`)
+- **StatusBadge.test.tsx** (10) — color mapping, pulse animation, size variants
+- **CodeViewer.test.tsx** (6) — rendering, copy, filename display
+- **NotificationProvider.test.tsx** (6) — toast creation, types, dismiss
+- **Layout.test.tsx** (6) — sidebar nav, links, children, version
+- **LiveProgress.test.tsx** (5) — stages, connection status, completion
+- **useWebSocket.test.ts** (5) — initial state, connection, cleanup
+- **client.test.ts** (8) — API function existence validation
+
+#### Validation Gate (17 Stage 5 checks)
+1-6: Module imports (FastAPI app, schemas, RunManager, WebSocket, tasks, routes)
+7-14: Frontend file existence (package.json, vite config, 8 pages, 5 components, 3 hooks, API client, vitest config, test setup)
+15-16: Backend API + integration tests pass
+17: `__stage__` is 5
+
+#### Stage Bump
+- `stlc_platform/__init__.py`: `__stage__` = 5
+
+### Final Metrics
+- **1208 backend tests** passing (1 pre-existing Stage 0 failure)
+- **46 frontend tests** ready (requires Node.js + `npm install`)
+- **121/125 validation gate checks** pass (4 pre-existing failures from earlier stages)
+- **18 files** changed, +1,381 lines
+
+### Stage 5 Summary (All 4 Phases)
+| Phase | Commit | Files | Tests Added |
+|-------|--------|-------|-------------|
+| Phase 1: FastAPI Backend | `8235b9f` | 22 | 97 |
+| Phase 2: React Frontend Core | `f320ea7` | 21 | 0 (no Node.js) |
+| Phase 3: Advanced Pages + WebSocket | `36c85d6` | 8 | 0 (frontend) |
+| Phase 4: Tests + Validation Gate | `18baebc` | 18 | 65 backend + 46 frontend |
+| **Total** | | **69 files** | **162 backend + 46 frontend** |
+
+---
+
+## Session: 2026-03-22 — Frontend TS Fixes (commit `fb7a06b`)
+
+### What Was Done
+Fixed TypeScript compilation errors and test assertions after first `npm install` + `npm test`:
+- CodeViewer test: button accessible name `/copy/i` (matches `<span>Copy</span>`)
+- CodeViewer test: multiline `textContent.toContain` instead of `toHaveTextContent`
+- LiveProgress: removed unused `WsMessage` import
+- NotificationProvider test: explicit prop types for TS strict mode
+- useWebSocket test: removed unused `act` and `UseWebSocketReturn` imports
+
+### Metrics
+- 5 files changed, **46/46 frontend tests passing**, TypeScript + Vite build clean
+
+---
+
+## Session: 2026-03-22 — Fix All Validation Failures + Enhancements (commit `9eb4b83`)
+
+### What Was Done
+
+#### Validation Fixes (125/125 now pass, was 121/125)
+1. **Stage 0 version assertion**: Allow `1.0` and `1.1` (4 artifacts upgraded in Stage 3)
+2. **mypy type errors**: Fixed all 52 errors across 10 files (casts, None guards, annotations)
+3. **Stage 1 integration tests**: Cascade from Stage 0 fix — auto-resolved
+4. **Framework count**: `== 3` → `>= 4` + verify `supertest` present
+5. **ruff lint**: Removed redundant local `HTTPException` imports in pipeline routes
+
+#### Enhancement 1: JWT Authentication
+- `stlc_platform/api/auth.py` — JWT tokens, API key support, `STLC_AUTH_ENABLED` toggle
+- `stlc_platform/api/routes/auth.py` — `/api/auth/status` + `/api/auth/login`
+- Lazy imports: PyJWT/passlib only loaded when auth enabled
+- 18 tests in `test_auth.py`
+
+#### Enhancement 2: Production SPA Serving
+- FastAPI serves React `dist/` with catch-all route
+- Auto-detects `frontend/dist/` or via `STLC_SERVE_FRONTEND` env var
+- 5 tests in `test_static_serving.py`
+
+#### Enhancement 3: Docker Compose
+- `Dockerfile` — Multi-stage: Node.js 20 builds frontend → Python 3.12 runtime
+- `docker-compose.yml` — App + Ollama with persistent volumes
+- `.dockerignore` + `.env.example`
+
+#### Enhancement 4: CI/CD Extension
+- `frontend-tests` job (Node.js 20, parallel with backend)
+- `pipeline-smoke` job (agent list + pipeline config)
+- `docker-build` job (validates Dockerfile, runs after both test jobs)
+
+### Metrics
+- **1232 backend tests**, 0 failures (was 1208 with 1 failure)
+- **46 frontend tests**, 0 failures
+- **125/125 validation gate** (was 121/125)
+- **0 mypy errors** (was 52), **0 ruff errors**
+- 23 files changed, +754/-39 lines
+
+---
+
+## Session: 2026-03-22 — Final Audit + Gap Fixes (commit pending)
+
+### What Was Done
+Comprehensive 3-agent audit found 5 gaps:
+
+#### Fixes Applied
+1. **pyproject.toml**: Added fastapi, uvicorn, python-multipart as core deps; PyJWT+passlib as `[auth]` extra
+2. **requirements.txt**: Added same 4 deps + PyYAML, Jinja2, beautifulsoup4
+3. **TestCaseArtifact**: Added `test_level: str = "unit"` field (v1.1 test pyramid)
+4. **test_artifacts_routes.py**: New tests for artifacts download route
+5. **test_files_routes.py**: New tests for file upload/download routes
+6. **MEMORY.md + conversation_log.md**: Updated with accurate test counts and recent sessions
 

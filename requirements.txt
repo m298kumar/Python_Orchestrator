@@ -18,6 +18,11 @@ PyPDF2>=3.0.1
 openpyxl>=3.1.2
 pandas>=2.0.0
 
+# Web API
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+python-multipart>=0.0.6
+
 # Utilities
 python-dotenv>=1.0.0
 pydantic>=2.0.0
@@ -25,7 +30,13 @@ pydantic-settings>=2.0.0   # pydantic v2 split BaseSettings into its own package
 rich>=13.0.0
 click>=8.1.0
 requests>=2.31.0
+PyYAML>=6.0
+Jinja2>=3.1.0
+beautifulsoup4>=4.12.0
 sentence-transformers>=2.2.2
+
+# Authentication (optional)
+PyJWT>=2.8.0
 
 # MCP Server
 mcp>=1.0.0        # Model Context Protocol — FastMCP server for tool exposure

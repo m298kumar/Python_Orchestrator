@@ -12,6 +12,11 @@ dependencies = [
     "ollama>=0.1.8",
     "chromadb>=0.5.3",
 
+    # Web API
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.20.0",
+    "python-multipart>=0.0.6",
+
     # File Reading
     "python-docx>=1.1.0",
     "PyPDF2>=3.0.1",
@@ -53,17 +58,21 @@ langchain = [
     "langchain-ollama>=0.1.0",
 ]
 
+# Authentication (optional — only needed when STLC_AUTH_ENABLED=true)
+auth = ["PyJWT>=2.8.0", "passlib[bcrypt]>=1.7.4"]
+
 # Development tools
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
     "ruff>=0.4.0",
     "mypy>=1.8.0",
+    "httpx>=0.25.0",
 ]
 
 # All optional dependencies
 all = [
-    "stlc-platform[bdd,embeddings,mcp,langchain,dev]",
+    "stlc-platform[bdd,embeddings,mcp,langchain,auth,dev]",
 ]
 
 [project.scripts]
