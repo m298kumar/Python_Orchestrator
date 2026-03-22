@@ -956,5 +956,78 @@ Close remaining spec gaps (Supertest, Scenario Outline, ChromaDB RAG, CRUD seque
 - **gRPC Proto Parsing**: Deferred (niche, low priority)
 
 ### Next Steps
-- Stage 5: Frontend UI (FastAPI backend + React frontend)
+- Stage 5: Frontend UI
+
+---
+
+## Session 013 — 2026-03-21 — Stage 5 Phase 1: FastAPI Backend
+
+### Objective
+Build the complete REST API + WebSocket backend for the STLC dashboard.
+
+### Architecture
+- FastAPI with CORS, OpenAPI docs, async lifespan
+- 11 route modules covering all STLC resources
+- WebSocket hub for real-time pipeline progress
+- Background task runner using ThreadPoolExecutor
+- In-memory run/artifact/state management
+
+### New Files Created
+
+#### Core Infrastructure (4 files)
+- `stlc_platform/api/schemas.py` — 23 Pydantic request/response models
+- `stlc_platform/api/deps.py` — RunManager class + singleton factories
+- `stlc_platform/api/websocket.py` — ConnectionManager with per-run broadcasting
+- `stlc_platform/api/tasks.py` — Background pipeline runner with WebSocket callbacks
+
+#### Main App (1 file)
+- `stlc_platform/api/main.py` — FastAPI app, CORS, health endpoint, WebSocket endpoint, 11 routers
+
+#### Route Modules (11 files)
+- `api/routes/pipeline.py` — POST /run, GET /runs, GET /runs/{id}, POST /resume (4 endpoints)
+- `api/routes/agents.py` — GET /, GET /{id} (2 endpoints)
+- `api/routes/requirements.py` — POST /upload, GET /, GET /{id}, PUT /{id} (4 endpoints)
+- `api/routes/test_cases.py` — GET /, GET /{id}, PUT /{id}, POST /approve, POST /reject (5 endpoints)
+- `api/routes/bdd.py` — GET /features, GET /features/{name}, GET /project/download (3 endpoints)
+- `api/routes/crawler.py` — GET /site-model, GET /pages, GET /pages/{url} (3 endpoints)
+- `api/routes/api_tests.py` — GET /, GET /{filename} (2 endpoints)
+- `api/routes/artifacts.py` — GET /{run_id}/download (1 endpoint)
+- `api/routes/feedback.py` — POST /, GET / (2 endpoints)
+- `api/routes/config.py` — GET /, PUT / (2 endpoints)
+- `api/routes/files.py` — POST /upload, GET /download/{filename} (2 endpoints)
+
+**Total: 36 routes (30 REST + 1 WebSocket + 5 auto-generated OpenAPI/docs)**
+
+#### Test Files (8 files)
+- `tests/unit/api/test_health.py` — 6 tests
+- `tests/unit/api/test_pipeline_routes.py` — 16 tests
+- `tests/unit/api/test_agent_routes.py` — 9 tests
+- `tests/unit/api/test_requirements_routes.py` — 12 tests
+- `tests/unit/api/test_feedback_routes.py` — 11 tests
+- `tests/unit/api/test_websocket.py` — 17 tests
+- `tests/unit/api/test_deps.py` — 26 tests
+
+### Key Features
+- **CORS**: localhost:5173 (Vite), localhost:3000, configurable via STLC_CORS_ORIGINS env var
+- **File Upload**: Requirements (.json/.yaml), OpenAPI specs, HAR files
+- **ZIP Download**: Scaffolded BDD projects, full run artifacts
+- **WebSocket**: Real-time stage_start, stage_complete, pipeline_complete events
+- **Background Runs**: Pipeline executes in thread pool, doesn't block API
+- **Config Sanitization**: Sensitive fields (api_key, secret, password, token) masked in responses
+- **OpenAPI Docs**: Auto-generated at /docs (Swagger UI) and /redoc
+
+### Verification
+- Server starts: `uvicorn stlc_platform.api.main:app` → 36 routes registered
+- All endpoints respond correctly (tested via TestClient)
+
+### Final Metrics
+- **97 new tests** across 8 test files — all passing
+- **1144 total tests** (1143 pass, 1 pre-existing Stage 0 failure)
+- Zero regressions
+- Lint clean
+
+### Next Steps
+- Phase 2: React frontend (Dashboard, Requirements, Test Cases pages)
+- Phase 3: Advanced frontend + real-time WebSocket integration
+- Phase 4: E2E Playwright tests + final validation
 
