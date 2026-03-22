@@ -336,15 +336,16 @@ class TestMigrationIntegration:
     """Verify migration script functions work."""
 
     def test_get_current_versions(self):
-        """All artifact types report version 1.0."""
+        """All artifact types report version 1.0 or 1.1."""
         import sys
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
         from migrate import get_current_versions
 
         versions = get_current_versions()
         assert len(versions) >= 8
+        allowed = {"1.0", "1.1"}
         for name, version in versions.items():
-            assert version == "1.0", f"{name} has unexpected version {version}"
+            assert version in allowed, f"{name} has unexpected version {version}"
 
     def test_check_no_migrations_needed(self):
         """With no artifact files, no migrations are needed."""

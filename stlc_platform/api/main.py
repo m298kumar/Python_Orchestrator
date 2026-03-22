@@ -26,6 +26,7 @@ from stlc_platform.api.routes import (
     agents,
     api_tests,
     artifacts,
+    auth as auth_mod,
     bdd,
     config,
     crawler,
@@ -88,6 +89,7 @@ app.add_middleware(
 
 # ── Routers ──────────────────────────────────────────────────────────────────
 
+app.include_router(auth_mod.router)
 app.include_router(pipeline.router)
 app.include_router(agents.router)
 app.include_router(requirements.router)
@@ -133,3 +135,32 @@ async def websocket_pipeline(websocket: WebSocket, run_id: str) -> None:
             await websocket.receive_text()
     except WebSocketDisconnect:
         ws_mgr.disconnect(websocket, run_id)
+
+
+# ── Static Frontend Serving (Production) ─────────────────────────────
+from pathlib import Path as _Path
+
+_frontend_dist = _Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+_serve_frontend = os.environ.get("STLC_SERVE_FRONTEND", "auto")
+
+if _serve_frontend == "true" or (
+    _serve_frontend == "auto" and _frontend_dist.is_dir()
+):
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    _assets_dir = _frontend_dist / "assets"
+    if _assets_dir.is_dir():
+        app.mount(
+            "/assets",
+            StaticFiles(directory=str(_assets_dir)),
+            name="frontend-assets",
+        )
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str) -> FileResponse:
+        """Serve the SPA frontend; fall back to index.html for client routing."""
+        file_path = _frontend_dist / full_path
+        if full_path and file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(_frontend_dist / "index.html"))

@@ -25,6 +25,10 @@ chroma_db/
 # Output artifacts
 output/
 
+# Node.js / Frontend
+node_modules/
+frontend/dist/
+
 # OS
 .DS_Store
 Thumbs.db

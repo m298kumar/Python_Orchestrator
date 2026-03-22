@@ -121,6 +121,12 @@ class APITestAgent(BaseAgent):
                     else:
                         api_model = gql_parser.parse(schema)
 
+            if api_model is None:
+                return AgentResult(
+                    success=False,
+                    errors=["No API model available: provide api_model, openapi_spec, har_data, or graphql_schema"],
+                )
+
             # Generate tests
             framework = config.get("framework", "pytest_requests")
             generator = APITestGenerator(framework=framework)

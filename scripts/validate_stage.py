@@ -809,14 +809,15 @@ def check_stage_3():
         _FAIL += 1
         print("  FAIL  Karate template missing")
 
-    # 27. 3 frameworks in SUPPORTED_FRAMEWORKS
+    # 27. 4+ frameworks in SUPPORTED_FRAMEWORKS (pytest_requests, rest_assured, karate, supertest)
     _check_import(
-        "3 frameworks in SUPPORTED_FRAMEWORKS",
+        "4+ frameworks in SUPPORTED_FRAMEWORKS",
         (
             "from stlc_platform.agents.api_test_agent.test_generator import SUPPORTED_FRAMEWORKS; "
-            "assert len(SUPPORTED_FRAMEWORKS) == 3, f'Expected 3, got {len(SUPPORTED_FRAMEWORKS)}'; "
+            "assert len(SUPPORTED_FRAMEWORKS) >= 4, f'Expected >=4, got {len(SUPPORTED_FRAMEWORKS)}'; "
             "assert 'rest_assured' in SUPPORTED_FRAMEWORKS; "
-            "assert 'karate' in SUPPORTED_FRAMEWORKS"
+            "assert 'karate' in SUPPORTED_FRAMEWORKS; "
+            "assert 'supertest' in SUPPORTED_FRAMEWORKS"
         ),
     )
 

@@ -256,7 +256,7 @@ class HARParser:
             parsed = json.loads(text)
             if isinstance(parsed, list):
                 return {"items": parsed}
-            return parsed
+            return dict(parsed)
         except (json.JSONDecodeError, TypeError):
             return {"raw": text}
 
@@ -270,7 +270,7 @@ class HARParser:
             parsed = json.loads(text)
             if isinstance(parsed, list):
                 return {"items": parsed}
-            return parsed
+            return dict(parsed)
         except (json.JSONDecodeError, TypeError):
             return None
 
@@ -288,7 +288,7 @@ class HARParser:
         headers = request.get("headers", [])
         for header in headers:
             if header.get("name", "").lower() == "content-type":
-                return header.get("value", "")
+                return str(header.get("value", ""))
         return ""
 
     def _detect_auth_type(self, entries: List[Dict[str, Any]]) -> str:
@@ -318,5 +318,5 @@ class HARParser:
             origins[origin] = origins.get(origin, 0) + 1
 
         if origins:
-            return max(origins, key=origins.get)
+            return max(origins, key=lambda k: origins[k])
         return ""

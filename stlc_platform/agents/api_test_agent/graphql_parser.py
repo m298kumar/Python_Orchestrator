@@ -63,6 +63,8 @@ class GraphQLParser:
             except json.JSONDecodeError as e:
                 raise ValueError(f"Invalid GraphQL introspection JSON: {e}")
 
+        assert isinstance(introspection, dict), "Introspection must be a dict"
+
         # Extract __schema from different wrapper formats
         schema = self._extract_schema(introspection)
 
@@ -139,9 +141,9 @@ class GraphQLParser:
     def _extract_schema(self, data: dict) -> dict:
         """Extract __schema from various wrapper formats."""
         if "__schema" in data:
-            return data["__schema"]
+            return dict(data["__schema"])
         if "data" in data and "__schema" in data.get("data", {}):
-            return data["data"]["__schema"]
+            return dict(data["data"]["__schema"])
         raise ValueError(
             "Invalid introspection result: expected '__schema' key."
         )
@@ -150,7 +152,7 @@ class GraphQLParser:
         """Find a type definition by name in the schema."""
         for t in schema.get("types", []):
             if t.get("name") == type_name:
-                return t
+                return dict(t)
         return None
 
     def _field_to_endpoint(
@@ -216,7 +218,7 @@ class GraphQLParser:
             inner = self._resolve_type(type_obj.get("ofType", {}))
             return f"[{inner}]"
         elif name:
-            return name
+            return str(name)
         return "Unknown"
 
     def _is_non_null(self, type_obj: dict) -> bool:

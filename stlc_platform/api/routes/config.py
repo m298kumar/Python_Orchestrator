@@ -27,7 +27,7 @@ _SENSITIVE_KEYS = {"api_key", "secret", "password", "token"}
 
 def _sanitize(d: Dict[str, Any]) -> Dict[str, Any]:
     """Mask sensitive values in a config dict."""
-    result = {}
+    result: Dict[str, Any] = {}
     for k, v in d.items():
         if any(sk in k.lower() for sk in _SENSITIVE_KEYS):
             result[k] = "***"

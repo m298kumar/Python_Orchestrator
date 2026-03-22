@@ -156,7 +156,7 @@ def _run_pipeline(
 ) -> None:
     """Execute a full pipeline."""
     from stlc_platform.pipeline.agent_registry import AgentRegistry
-    from stlc_platform.pipeline.orchestrator import PipelineOrchestrator
+    from stlc_platform.pipeline.orchestrator import PipelineOrchestrator, StageResult
     from stlc_platform.pipeline.pipeline_loader import load_pipeline
     from stlc_platform.pipeline.skill_loader import SkillLoader
     from stlc_platform.pipeline.profile_loader import ProfileLoader
@@ -199,7 +199,7 @@ def _run_pipeline(
         if not ci:
             click.echo(f"  Running stage: {stage_id}...")
 
-    def on_complete(sr: "StageResult") -> None:  # noqa: F821
+    def on_complete(sr: StageResult) -> None:
         if not ci:
             status = "PASS" if sr.success else ("SKIP" if sr.skipped else "FAIL")
             click.echo(f"  {status}  {sr.stage_id} ({sr.duration_seconds:.1f}s)")

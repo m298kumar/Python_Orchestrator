@@ -161,7 +161,7 @@ class PageParser:
             return f'{tag_name}[name="{name}"]'
 
         # 4. class (use first non-empty class)
-        classes = tag.get("class", [])
+        classes = tag.get("class")
         if classes and isinstance(classes, list):
             # Filter out empty strings
             non_empty = [c for c in classes if c.strip()]
@@ -181,12 +181,12 @@ class PageParser:
 
         for form_tag in soup.find_all("form"):
             action = form_tag.get("action", "")
-            method = (form_tag.get("method") or "GET").upper()
+            method = str(form_tag.get("method") or "GET").upper()
 
             fields: List[Dict[str, str]] = []
             for field_tag in form_tag.find_all(["input", "select", "textarea"]):
-                field_name = field_tag.get("name", "")
-                field_type = field_tag.get("type", "text")
+                field_name = str(field_tag.get("name", ""))
+                field_type = str(field_tag.get("type", "text"))
                 if field_tag.name == "select":
                     field_type = "select"
                 elif field_tag.name == "textarea":
@@ -228,7 +228,7 @@ class PageParser:
         seen: set = set()
 
         for a_tag in soup.find_all("a", href=True):
-            href = a_tag["href"].strip()
+            href = str(a_tag["href"]).strip()
 
             # Skip empty, anchor-only, and excluded schemes
             if not href or href.startswith("#"):
@@ -257,7 +257,7 @@ class PageParser:
         text = tag.get_text(strip=True)
         if not text:
             # Fallback to placeholder or value for inputs
-            text = tag.get("placeholder", "") or tag.get("value", "")
+            text = str(tag.get("placeholder", "") or tag.get("value", ""))
         if isinstance(text, list):
             text = " ".join(text)
         return str(text)[:200]

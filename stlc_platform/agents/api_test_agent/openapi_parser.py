@@ -70,14 +70,14 @@ class OpenAPIParser:
         """Parse a JSON or YAML string into a dict."""
         # Try JSON first (faster, more common for API specs)
         try:
-            return json.loads(raw)
+            return dict(json.loads(raw))
         except json.JSONDecodeError:
             pass
 
         # Fall back to YAML
         try:
             import yaml
-            return yaml.safe_load(raw)
+            return dict(yaml.safe_load(raw))
         except Exception:
             raise ValueError("Spec is not valid JSON or YAML.")
 
@@ -249,7 +249,7 @@ class OpenAPIParser:
         self, path_params: List[dict], op_params: List[dict]
     ) -> List[dict]:
         """Merge path-level and operation-level params (op overrides path)."""
-        merged: Dict[str, dict] = {}
+        merged: Dict[tuple, dict] = {}
         for p in path_params:
             key = (p.get("name", ""), p.get("in", ""))
             merged[key] = p
@@ -301,7 +301,7 @@ class OpenAPIParser:
             json_content = content.get("application/json", {})
             schema = json_content.get("schema")
             if schema:
-                return self._resolve_ref(schema, root)
+                return dict(self._resolve_ref(schema, root))
             return None
         else:
             # Swagger 2.0: body parameter
@@ -309,7 +309,7 @@ class OpenAPIParser:
                 if p.get("in") == "body":
                     schema = p.get("schema")
                     if schema:
-                        return self._resolve_ref(schema, root)
+                        return dict(self._resolve_ref(schema, root))
             return None
 
     # ------------------------------------------------------------------
@@ -330,11 +330,11 @@ class OpenAPIParser:
                 json_content = content.get("application/json", {})
                 schema = json_content.get("schema")
                 if schema:
-                    return self._resolve_ref(schema, root)
+                    return dict(self._resolve_ref(schema, root))
             else:
                 schema = resp.get("schema")
                 if schema:
-                    return self._resolve_ref(schema, root)
+                    return dict(self._resolve_ref(schema, root))
         return None
 
     def _extract_status_codes(self, responses: dict) -> List[int]:

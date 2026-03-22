@@ -4,8 +4,6 @@ Pipeline Routes
 Run, list, and manage STLC pipeline executions.
 """
 
-from __future__ import annotations
-
 from fastapi import APIRouter, HTTPException
 
 from stlc_platform.api.deps import get_run_manager
@@ -35,6 +33,8 @@ def create_run(req: PipelineRunRequest) -> PipelineRunStatus:
     )
 
     run = mgr.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return PipelineRunStatus(
         run_id=run_id,
         pipeline_name=run["pipeline_name"],
@@ -124,6 +124,8 @@ def resume_run(run_id: str, resume_from: str | None = None) -> PipelineRunStatus
     )
 
     updated = mgr.get_run(run_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return PipelineRunStatus(
         run_id=updated["run_id"],
         pipeline_name=updated["pipeline_name"],

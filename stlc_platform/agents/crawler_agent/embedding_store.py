@@ -116,7 +116,7 @@ class CrawlerEmbeddingStore:
             # Elements summary
             element_count = len(page.elements)
             if page.elements:
-                element_types = {}
+                element_types: Dict[str, int] = {}
                 for el in page.elements:
                     element_types[el.element_type] = (
                         element_types.get(el.element_type, 0) + 1
@@ -218,4 +218,4 @@ class CrawlerEmbeddingStore:
     def count(self) -> int:
         """Return the number of documents in the collection."""
         self.initialize()
-        return self._collection.count()
+        return int(self._collection.count())

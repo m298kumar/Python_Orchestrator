@@ -329,7 +329,7 @@ class DynamicCrawler:
 
     def _extract_forms(self, page: Any) -> List[Dict[str, Any]]:
         """Extract forms from the live page."""
-        return page.evaluate("""() => {
+        return list(page.evaluate("""() => {
             const forms = [];
             document.querySelectorAll('form').forEach(form => {
                 const fields = [];
@@ -349,7 +349,7 @@ class DynamicCrawler:
                 });
             });
             return forms;
-        }""")
+        }"""))
 
     def _extract_links(self, page: Any, current_url: str) -> List[str]:
         """Extract same-origin links from the page."""
