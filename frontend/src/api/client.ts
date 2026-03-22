@@ -219,4 +219,67 @@ export const submitFeedback = (data: FeedbackRequest) =>
 export const listFeedback = (agentId?: string) =>
   api.get('/feedback/', { params: agentId ? { agent_id: agentId } : {} });
 
+// ---------------------------------------------------------------------------
+// Crawler / Site Model
+// ---------------------------------------------------------------------------
+
+export interface SiteModelResponse {
+  base_url: string;
+  total_pages: number;
+  total_elements: number;
+  total_forms: number;
+  navigation_graph: Record<string, string[]>;
+  crawl_timestamp: string;
+}
+
+export interface PageSummary {
+  url: string;
+  title: string;
+  element_count: number;
+  form_count: number;
+  link_count: number;
+}
+
+export const getSiteModel = () =>
+  api.get<SiteModelResponse>('/crawler/site-model');
+
+export const listCrawlerPages = () =>
+  api.get<PageSummary[]>('/crawler/pages');
+
+// ---------------------------------------------------------------------------
+// API Tests
+// ---------------------------------------------------------------------------
+
+export interface ApiTestFile {
+  filename: string;
+  framework: string;
+  language: string;
+  endpoint_path: string;
+  test_count: number;
+  test_level: string;
+  content?: string;
+}
+
+export const listApiTests = () =>
+  api.get<ApiTestFile[]>('/api-tests/');
+
+export const getApiTest = (filename: string) =>
+  api.get<ApiTestFile>('/api-tests/' + encodeURIComponent(filename));
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+export interface ConfigResponse {
+  project: Record<string, any>;
+  ollama: Record<string, any>;
+  output: Record<string, any>;
+}
+
+export const getConfig = () =>
+  api.get<ConfigResponse>('/config/');
+
+export const updateConfig = (data: Partial<ConfigResponse>) =>
+  api.put('/config/', data);
+
 export default api;
