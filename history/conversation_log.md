@@ -1105,6 +1105,34 @@ Backend must be running: `uvicorn stlc_platform.api.main:app --reload`
 - Frontend requires `npm install` + Node.js to build/test
 
 ### Next Steps
-- Phase 3: Advanced pages (Crawler, API Tests, Config, History) + WebSocket real-time integration
 - Phase 4: Frontend tests (Vitest) + E2E Playwright tests + validation gate
+
+---
+
+## Session: 2026-03-22 — Stage 5 Phase 3 Implementation
+
+### What Was Done
+Implemented **Phase 3: Advanced Frontend Pages + Real-Time Features** (commit `36c85d6`):
+
+#### New Pages (4)
+1. **Crawler.tsx** — Site model stats, page cards grid, navigation graph, click-to-detail modal
+2. **ApiTests.tsx** — Stats bar, file list table, CodeViewer panel, language auto-detection
+3. **Config.tsx** — 3 collapsible sections (Project/LLM/Output), type-aware inputs, save/reset
+4. **History.tsx** — Run history table, expandable details, 10s auto-refresh for running pipelines
+
+#### New Components (2)
+1. **NotificationProvider.tsx** — React context toast system, 4 types (success/error/warning/info), auto-dismiss 5s
+2. **LiveProgress.tsx** — Real-time pipeline timeline using useWebSocket hook, animated stage entries
+
+#### Updated Files
+- **client.ts** — Added getSiteModel, listCrawlerPages, listApiTests, getApiTest, getConfig, updateConfig + 4 interfaces
+- **App.tsx** — Replaced placeholder imports with real pages, wrapped in NotificationProvider
+
+### Metrics
+- **8 files** changed (6 created, 2 modified), +1583 lines
+- **1143 backend tests** passing (1 pre-existing Stage 0 version check failure)
+- Zero regressions
+
+### Next Steps
+- Phase 4: Frontend tests (Vitest + React Testing Library) + E2E Playwright tests + Stage 5 validation gate
 

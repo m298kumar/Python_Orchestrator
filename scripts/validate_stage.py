@@ -14,7 +14,6 @@ Each stage runs cumulative checks (all previous stage checks + its own).
 import argparse
 import subprocess
 import sys
-import os
 from pathlib import Path
 
 
@@ -1145,10 +1144,145 @@ def check_stage_4():
 
 
 def check_stage_5():
-    """Frontend UI."""
+    """Frontend UI + Backend API."""
     check_stage_4()
-    print("\n--- Stage 5: Frontend UI ---")
-    print("  SKIP  Stage 5 checks not yet implemented")
+    print("\n--- Stage 5: Frontend UI + Backend API ---")
+
+    frontend = _ROOT / "frontend"
+    integration_dir = _ROOT / "tests" / "integration"
+    unit_api_dir = _ROOT / "tests" / "unit" / "api"
+
+    # ── Imports ──────────────────────────────────────────────────────────
+
+    # 1. FastAPI app importable
+    _run("FastAPI app importable", [
+        sys.executable, "-c",
+        "from stlc_platform.api.main import app; assert app is not None",
+    ])
+
+    # 2. API schemas importable
+    _run("API schemas importable", [
+        sys.executable, "-c",
+        "from stlc_platform.api.schemas import PipelineRunRequest, HealthResponse, WSMessage",
+    ])
+
+    # 3. RunManager importable
+    _run("RunManager importable", [
+        sys.executable, "-c",
+        "from stlc_platform.api.deps import RunManager, get_run_manager, get_ws_manager",
+    ])
+
+    # 4. WebSocket ConnectionManager importable
+    _run("WebSocket ConnectionManager importable", [
+        sys.executable, "-c",
+        "from stlc_platform.api.websocket import ConnectionManager",
+    ])
+
+    # 5. Background task runner importable
+    _run("Background task runner importable", [
+        sys.executable, "-c",
+        "from stlc_platform.api.tasks import submit_pipeline_run, run_pipeline_background",
+    ])
+
+    # 6. All 11 route modules importable
+    _run("All route modules importable", [
+        sys.executable, "-c",
+        "from stlc_platform.api.routes import ("
+        "pipeline, agents, requirements, test_cases, bdd, "
+        "crawler, api_tests, artifacts, feedback, config, files"
+        ")",
+    ])
+
+    # ── Frontend files ───────────────────────────────────────────────────
+
+    # 7. Frontend package.json exists
+    _run("Frontend package.json exists", [
+        sys.executable, "-c",
+        f"from pathlib import Path; assert Path(r'{frontend / 'package.json'}').exists()",
+    ])
+
+    # 8. Vite config exists
+    _run("Frontend vite.config.ts exists", [
+        sys.executable, "-c",
+        f"from pathlib import Path; assert Path(r'{frontend / 'vite.config.ts'}').exists()",
+    ])
+
+    # 9. All 8 page components exist
+    pages_dir = str(frontend / "src" / "pages")
+    _run("All 8 page components exist", [
+        sys.executable, "-c",
+        "import sys; from pathlib import Path; "
+        f"d = Path(r'{pages_dir}'); "
+        "pages = ['Dashboard','Requirements','TestCases','BddCode','Crawler','ApiTests','Config','History']; "
+        "missing = [p for p in pages if not (d / (p + '.tsx')).exists()]; "
+        "sys.exit(1) if missing else None",
+    ])
+
+    # 10. All 5 reusable components exist
+    comps_dir = str(frontend / "src" / "components")
+    _run("All 5 reusable components exist", [
+        sys.executable, "-c",
+        "import sys; from pathlib import Path; "
+        f"d = Path(r'{comps_dir}'); "
+        "comps = ['Layout','StatusBadge','CodeViewer','NotificationProvider','LiveProgress']; "
+        "missing = [c for c in comps if not (d / (c + '.tsx')).exists()]; "
+        "sys.exit(1) if missing else None",
+    ])
+
+    # 11. All 3 hooks exist
+    hooks_dir = str(frontend / "src" / "hooks")
+    _run("All 3 custom hooks exist", [
+        sys.executable, "-c",
+        "import sys; from pathlib import Path; "
+        f"d = Path(r'{hooks_dir}'); "
+        "hooks = ['useWebSocket','usePipeline','useRequirements']; "
+        "missing = [h for h in hooks if not (d / (h + '.ts')).exists()]; "
+        "sys.exit(1) if missing else None",
+    ])
+
+    # 12. API client exists
+    _run("API client module exists", [
+        sys.executable, "-c",
+        f"from pathlib import Path; assert Path(r'{frontend / 'src' / 'api' / 'client.ts'}').exists()",
+    ])
+
+    # 13. Vitest config exists
+    _run("Vitest config exists", [
+        sys.executable, "-c",
+        f"from pathlib import Path; assert Path(r'{frontend / 'vitest.config.ts'}').exists()",
+    ])
+
+    # 14. Frontend test setup exists
+    _run("Frontend test setup exists", [
+        sys.executable, "-c",
+        f"from pathlib import Path; assert Path(r'{frontend / 'src' / 'test' / 'setup.ts'}').exists()",
+    ])
+
+    # ── Backend API tests ────────────────────────────────────────────────
+
+    # 15. Stage 5 backend unit tests pass
+    api_test_files = sorted(unit_api_dir.glob("test_*.py"))
+    if api_test_files:
+        _run(
+            "Stage 5 backend API unit tests",
+            [sys.executable, "-m", "pytest"] + [str(f) for f in api_test_files]
+            + ["-v", "--tb=short", "-q"],
+        )
+
+    # 16. Stage 5 integration tests pass
+    stage5_test = integration_dir / "test_stage5_validation.py"
+    if stage5_test.exists():
+        _run(
+            "Stage 5 integration tests",
+            [sys.executable, "-m", "pytest", str(stage5_test), "-v", "--tb=short", "-q"],
+        )
+
+    # 17. __stage__ is 5
+    _run("__stage__ is 5", [
+        sys.executable, "-c",
+        "import stlc_platform; assert stlc_platform.__stage__ == 5, "
+        f"f'Expected 5, got {'{'}stlc_platform.__stage__{'}'}'",
+    ])
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
