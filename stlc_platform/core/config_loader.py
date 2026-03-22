@@ -261,6 +261,34 @@ def load_config() -> AppConfig:
     return cfg
 
 
+def save_config_yaml(updates: dict) -> Path:
+    """Deep-merge *updates* into ``config/stlc_config.yaml`` and write back.
+
+    Args:
+        updates: Nested dict of config keys/values to merge.
+
+    Returns:
+        The Path to the written YAML file.
+    """
+    import yaml
+
+    root = _find_project_root()
+    yaml_path = root / "config" / "stlc_config.yaml"
+
+    # Read existing YAML (or start fresh)
+    current: Dict[str, Any] = {}
+    if yaml_path.exists():
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            current = yaml.safe_load(f) or {}
+
+    merged = deep_merge(current, updates)
+
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        yaml.dump(merged, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    return yaml_path
+
+
 def load_config_yaml(profile: str = "") -> Dict[str, Any]:
     """
     Load raw YAML config dict with optional profile overlay.

@@ -205,13 +205,38 @@ class FeedbackResponse(BaseModel):
 class ConfigResponse(BaseModel):
     """Current configuration (sanitized)."""
     project: Dict[str, Any] = Field(default_factory=dict)
-    ollama: Dict[str, Any] = Field(default_factory=dict)
+    llm: Dict[str, Any] = Field(default_factory=dict)
     output: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ConfigUpdate(BaseModel):
-    """Config fields to update."""
-    updates: Dict[str, Any]
+    """Config fields to update.
+
+    Supports two formats:
+    1. Dot-notation via ``updates``: {"updates": {"llm.model": "gpt-4o"}}
+    2. Structured sections: {"llm": {"model": "gpt-4o"}, "project": {"name": "X"}}
+
+    Both can be combined; ``updates`` is applied first, then sections are deep-merged.
+    """
+    updates: Optional[Dict[str, Any]] = None
+    project: Optional[Dict[str, Any]] = None
+    llm: Optional[Dict[str, Any]] = None
+    output: Optional[Dict[str, Any]] = None
+
+
+class LLMTestRequest(BaseModel):
+    """Request to test an LLM provider connection."""
+    provider: str  # ollama | openai | anthropic | azure
+    model: str = ""
+    base_url: str = ""
+    api_key: str = ""
+
+
+class LLMTestResponse(BaseModel):
+    """Result of an LLM provider connection test."""
+    success: bool
+    message: str
+    models: list[str] = []
 
 
 # ── WebSocket Messages ──────────────────────────────────────────────────────

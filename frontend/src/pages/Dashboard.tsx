@@ -10,10 +10,13 @@ import {
   Play,
   Upload,
   X,
+  Rocket,
+  ArrowRight,
 } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import {
   getHealth,
+  getConfig,
   listPipelineRuns,
   listRequirements,
   listTestCases,
@@ -21,6 +24,7 @@ import {
   downloadBddProject,
   type PipelineRunSummary,
   type PipelineRunRequest,
+  type ConfigResponse,
 } from "../api/client";
 
 // ---------------------------------------------------------------------------
@@ -161,23 +165,38 @@ export default function Dashboard() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [triggerLoading, setTriggerLoading] = useState(false);
+  const [showSetupBanner, setShowSetupBanner] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAll() {
       try {
-        const [healthRes, runsRes, reqRes, tcRes] = await Promise.all([
+        const [healthRes, runsRes, reqRes, tcRes, configRes] = await Promise.all([
           getHealth(),
           listPipelineRuns(),
           listRequirements(),
           listTestCases(),
+          getConfig(),
         ]);
         if (cancelled) return;
         setAgentCount(healthRes.data.agents_registered);
         setRuns(runsRes.data);
         setReqCount(reqRes.data.length);
         setTcCount(tcRes.data.length);
+
+        // Check if first-run setup banner should be shown
+        const dismissed = localStorage.getItem("stlc_setup_dismissed") === "true";
+        if (!dismissed) {
+          const cfg: ConfigResponse = configRes.data;
+          const llm = cfg.llm ?? {};
+          const provider = llm.provider ?? "";
+          const apiKey = llm.api_key ?? "";
+          const needsSetup =
+            !provider ||
+            (provider !== "ollama" && (!apiKey || apiKey === ""));
+          setShowSetupBanner(needsSetup);
+        }
       } catch (err: any) {
         if (!cancelled) setError(err.message ?? "Failed to load dashboard data");
       } finally {
@@ -241,6 +260,44 @@ export default function Dashboard() {
           <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
             <X className="h-4 w-4" />
           </button>
+        </div>
+      )}
+
+      {/* First-run setup banner */}
+      {showSetupBanner && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0">
+              <Rocket className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-semibold text-gray-900">
+                Welcome! Set up your AI provider to get started
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Configure your LLM (OpenAI, Anthropic, or local Ollama) to start
+                generating test cases automatically.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => navigate("/config")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Set Up Now
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => {
+                  localStorage.setItem("stlc_setup_dismissed", "true");
+                  setShowSetupBanner(false);
+                }}
+                className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

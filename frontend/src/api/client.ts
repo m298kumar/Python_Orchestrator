@@ -272,14 +272,30 @@ export const getApiTest = (filename: string) =>
 
 export interface ConfigResponse {
   project: Record<string, any>;
-  ollama: Record<string, any>;
+  llm: Record<string, any>;
   output: Record<string, any>;
+}
+
+export interface LLMTestRequest {
+  provider: string;
+  model: string;
+  base_url: string;
+  api_key: string;
+}
+
+export interface LLMTestResponse {
+  success: boolean;
+  message: string;
+  models: string[];
 }
 
 export const getConfig = () =>
   api.get<ConfigResponse>('/config/');
 
 export const updateConfig = (data: Partial<ConfigResponse>) =>
-  api.put('/config/', data);
+  api.put<ConfigResponse>('/config/', data);
+
+export const testLlmConnection = (data: LLMTestRequest) =>
+  api.post<LLMTestResponse>('/config/test-llm', data);
 
 export default api;
