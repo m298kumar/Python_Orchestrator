@@ -877,6 +877,84 @@ Add unit tests for 5 previously untested modules: orchestrator, CLI, exporters, 
 - Lint clean
 
 ### Next Steps
-- Wave C: Spec compliance (Supertest, Scenario Outline, ChromaDB RAG)
-- Wave D: Nice-to-haves (Faker factories, CRUD sequences, coverage threshold)
-- Stage 5: Frontend UI
+- Wave C+D: Spec compliance + quality improvements
+
+---
+
+## Session 012c — 2026-03-21 — Wave C+D: Spec Compliance & Quality
+
+### Objective
+Close remaining spec gaps (Supertest, Scenario Outline, ChromaDB RAG, CRUD sequences, Faker payloads).
+
+### Wave C: Spec Compliance
+
+#### C1: Supertest JS Framework (API Test Generator)
+- **Created** `stlc_platform/agents/api_test_agent/templates/supertest.js.j2`
+  - Mocha-style `describe`/`it` blocks with `require('supertest')`
+  - All 6 test types: happy_path, auth, validation, boundary, schema
+  - Handles GET/POST/PUT/DELETE with auth headers, payloads, query params
+- **Modified** `test_generator.py` — added `supertest` to SUPPORTED_FRAMEWORKS + _LANGUAGE_MAP
+- **Tests**: 21 new tests in `test_supertest.py`
+
+#### C2: Scenario Outline Detection (BDD Feature Generator)
+- **Modified** `stlc_platform/agents/bdd_agent/feature_generator.py`
+  - Added `_normalize_step()`: replaces quoted strings and standalone numbers with `<param_N>` / `<value_N>` placeholders
+  - Added `_detect_outlines()`: groups TCs by step skeleton, merges 2+ matches into Scenario Outline
+  - Added `_build_outline()`: constructs outline scenario with Examples header + rows
+  - Updated `_build_feature()` to use outline detection
+- **Tests**: 13 new tests in `test_scenario_outline.py`
+
+#### C3: ChromaDB RAG Embedding for Crawler Results
+- **Created** `stlc_platform/agents/crawler_agent/embedding_store.py`
+  - `CrawlerEmbeddingStore` class with `embed_site_model()` and `retrieve_context()`
+  - Stores page documents (URL, title, elements, forms) in ChromaDB collection
+  - Semantic search with similarity scoring for downstream agent context
+- **Modified** `crawler_agent/agent.py` — optional ChromaDB embedding after site model build
+- **Modified** `crawler_agent/__init__.py` — exports CrawlerEmbeddingStore
+- **Tests**: 11 new tests in `test_embedding_store.py`
+
+### Wave D: Quality Improvements
+
+#### D1: CRUD Sequence Test Generation
+- **Modified** `stlc_platform/agents/api_test_agent/test_generator.py`
+  - Added `_detect_crud_groups()`: finds resource groups (same base path, POST+GET+PUT+DELETE)
+  - Added `_crud_sequence_tests_for_group()`: generates integration-level chain tests
+  - Added `_generate_crud_artifact()`: renders CRUD sequence tests
+  - Updated `generate()` to produce CRUD artifacts after per-endpoint tests
+- **Modified** `pytest_requests.py.j2` — added CRUD sequence block (POST→GET→PUT→DELETE→GET 404)
+- **Tests**: 10 new tests in `test_crud_sequence.py`
+
+#### D2: Smart Faker-Based Payloads
+- **Modified** `test_generator.py` — replaced simple `_make_example_payload()` with `_smart_field_value()`
+  - Heuristic field name matching: email→`test_user@example.com`, name→`John Doe`, etc.
+  - No external Faker dependency — pure heuristic approach
+  - Covers: name, email, phone, address, city, zip, url, description, date, age, quantity, price
+- **Tests**: 31 new tests in `test_faker_payload.py`
+
+### Integration Test Updates
+- Updated `test_stage3p2_validation.py` assertions from `== 8` to `>= 8` to account for CRUD sequence artifacts
+
+### Final Metrics
+- **87 new tests** across 5 test files — all passing
+- **1047 total tests** (1046 pass, 1 pre-existing Stage 0 failure)
+- Zero regressions
+- Lint clean
+
+### Files Changed (Summary)
+- 3 new source files: `supertest.js.j2`, `embedding_store.py`, templates
+- 5 modified source files: `test_generator.py`, `feature_generator.py`, `crawler_agent/agent.py`, `crawler_agent/__init__.py`, `pytest_requests.py.j2`
+- 5 new test files: `test_supertest.py`, `test_scenario_outline.py`, `test_crud_sequence.py`, `test_faker_payload.py`, `test_embedding_store.py`
+- 2 updated test files: `test_test_generator.py`, `test_stage3p2_validation.py`
+
+### Spec Compliance After Waves C+D
+- **Supertest JS**: ✅ Implemented (was MISSING)
+- **Scenario Outline**: ✅ Implemented (was PARTIAL — infrastructure only)
+- **ChromaDB RAG**: ✅ Implemented (was MISSING from crawler)
+- **CRUD Sequences**: ✅ Implemented (was declared but never generated)
+- **Faker Payloads**: ✅ Implemented (was hardcoded `test_fieldname`)
+- **Test Pyramid Validation**: ✅ Already existed (warnings mode)
+- **gRPC Proto Parsing**: Deferred (niche, low priority)
+
+### Next Steps
+- Stage 5: Frontend UI (FastAPI backend + React frontend)
+

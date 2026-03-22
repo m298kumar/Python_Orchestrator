@@ -170,5 +170,73 @@ class Test{{ class_name }}_{{ test.func_name }}:
         schema = {{ test.schema }}
         jsonschema.validate(instance=response.json(), schema=schema)
 {% endif %}
+{% if test.test_type == "crud_sequence" %}
+    def test_{{ test.func_name }}(self):
+        """{{ test.description }}"""
+{% if test.auth_required %}
+        headers = {"Authorization": "Bearer <TOKEN>", "Content-Type": "application/json"}
+        headers_read = {"Authorization": "Bearer <TOKEN>"}
+{% else %}
+        headers = {"Content-Type": "application/json"}
+        headers_read = {}
+{% endif %}
+
+        # Step 1: POST — Create resource
+        create_payload = {{ test.create_payload }}
+        create_resp = requests.post(
+            f"{BASE_URL}{{ test.post_path }}",
+            json=create_payload,
+            headers=headers,
+        )
+        assert create_resp.status_code in [200, 201], (
+            f"Create failed: {create_resp.status_code} {create_resp.text}"
+        )
+        created = create_resp.json()
+        resource_id = created.get("id", created.get("{{ test.resource_name }}_id", 1))
+
+        # Step 2: GET — Verify resource exists
+        get_url = f"{BASE_URL}{{ test.get_path }}".replace(
+            "{" + "{{ test.resource_name }}Id" + "}", str(resource_id)
+        ).rstrip("/")
+        if get_url == f"{BASE_URL}{{ test.get_path }}":
+            get_url = f"{BASE_URL}{{ test.base_path }}/{resource_id}"
+        get_resp = requests.get(get_url, headers=headers_read)
+        assert get_resp.status_code == 200, (
+            f"Read after create failed: {get_resp.status_code} {get_resp.text}"
+        )
+
+        # Step 3: PUT/PATCH — Update resource
+        update_payload = {{ test.update_payload }}
+        update_url = f"{BASE_URL}{{ test.put_path }}".replace(
+            "{" + "{{ test.resource_name }}Id" + "}", str(resource_id)
+        ).rstrip("/")
+        if update_url == f"{BASE_URL}{{ test.put_path }}":
+            update_url = f"{BASE_URL}{{ test.base_path }}/{resource_id}"
+        update_resp = requests.{{ test.update_method }}(
+            update_url,
+            json=update_payload,
+            headers=headers,
+        )
+        assert update_resp.status_code in [200, 204], (
+            f"Update failed: {update_resp.status_code} {update_resp.text}"
+        )
+
+        # Step 4: DELETE — Remove resource
+        delete_url = f"{BASE_URL}{{ test.delete_path }}".replace(
+            "{" + "{{ test.resource_name }}Id" + "}", str(resource_id)
+        ).rstrip("/")
+        if delete_url == f"{BASE_URL}{{ test.delete_path }}":
+            delete_url = f"{BASE_URL}{{ test.base_path }}/{resource_id}"
+        delete_resp = requests.delete(delete_url, headers=headers_read)
+        assert delete_resp.status_code in [200, 204], (
+            f"Delete failed: {delete_resp.status_code} {delete_resp.text}"
+        )
+
+        # Step 5: GET — Verify resource is gone (404)
+        verify_resp = requests.get(get_url, headers=headers_read)
+        assert verify_resp.status_code == 404, (
+            f"Expected 404 after delete, got: {verify_resp.status_code}"
+        )
+{% endif %}
 
 {% endfor %}

@@ -8,6 +8,7 @@ from stlc_platform.agents.crawler_agent.dynamic_crawler import (
     CapturedRequest,
     is_playwright_available,
 )
+from stlc_platform.agents.crawler_agent.embedding_store import CrawlerEmbeddingStore
 
 __all__ = [
     "CrawlerAgent",
@@ -18,4 +19,5 @@ __all__ = [
     "CrawlResult",
     "CapturedRequest",
     "is_playwright_available",
+    "CrawlerEmbeddingStore",
 ]

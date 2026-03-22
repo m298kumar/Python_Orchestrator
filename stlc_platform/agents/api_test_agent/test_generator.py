@@ -7,6 +7,7 @@ Supported frameworks:
   - pytest_requests (Pytest + Requests library, Python)
   - rest_assured (JUnit 5 + REST Assured, Java)
   - karate (Karate DSL, .feature files)
+  - supertest (Supertest + Mocha, JavaScript/Node.js)
 
 Extension: Add new frameworks by placing a .j2 template in the templates/
 directory and adding an entry to SUPPORTED_FRAMEWORKS.
@@ -36,6 +37,7 @@ SUPPORTED_FRAMEWORKS: Dict[str, str] = {
     "pytest_requests": "pytest_requests.py.j2",
     "rest_assured": "rest_assured.java.j2",
     "karate": "karate.feature.j2",
+    "supertest": "supertest.js.j2",
 }
 
 # Framework name -> language
@@ -43,6 +45,7 @@ _LANGUAGE_MAP: Dict[str, str] = {
     "pytest_requests": "python",
     "rest_assured": "java",
     "karate": "karate",
+    "supertest": "javascript",
 }
 
 # Conftest template (Python frameworks only)
@@ -116,6 +119,16 @@ class APITestGenerator:
                 test_types_filter=test_types_filter,
             )
             if artifact.test_count > 0:
+                artifacts.append(artifact)
+
+        # Generate CRUD sequence tests (cross-endpoint integration tests)
+        crud_groups = self._detect_crud_groups(api_model)
+        for group in crud_groups:
+            crud_tests = self._crud_sequence_tests_for_group(group, api_model)
+            if crud_tests:
+                artifact = self._generate_crud_artifact(
+                    group, crud_tests, api_model.base_url, api_model.auth_type
+                )
                 artifacts.append(artifact)
 
         return artifacts
@@ -256,7 +269,11 @@ class APITestGenerator:
 
     def _happy_path_test(self, endpoint: APIEndpointArtifact) -> Dict[str, Any]:
         """Generate happy path test case."""
-        payload = self._make_example_payload(endpoint) if endpoint.request_body_schema else "{}"
+        payload = (
+            self._make_example_payload(endpoint)
+            if endpoint.request_body_schema
+            else "{}"
+        )
         return {
             "func_name": f"happy_path_{endpoint.method.lower()}",
             "description": f"Happy path: {endpoint.method} {endpoint.path} returns success",
@@ -271,14 +288,19 @@ class APITestGenerator:
         return [
             {
                 "func_name": f"auth_missing_{endpoint.method.lower()}",
-                "description": f"Auth: {endpoint.method} {endpoint.path} without token returns 401",
+                "description": (
+                    f"Auth: {endpoint.method} {endpoint.path} without token returns 401"
+                ),
                 "test_type": "auth_missing",
                 "test_level": self._classifier.classify_test_level("auth"),
                 "failure_type": self._classifier.classify_failure_type("auth"),
             },
             {
                 "func_name": f"auth_invalid_{endpoint.method.lower()}",
-                "description": f"Auth: {endpoint.method} {endpoint.path} with invalid token returns 401/403",
+                "description": (
+                    f"Auth: {endpoint.method} {endpoint.path} "
+                    "with invalid token returns 401/403"
+                ),
                 "test_type": "auth_invalid",
                 "test_level": self._classifier.classify_test_level("auth"),
                 "failure_type": self._classifier.classify_failure_type("auth"),
@@ -292,7 +314,8 @@ class APITestGenerator:
         return {
             "func_name": f"validation_missing_fields_{endpoint.method.lower()}",
             "description": (
-                f"Validation: {endpoint.method} {endpoint.path} with empty payload returns 400/422"
+                f"Validation: {endpoint.method} {endpoint.path} "
+                "with empty payload returns 400/422"
             ),
             "test_type": "validation_missing_fields",
             "test_level": self._classifier.classify_test_level("validation"),
@@ -329,7 +352,8 @@ class APITestGenerator:
         return {
             "func_name": f"boundary_{endpoint.method.lower()}",
             "description": (
-                f"Boundary: {endpoint.method} {endpoint.path} with boundary values returns 400/422"
+                f"Boundary: {endpoint.method} {endpoint.path} "
+                "with boundary values returns 400/422"
             ),
             "test_type": "boundary",
             "test_level": self._classifier.classify_test_level("boundary"),
@@ -348,7 +372,9 @@ class APITestGenerator:
             ),
             "test_type": "schema_validation",
             "test_level": self._classifier.classify_test_level("schema_validation"),
-            "failure_type": self._classifier.classify_failure_type("schema_validation"),
+            "failure_type": self._classifier.classify_failure_type(
+                "schema_validation"
+            ),
             "schema": repr(endpoint.response_schema),
         }
 
@@ -367,13 +393,16 @@ class APITestGenerator:
         slug = re.sub(r"_+", "_", slug).strip("_").lower()
 
         lang = _LANGUAGE_MAP.get(self.framework, "python")
+        method_lower = endpoint.method.lower()
         if lang == "java":
             class_name = self._make_class_name(endpoint)
             return f"{class_name}.java"
         elif lang == "karate":
-            return f"{endpoint.method.lower()}_{slug}.feature"
+            return f"{method_lower}_{slug}.feature"
+        elif lang == "javascript":
+            return f"test_api_{method_lower}_{slug}.test.js"
         else:
-            return f"test_api_{endpoint.method.lower()}_{slug}.py"
+            return f"test_api_{method_lower}_{slug}.py"
 
     def _make_class_name(self, endpoint: APIEndpointArtifact) -> str:
         """Generate a class name like TestGetPets."""
@@ -407,8 +436,16 @@ class APITestGenerator:
                 pairs.append(f'"{name}": "test"')
         return "{" + ", ".join(pairs) + "}"
 
+    # ------------------------------------------------------------------
+    # Smart payload generation (heuristic field-name matching)
+    # ------------------------------------------------------------------
+
     def _make_example_payload(self, endpoint: APIEndpointArtifact) -> str:
-        """Generate an example payload from the request body schema."""
+        """Generate an example payload from the request body schema.
+
+        Uses heuristic field-name matching to produce realistic test data
+        without any external dependencies (no Faker library needed).
+        """
         # Use examples if available
         if endpoint.examples.get("request"):
             return repr(endpoint.examples["request"])
@@ -422,17 +459,257 @@ class APITestGenerator:
         payload: Dict[str, Any] = {}
         for field_name, field_schema in props.items():
             field_type = field_schema.get("type", "string")
-            if field_type == "string":
-                payload[field_name] = f"test_{field_name}"
-            elif field_type == "integer":
-                payload[field_name] = 1
-            elif field_type == "number":
-                payload[field_name] = 1.0
-            elif field_type == "boolean":
-                payload[field_name] = True
-            elif field_type == "array":
-                payload[field_name] = []
-            else:
-                payload[field_name] = f"test_{field_name}"
+            payload[field_name] = self._smart_field_value(
+                field_name, field_type, field_schema
+            )
 
         return repr(payload)
+
+    @staticmethod
+    def _smart_field_value(
+        field_name: str, field_type: str, field_schema: Dict[str, Any]
+    ) -> Any:
+        """Return a realistic test value based on field name and type heuristics."""
+        name_lower = field_name.lower()
+
+        if field_type == "string":
+            # Email patterns
+            if name_lower in (
+                "email", "email_address", "emailaddress",
+            ):
+                return "test_user@example.com"
+            # Name patterns
+            if name_lower in (
+                "name", "full_name", "fullname", "display_name", "displayname",
+            ):
+                return "John Doe"
+            if name_lower in (
+                "first_name", "firstname", "given_name", "givenname",
+            ):
+                return "Jane"
+            if name_lower in (
+                "last_name", "lastname", "family_name", "familyname", "surname",
+            ):
+                return "Smith"
+            # Phone patterns
+            if "phone" in name_lower or "mobile" in name_lower or "tel" in name_lower:
+                return "+1-555-0100"
+            # Address patterns
+            if name_lower in (
+                "address", "street", "street_address", "streetaddress",
+            ):
+                return "123 Test Street"
+            if name_lower in ("city", "town"):
+                return "Test City"
+            if name_lower in ("state", "province", "region"):
+                return "CA"
+            if name_lower in ("country",):
+                return "US"
+            if name_lower in (
+                "zip", "zip_code", "zipcode", "postal", "postal_code", "postalcode",
+            ):
+                return "12345"
+            # URL patterns
+            if name_lower in ("url", "website", "homepage", "link", "uri"):
+                return "https://example.com"
+            # Description / text
+            if name_lower in ("description", "desc", "bio", "about", "summary"):
+                return f"Test description for {field_name}"
+            # Date/time patterns
+            if any(
+                kw in name_lower
+                for kw in (
+                    "date", "created_at", "updated_at", "timestamp",
+                    "datetime", "createdat", "updatedat",
+                )
+            ):
+                return "2024-01-15T10:30:00Z"
+            # Password
+            if "password" in name_lower or "secret" in name_lower:
+                return "TestPass123!"
+            # Status
+            if name_lower == "status":
+                return "active"
+            # Default string
+            return f"test_{field_name}"
+
+        elif field_type == "integer":
+            if name_lower in ("age",):
+                return 25
+            if name_lower in ("quantity", "qty", "count"):
+                return 5
+            if name_lower in ("price", "amount", "cost", "total"):
+                return 1999
+            if (
+                name_lower in ("id",)
+                or name_lower.endswith("_id")
+                or name_lower.endswith("id")
+            ):
+                return 1
+            if name_lower in ("year",):
+                return 2024
+            return 42
+
+        elif field_type == "number":
+            if name_lower in ("price", "amount", "cost", "total"):
+                return 19.99
+            if name_lower in ("latitude", "lat"):
+                return 37.7749
+            if name_lower in ("longitude", "lng", "lon"):
+                return -122.4194
+            return 1.0
+
+        elif field_type == "boolean":
+            return True
+        elif field_type == "array":
+            return []
+        else:
+            return f"test_{field_name}"
+
+    # ------------------------------------------------------------------
+    # CRUD sequence detection and generation
+    # ------------------------------------------------------------------
+
+    def _detect_crud_groups(
+        self, api_model: APIModelArtifact
+    ) -> List[Dict[str, Any]]:
+        """Identify resource groups that have POST + GET + PUT/PATCH + DELETE.
+
+        Groups endpoints by base path (stripping path parameters) and checks
+        that at least POST, GET, PUT (or PATCH), and DELETE are present.
+
+        Returns:
+            List of dicts, each with:
+              - base_path: str (e.g. "/pets")
+              - endpoints: dict mapping method -> APIEndpointArtifact
+              - resource_name: str (e.g. "pets")
+        """
+        # Group endpoints by their base path (path without trailing {param})
+        path_groups: Dict[str, Dict[str, APIEndpointArtifact]] = {}
+        for endpoint in api_model.endpoints:
+            # Normalize: strip trailing path params to find the base resource
+            base = re.sub(r"/\{[^}]+\}$", "", endpoint.path)
+            if base not in path_groups:
+                path_groups[base] = {}
+            method_upper = endpoint.method.upper()
+            # Keep first occurrence per method
+            if method_upper not in path_groups[base]:
+                path_groups[base][method_upper] = endpoint
+
+        crud_groups: List[Dict[str, Any]] = []
+        for base_path, methods in path_groups.items():
+            has_create = "POST" in methods
+            has_read = "GET" in methods
+            has_update = "PUT" in methods or "PATCH" in methods
+            has_delete = "DELETE" in methods
+
+            if has_create and has_read and has_update and has_delete:
+                # Derive a resource name from the base path
+                resource_name = base_path.strip("/").split("/")[-1]
+                crud_groups.append(
+                    {
+                        "base_path": base_path,
+                        "endpoints": methods,
+                        "resource_name": resource_name,
+                    }
+                )
+
+        return crud_groups
+
+    def _crud_sequence_tests_for_group(
+        self, group: Dict[str, Any], api_model: APIModelArtifact
+    ) -> List[Dict[str, Any]]:
+        """Generate CRUD sequence test cases for a single resource group.
+
+        Returns a list with one test case dict representing the full
+        POST -> GET -> PUT -> DELETE -> GET(404) chain.
+        """
+        endpoints = group["endpoints"]
+        resource = group["resource_name"]
+        base_path = group["base_path"]
+
+        post_ep = endpoints.get("POST")
+        get_ep = endpoints.get("GET")
+        put_ep = endpoints.get("PUT") or endpoints.get("PATCH")
+        delete_ep = endpoints.get("DELETE")
+
+        # Build a create payload from the POST endpoint schema
+        create_payload = "{}"
+        if post_ep and post_ep.request_body_schema:
+            create_payload = self._make_example_payload(post_ep)
+
+        update_payload = "{}"
+        if put_ep and put_ep.request_body_schema:
+            update_payload = self._make_example_payload(put_ep)
+
+        update_method = "PUT" if "PUT" in endpoints else "PATCH"
+
+        return [
+            {
+                "func_name": f"crud_sequence_{resource}",
+                "description": (
+                    f"CRUD sequence: Create, Read, Update, Delete {resource} "
+                    f"via {base_path}"
+                ),
+                "test_type": "crud_sequence",
+                "test_level": self._classifier.classify_test_level("crud_sequence"),
+                "failure_type": self._classifier.classify_failure_type(
+                    "crud_sequence"
+                ),
+                "create_payload": create_payload,
+                "update_payload": update_payload,
+                "base_path": base_path,
+                "resource_name": resource,
+                "post_path": post_ep.path if post_ep else base_path,
+                "get_path": get_ep.path if get_ep else base_path,
+                "put_path": put_ep.path if put_ep else base_path,
+                "delete_path": delete_ep.path if delete_ep else base_path,
+                "update_method": update_method.lower(),
+                "auth_required": any(
+                    ep.auth_required
+                    for ep in [post_ep, get_ep, put_ep, delete_ep]
+                    if ep
+                ),
+            }
+        ]
+
+    def _generate_crud_artifact(
+        self,
+        group: Dict[str, Any],
+        crud_tests: List[Dict[str, Any]],
+        base_url: str,
+        auth_type: str,
+    ) -> APITestArtifact:
+        """Render CRUD sequence tests into an APITestArtifact."""
+        resource = group["resource_name"]
+
+        template = self._env.get_template(SUPPORTED_FRAMEWORKS[self.framework])
+        content = template.render(
+            method="CRUD",
+            method_lower="crud",
+            path=group["base_path"],
+            path_template=group["base_path"],
+            summary=f"CRUD sequence for {resource}",
+            operation_id=f"crud_{resource}",
+            base_url=base_url,
+            auth_required=crud_tests[0].get("auth_required", False),
+            auth_type=auth_type,
+            class_name=f"TestCrudSequence{resource.capitalize()}",
+            path_params=[],
+            query_params=[],
+            query_params_dict="{}",
+            has_schema_validation=False,
+            tests=crud_tests,
+        )
+
+        return APITestArtifact(
+            framework=self.framework,
+            language=_LANGUAGE_MAP.get(self.framework, "python"),
+            filename=f"test_crud_sequence_{resource}.py",
+            content=content,
+            endpoint_path=group["base_path"],
+            test_count=len(crud_tests),
+            test_level="integration",
+            test_type="crud_sequence",
+            tags=[resource, "crud", "integration"],
+        )

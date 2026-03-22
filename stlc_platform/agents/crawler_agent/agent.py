@@ -7,6 +7,7 @@ and DiscrepancyDetector to produce site model artifacts from raw HTML pages.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List
 
 from stlc_platform.core.base_agent import (
@@ -23,6 +24,8 @@ from stlc_platform.agents.crawler_agent.dynamic_crawler import (
     is_playwright_available,
 )
 from stlc_platform.core.contracts import SiteModelArtifact
+
+logger = logging.getLogger(__name__)
 
 
 class CrawlerAgent(BaseAgent):
@@ -206,6 +209,29 @@ class CrawlerAgent(BaseAgent):
 
             if validation.warnings:
                 metadata["validation_warnings"] = validation.warnings
+
+            # Optional: embed site model into ChromaDB for RAG retrieval
+            chromadb_embedded = False
+            try:
+                from stlc_platform.agents.crawler_agent.embedding_store import (
+                    CrawlerEmbeddingStore,
+                )
+
+                store = CrawlerEmbeddingStore()
+                doc_count = store.embed_site_model(site_model)
+                chromadb_embedded = doc_count > 0
+                logger.info(
+                    "Embedded %d pages into ChromaDB", doc_count
+                )
+            except ImportError:
+                logger.debug(
+                    "ChromaDB not available — skipping page embedding"
+                )
+            except Exception as exc:
+                logger.warning(
+                    "ChromaDB embedding failed (non-fatal): %s", exc
+                )
+            metadata["chromadb_embedded"] = chromadb_embedded
 
             return AgentResult(
                 success=True,

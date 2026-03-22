@@ -4,6 +4,11 @@ Feature File Generator
 Converts TestCaseArtifact lists into Gherkin .feature files.
 Groups test cases by requirement, extracts Background from shared
 preconditions, and renders using Jinja2 templates.
+
+Supports automatic Scenario Outline detection: when multiple test cases
+under the same requirement share the same step skeleton but differ in
+quoted-string or numeric values, they are merged into a single
+Scenario Outline with an Examples table.
 """
 
 from __future__ import annotations
@@ -16,6 +21,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 
 from stlc_platform.core.contracts import FeatureFileArtifact, TestCaseArtifact
+
+# Regex patterns for parameterizable values
+_QUOTED_RE = re.compile(r"""(?:"([^"]*?)"|'([^']*?)')""")
+_NUMBER_RE = re.compile(r"(?<![a-zA-Z_])-?\d+(?:\.\d+)?(?![a-zA-Z0-9_])")
 
 
 # -- Paths --
@@ -90,11 +99,8 @@ class FeatureFileGenerator:
         # Extract Background (shared Given)
         background = self._extract_background(cases)
 
-        # Build scenarios
-        scenarios = []
-        for tc in cases:
-            scenario = self._build_scenario(tc, background_given=background)
-            scenarios.append(scenario)
+        # Detect outlines and build scenarios
+        scenarios = self._detect_outlines(cases, background)
 
         # Render template
         template = self._env.get_template("feature.j2")
@@ -159,6 +165,143 @@ class FeatureFileGenerator:
             if g.lower() == most_common_lower:
                 return g
         return None
+
+    # -- Scenario Outline detection ------------------------------------------
+
+    def _normalize_step(
+        self,
+        text: str,
+        counter: Optional[Dict[str, int]] = None,
+    ) -> Tuple[str, List[Tuple[str, str]]]:
+        """
+        Replace parameterizable values in a step with placeholders.
+
+        Returns ``(skeleton, params)`` where *skeleton* has ``<param_N>``
+        or ``<value_N>`` placeholders and *params* is a list of
+        ``(placeholder_name, original_value)`` pairs.
+
+        An optional *counter* dict (keys ``"p"`` and ``"v"``) can be
+        passed to keep numbering unique across multiple calls (e.g.
+        across Given / When / Then of the same test case).
+        """
+        params: List[Tuple[str, str]] = []
+        if counter is None:
+            counter = {"p": 0, "v": 0}
+
+        def _replace_quoted(m: re.Match) -> str:
+            val = m.group(1) if m.group(1) is not None else m.group(2)
+            counter["p"] += 1
+            name = f"param_{counter['p']}"
+            params.append((name, val))
+            return f"<{name}>"
+
+        skeleton = _QUOTED_RE.sub(_replace_quoted, text)
+
+        def _replace_number(m: re.Match) -> str:
+            counter["v"] += 1
+            name = f"value_{counter['v']}"
+            params.append((name, m.group(0)))
+            return f"<{name}>"
+
+        skeleton = _NUMBER_RE.sub(_replace_number, skeleton)
+        return skeleton, params
+
+    def _detect_outlines(
+        self,
+        cases: List[TestCaseArtifact],
+        background_given: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Group test cases by step skeleton.  Groups with 2+ members become
+        a single Scenario Outline; singletons stay as regular Scenarios.
+        """
+        # Build per-TC metadata: skeleton key + extracted params
+        KeyType = Tuple[str, str, str]
+        groups: Dict[KeyType, List[Tuple[TestCaseArtifact, List[Tuple[str, str]]]]] = (
+            OrderedDict()
+        )
+
+        for tc in cases:
+            # Use a shared counter so param names are unique across G/W/T
+            ctr: Dict[str, int] = {"p": 0, "v": 0}
+            given_skel, given_params = self._normalize_step(self._get_given(tc), ctr)
+            when_skel, when_params = self._normalize_step(self._get_when(tc), ctr)
+            then_skel, then_params = self._normalize_step(self._get_then(tc), ctr)
+            key: KeyType = (given_skel, when_skel, then_skel)
+            all_params = given_params + when_params + then_params
+            groups.setdefault(key, []).append((tc, all_params))
+
+        scenarios: List[Dict[str, Any]] = []
+        for key, members in groups.items():
+            # Only merge into an outline when there are 2+ members AND
+            # the skeleton actually extracted parameters to vary.
+            has_params = any(len(params) > 0 for _, params in members)
+            if len(members) >= 2 and has_params:
+                # Merge into a Scenario Outline
+                scenarios.append(
+                    self._build_outline(key, members, background_given)
+                )
+            else:
+                # Regular scenarios (either single or identical with no params)
+                for tc, _ in members:
+                    scenarios.append(
+                        self._build_scenario(tc, background_given=background_given)
+                    )
+        return scenarios
+
+    def _build_outline(
+        self,
+        skeleton_key: Tuple[str, str, str],
+        members: List[Tuple[TestCaseArtifact, List[Tuple[str, str]]]],
+        background_given: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build a Scenario Outline dict from a group of matching test cases."""
+        given_skel, when_skel, then_skel = skeleton_key
+        first_tc, first_params = members[0]
+
+        # Derive param names from first member (all members share same skeleton)
+        param_names = [p[0] for p in first_params]
+
+        # Build Examples rows
+        examples_rows: List[str] = []
+        for _, params in members:
+            vals = [p[1] for p in params]
+            row = "| " + " | ".join(vals) + " |"
+            examples_rows.append(row)
+
+        examples_header = "| " + " | ".join(param_names) + " |" if param_names else ""
+
+        # Split skeleton steps
+        given_main, given_ands = self._split_step(given_skel)
+        when_main, when_ands = self._split_step(when_skel)
+        then_main, then_ands = self._split_step(then_skel)
+
+        # Skip Given if Background covers it
+        skip_given = False
+        if background_given and given_main:
+            if given_main.lower().strip() == background_given.lower().strip():
+                skip_given = True
+
+        tags = self._scenario_tags(first_tc)
+
+        # Build a combined title from the first TC
+        title = first_tc.title
+
+        return {
+            "name": self._escape_gherkin(title),
+            "tags": tags,
+            "given": self._escape_gherkin(given_main) if not skip_given else "",
+            "and_givens": [self._escape_gherkin(g) for g in given_ands] if not skip_given else [],
+            "when": self._escape_gherkin(when_main),
+            "and_whens": [self._escape_gherkin(w) for w in when_ands],
+            "then": self._escape_gherkin(then_main),
+            "and_thens": [self._escape_gherkin(t) for t in then_ands],
+            "is_outline": True,
+            "examples_header": examples_header,
+            "examples_rows": examples_rows,
+        }
+
+    # -- Single scenario builder ---------------------------------------------
 
     def _build_scenario(
         self,

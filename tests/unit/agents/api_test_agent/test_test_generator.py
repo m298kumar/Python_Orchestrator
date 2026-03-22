@@ -363,7 +363,8 @@ class TestRestAssuredGeneration:
     def test_petstore_produces_8_test_files(self, petstore_model):
         gen = APITestGenerator(framework="rest_assured")
         artifacts = gen.generate(petstore_model)
-        assert len(artifacts) == 8
+        # 8 per-endpoint files + 1 CRUD sequence artifact = 9
+        assert len(artifacts) == 9
 
 
 # ── Karate Generation ───────────────────────────────────────────────────────
@@ -416,18 +417,20 @@ class TestKarateGeneration:
     def test_petstore_produces_8_test_files(self, petstore_model):
         gen = APITestGenerator(framework="karate")
         artifacts = gen.generate(petstore_model)
-        assert len(artifacts) == 8
+        # 8 per-endpoint files + 1 CRUD sequence artifact = 9
+        assert len(artifacts) == 9
 
 
 # ── Multi-Framework Support ─────────────────────────────────────────────────
 
 
 class TestMultiFrameworkSupport:
-    def test_three_frameworks_supported(self):
-        assert len(SUPPORTED_FRAMEWORKS) == 3
+    def test_four_frameworks_supported(self):
+        assert len(SUPPORTED_FRAMEWORKS) == 4
         assert "pytest_requests" in SUPPORTED_FRAMEWORKS
         assert "rest_assured" in SUPPORTED_FRAMEWORKS
         assert "karate" in SUPPORTED_FRAMEWORKS
+        assert "supertest" in SUPPORTED_FRAMEWORKS
 
     def test_all_frameworks_produce_output(self, petstore_model):
         for fw in SUPPORTED_FRAMEWORKS:
