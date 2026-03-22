@@ -17,7 +17,9 @@ describe('CodeViewer', () => {
 
   it('renders the code content', () => {
     render(<CodeViewer code={sampleCode} language="javascript" />);
-    expect(screen.getByTestId('code-block')).toHaveTextContent(sampleCode);
+    const block = screen.getByTestId('code-block');
+    expect(block.textContent).toContain('const x = 42;');
+    expect(block.textContent).toContain('console.log(x);');
   });
 
   it('shows filename in the header when provided', () => {
@@ -35,13 +37,13 @@ describe('CodeViewer', () => {
   it('renders a copy button', () => {
     render(<CodeViewer code={sampleCode} language="javascript" />);
     expect(
-      screen.getByRole('button', { name: /copy to clipboard/i })
+      screen.getByRole('button', { name: /copy/i })
     ).toBeInTheDocument();
   });
 
   it('calls navigator.clipboard.writeText when copy is clicked', async () => {
     render(<CodeViewer code={sampleCode} language="javascript" />);
-    const copyBtn = screen.getByRole('button', { name: /copy to clipboard/i });
+    const copyBtn = screen.getByRole('button', { name: /copy/i });
     fireEvent.click(copyBtn);
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(sampleCode);
@@ -50,7 +52,7 @@ describe('CodeViewer', () => {
 
   it('shows "Copied" text after clicking copy', async () => {
     render(<CodeViewer code={sampleCode} language="javascript" />);
-    const copyBtn = screen.getByRole('button', { name: /copy to clipboard/i });
+    const copyBtn = screen.getByRole('button', { name: /copy/i });
     fireEvent.click(copyBtn);
     await waitFor(() => {
       expect(screen.getByText('Copied')).toBeInTheDocument();

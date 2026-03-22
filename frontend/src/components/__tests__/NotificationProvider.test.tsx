@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import NotificationProvider, { useNotification } from '../NotificationProvider';
 
-function TestConsumer({ message = 'Hello', type = 'success' as const }) {
+function TestConsumer({ message = 'Hello', type = 'success' }: { message?: string; type?: 'success' | 'error' | 'info' | 'warning' }) {
   const { notify } = useNotification();
   return (
     <button onClick={() => notify(message, type)}>Trigger</button>

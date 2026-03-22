@@ -2,13 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { WsMessage } from '../../hooks/useWebSocket';
 
-const mockUseWebSocket = vi.fn<
-  [string | null],
-  { messages: WsMessage[]; isConnected: boolean; lastEvent: WsMessage | null }
->();
+const mockUseWebSocket = vi.fn<() => { messages: WsMessage[]; isConnected: boolean; lastEvent: WsMessage | null }>();
 
 vi.mock('../../hooks/useWebSocket', () => ({
-  useWebSocket: (...args: any[]) => mockUseWebSocket(args[0]),
+  useWebSocket: () => mockUseWebSocket(),
 }));
 
 import LiveProgress from '../LiveProgress';

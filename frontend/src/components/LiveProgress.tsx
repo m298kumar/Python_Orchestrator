@@ -8,7 +8,6 @@ import {
   Trophy,
 } from "lucide-react";
 import { useWebSocket } from "../hooks/useWebSocket";
-import type { WsMessage } from "../hooks/useWebSocket";
 
 interface Props {
   runId: string;

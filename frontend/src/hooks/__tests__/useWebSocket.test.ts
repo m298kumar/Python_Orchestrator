@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import type { UseWebSocketReturn } from '../useWebSocket';
+import { renderHook } from '@testing-library/react';
 
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
