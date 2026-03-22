@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+}
+
+@layer components {
+  .sidebar {
+    @apply fixed left-0 top-0 h-screen w-64 bg-gray-900 text-white overflow-y-auto;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 rounded-lg
+           transition-colors hover:bg-gray-800 hover:text-white;
+  }
+
+  .sidebar-link.active {
+    @apply bg-primary-600 text-white;
+  }
+
+  .main-content {
+    @apply ml-64 min-h-screen p-6;
+  }
+
+  .code-block {
+    @apply rounded-lg bg-gray-900 text-sm overflow-x-auto;
+  }
+
+  .code-block pre {
+    @apply p-4;
+  }
+}
+
+@layer utilities {
+  /* Custom scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme("colors.gray.400") transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-gray-400;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+}

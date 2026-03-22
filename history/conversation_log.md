@@ -1027,7 +1027,84 @@ Build the complete REST API + WebSocket backend for the STLC dashboard.
 - Lint clean
 
 ### Next Steps
-- Phase 2: React frontend (Dashboard, Requirements, Test Cases pages)
-- Phase 3: Advanced frontend + real-time WebSocket integration
-- Phase 4: E2E Playwright tests + final validation
+- Phase 2: React frontend
+
+---
+
+## Session 013b — 2026-03-22 — Stage 5 Phase 2: React Frontend
+
+### Objective
+Build the React frontend: project setup, layout, API client, hooks, and 4 core pages.
+
+### Technology Stack
+- React 18 + TypeScript + Vite 6
+- Tailwind CSS 3 for styling
+- Axios for API calls
+- lucide-react for icons
+- react-syntax-highlighter for code viewing
+- react-router-dom v6 for routing
+- Vitest + React Testing Library for tests (ready but Node.js needed)
+
+### New Files Created (21 files)
+
+#### Project Configuration (6 files)
+- `frontend/package.json` — Dependencies, scripts (dev, build, test)
+- `frontend/tsconfig.json` — Strict TS config with @/ path alias
+- `frontend/vite.config.ts` — Vite with React plugin, /api proxy to :8000
+- `frontend/postcss.config.js` — PostCSS with Tailwind
+- `frontend/tailwind.config.js` — Custom STLC theme colors
+- `frontend/index.html` — Vite entry point
+
+#### App Infrastructure (4 files)
+- `frontend/src/main.tsx` — Entry point with BrowserRouter
+- `frontend/src/index.css` — Tailwind directives + custom sidebar/scrollbar styles
+- `frontend/src/vite-env.d.ts` — Vite type reference
+- `frontend/src/App.tsx` — 8 routes with Layout wrapper
+
+#### API Client & Hooks (4 files)
+- `frontend/src/api/client.ts` — 19 typed API functions + 11 TypeScript interfaces
+- `frontend/src/hooks/useWebSocket.ts` — WebSocket with auto-reconnect + exponential backoff
+- `frontend/src/hooks/usePipeline.ts` — Pipeline run state management
+- `frontend/src/hooks/useRequirements.ts` — Requirements CRUD state
+
+#### Shared Components (3 files)
+- `frontend/src/components/Layout.tsx` — Sidebar (w-64, dark) + main area, 8 nav links with icons
+- `frontend/src/components/StatusBadge.tsx` — Colored status pills (green/blue/red/gray/yellow)
+- `frontend/src/components/CodeViewer.tsx` — Syntax-highlighted code with copy button
+
+#### Pages (4 files)
+- `frontend/src/pages/Dashboard.tsx` — Stats cards (4), recent runs table, trigger run modal, quick actions
+- `frontend/src/pages/Requirements.tsx` — Drag-drop upload, table with inline edit, priority badges
+- `frontend/src/pages/TestCases.tsx` — Filterable table, expandable GWT detail, approve/reject actions
+- `frontend/src/pages/BddCode.tsx` — Two-panel: feature file list + Gherkin code viewer, ZIP download
+
+### Key Features
+- **Sidebar navigation** with active link highlighting (indigo accent)
+- **Dashboard** with live stats fetched from 4 API endpoints in parallel
+- **File upload** with drag-and-drop zone + status feedback
+- **Inline editing** for requirements and test cases
+- **Test case filtering** by type, priority, status, and text search
+- **Gherkin syntax highlighting** with keyword coloring (Feature, Scenario, Given/When/Then)
+- **WebSocket hook** with auto-reconnect for real-time pipeline progress
+- **Loading/error/empty states** handled consistently across all pages
+- **Proxy configuration** for seamless dev experience (Vite → FastAPI)
+
+### Setup Instructions
+```bash
+# Install Node.js (v18+), then:
+cd frontend
+npm install
+npm run dev    # Dev server at http://localhost:5173
+```
+
+Backend must be running: `uvicorn stlc_platform.api.main:app --reload`
+
+### Final Metrics
+- **21 frontend files** created
+- **1143 backend tests** still passing (zero regressions)
+- Frontend requires `npm install` + Node.js to build/test
+
+### Next Steps
+- Phase 3: Advanced pages (Crawler, API Tests, Config, History) + WebSocket real-time integration
+- Phase 4: Frontend tests (Vitest) + E2E Playwright tests + validation gate
 
