@@ -52,6 +52,18 @@ def run_pipeline_background(
     try:
         dag = load_pipeline(pipeline_path)
 
+        # Load base config from stlc_config.yaml, then merge caller overrides
+        from stlc_platform.core.config_loader import _find_project_root, _load_yaml, deep_merge
+        base_config = _load_yaml(_find_project_root() / "config" / "stlc_config.yaml")
+        merged_config = deep_merge(base_config, config)
+
+        # Inject uploaded requirements from the in-memory store (if any)
+        from stlc_platform.api.routes.requirements import _requirements
+        if _requirements and "requirements" not in merged_config:
+            merged_config["requirements"] = list(_requirements.values())
+
+        config = merged_config
+
         # Load execution profile
         execution_profile = None
         if profile:
