@@ -52,10 +52,16 @@ def get_gwt_hint(test_type: str, ac_type: str, ac: str, feature: str) -> str:
             f'then: "The system correctly rejects or handles the failure case with an accurate message"'
         )
     else:
+        edge_when = {
+            'data_valid': f"The user enters the exact boundary value into the field described by: {ac[:60]}, then enters one unit beyond",
+            'timing': f"The timed event reaches exactly the limit described in: {ac[:60]}",
+            'eligibility': f"The user with an account exactly at the eligibility threshold attempts: {ac[:60]}",
+            'ui_behaviour': f"The user triggers the UI behaviour at the exact threshold described in: {ac[:60]}",
+        }.get(ac_type, f"The user performs the action that tests the exact threshold in: {ac[:60]}")
         return (
-            f'given: "Test data is set at exactly the boundary value for: {ac[:60]}"\n'
-            f'when: "The boundary-condition action is executed"\n'
-            f'then: "System accepts the boundary value and rejects values beyond it"'
+            f'given: "Test data is configured at the exact threshold defined by: {ac[:70]}"\n'
+            f'when: "{edge_when}"\n'
+            f'then: "At the threshold the system allows the action. Beyond the threshold the system rejects with a specific message"'
         )
 
 
@@ -241,16 +247,29 @@ def _hints_edge(ac: str, ac_type: str, feature: str, nav_target: str) -> Dict[st
             ),
             outcome=f"System behaves correctly at exactly the time boundary and transitions to the timeout state when exceeded, per: {ac[:100]}.",
         )
-    else:  # general
+    elif ac_type == 'eligibility':
         return dict(
-            desc=f"Verifies system boundary enforcement at the exact limit described in: {ac[:90]}.",
-            pre=f"Test data configured at exactly the boundary value for: {ac[:60]}; application installed; tester logged in.",
+            desc=f"Verifies the system enforces the eligibility boundary exactly as defined: {ac[:90]}.",
+            pre=f"Two test accounts prepared: one that EXACTLY meets the eligibility threshold in '{ac[:60]}', and one that is ONE UNIT below/beyond; application installed.",
             steps=(
-                f"1. Configure test data at exactly the boundary value described in: {ac[:60]} -> Test data is set precisely at the boundary\n"
-                f"2. Log in and navigate to the {nav_target} screen -> Screen loads; boundary test data is visible\n"
-                f"3. Execute the boundary action - name the specific button or step the tester performs at the exact limit value -> System processes the boundary value correctly\n"
-                f"4. Observe and record the outcome displayed on screen - name the specific message, state, or value shown -> Outcome matches the requirement at the boundary: {ac[:60]}\n"
-                f"5. Repeat with a value one unit beyond the boundary -> System correctly rejects or handles the out-of-bounds value"
+                f"1. Log in with the account that EXACTLY meets the eligibility criterion: {ac[:100]} -> Home screen loads\n"
+                f"2. Navigate to the {nav_target} screen and attempt the eligibility-gated action -> System evaluates eligibility\n"
+                f"3. Verify the system ALLOWS the action for the qualifying account -> Expected success message or screen is displayed\n"
+                f"4. Log out and log in with the account ONE UNIT below the eligibility threshold -> Home screen loads\n"
+                f"5. Repeat the same action and verify the system BLOCKS it with the correct ineligibility message: {ac[:80]} -> Specific rejection reason is displayed"
             ),
-            outcome=f"System correctly accepts the exact boundary value and rejects values beyond it, per: {ac[:100]}.",
+            outcome=f"Account exactly at the threshold is accepted. Account one unit below is rejected with the correct reason, per: {ac[:100]}.",
+        )
+    else:  # general / unclassified
+        return dict(
+            desc=f"Verifies the system behaves correctly at the exact boundary condition: {ac[:90]}.",
+            pre=f"Test data configured at the threshold defined by: {ac[:80]}; application installed; tester logged in with a qualifying account.",
+            steps=(
+                f"1. Log in and navigate to the {nav_target} screen -> Screen loads\n"
+                f"2. Set up the test condition so that the criterion is EXACTLY met: {ac[:100]} -> Confirm the test data matches the threshold value\n"
+                f"3. Trigger the action that depends on this criterion - name the specific button, link, or event on the {nav_target} screen -> System evaluates the condition and responds\n"
+                f"4. Verify the system allows or shows the correct behaviour when the condition is exactly met: {ac[:80]} -> System displays the expected outcome or state\n"
+                f"5. Change the test data so the criterion is NOT met (one unit beyond the threshold) and repeat -> System shows a different response: rejection, warning, or fallback message"
+            ),
+            outcome=f"At the exact threshold the system behaves as specified: {ac[:100]}. Beyond the threshold the system correctly rejects or transitions to the fallback state.",
         )
