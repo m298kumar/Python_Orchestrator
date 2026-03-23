@@ -428,7 +428,7 @@ class FeatureFileGenerator:
         raw = f"{req_id}_{title}"
         # Slugify
         slug = re.sub(r"[^a-zA-Z0-9]+", "_", raw).strip("_").lower()
-        # Truncate if too long
-        if len(slug) > 80:
-            slug = slug[:80].rstrip("_")
+        # Cap at 60 chars for reasonable filenames
+        if len(slug) > 60:
+            slug = slug[:60].rstrip("_")
         return f"{slug}.feature"

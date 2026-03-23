@@ -203,6 +203,43 @@ class TestCaseSanitiser:
 
     # -- Detection helpers -------------------------------------------------------
 
+    # Common LLM typos produced by small models (phi4-mini, etc.)
+    _TYPO_FIXES: Dict[str, str] = {
+        "verifcation": "verification",
+        "verfication": "verification",
+        "verication": "verification",
+        "fbiometric": "biometric",
+        "fbiometrics": "biometrics",
+        "chequæ": "cheque",
+        "chequce": "cheque",
+        "enrollement": "enrollment",
+        "enrolment": "enrollment",
+        "ineligiblity": "ineligibility",
+        "ineligibilty": "ineligibility",
+        "i-neligibility": "ineligibility",
+        "authetication": "authentication",
+        "authentiation": "authentication",
+        "acknowlegement": "acknowledgement",
+        "acknowledgment": "acknowledgement",
+        "trasaction": "transaction",
+        "transation": "transaction",
+        "validaton": "validation",
+        "procesing": "processing",
+        "Dayl:ld": "Daily",
+        "Camra": "Camera",
+        "CapturE": "Capture",
+        "Lmt-": "Limit",
+        "5o%": "50%",
+    }
+
+    @classmethod
+    def _fix_typos(cls, text: str) -> str:
+        """Fix common LLM-generated typos in text."""
+        for typo, fix in cls._TYPO_FIXES.items():
+            if typo in text:
+                text = text.replace(typo, fix)
+        return text
+
     @staticmethod
     def _strip_md_text(text: str) -> str:
         """Strip markdown bold/italic markers and backticks from a string."""
@@ -212,26 +249,31 @@ class TestCaseSanitiser:
         text = re.sub(r'(?<!\w)\*+|\*+(?!\w)', '', text)
         # Remove backtick code markers
         text = re.sub(r'`([^`]+)`', r'\1', text)
+        # Strip leading/trailing garbage punctuation from LLM output
+        text = re.sub(r'^[\s\-–—>:;,.()\'"]+', '', text)
+        text = re.sub(r'[\s\-–—>:;,.\'"}\])+]+$', '', text.rstrip())
         return text.strip()
 
     def _strip_markdown(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Strip markdown artifacts from all text fields in a test case dict."""
+        """Strip markdown artifacts and fix typos in all text fields."""
         text_fields = [
             "title", "description", "preconditions", "expected_outcome",
             "given", "when", "then", "component",
         ]
         for field in text_fields:
             if field in data and isinstance(data[field], str):
-                data[field] = self._strip_md_text(data[field])
+                data[field] = self._fix_typos(self._strip_md_text(data[field]))
 
         # Clean steps
         steps = data.get("steps", [])
         for step in steps:
             if isinstance(step, dict):
                 if "action" in step and isinstance(step["action"], str):
-                    step["action"] = self._strip_md_text(step["action"])
+                    step["action"] = self._fix_typos(self._strip_md_text(step["action"]))
                 if "expected_result" in step and isinstance(step["expected_result"], str):
-                    step["expected_result"] = self._strip_md_text(step["expected_result"])
+                    step["expected_result"] = self._fix_typos(
+                        self._strip_md_text(step["expected_result"])
+                    )
 
         # Clean tags — remove entries with markdown/json garbage
         tags = data.get("tags", [])
@@ -319,6 +361,12 @@ class TestCaseSanitiser:
         if self._has_loop(v, threshold=2):
             return True
         if self._has_python_leakage(v):
+            return True
+        # Detect truncated text — ends with : or ( suggesting incomplete sentence
+        if v.rstrip().endswith((':', '(', '{', '...', ',')) :
+            return True
+        # Detect unclosed parens/quotes — sign of LLM truncation
+        if v.count('(') > v.count(')') or v.count("'") % 2 == 1:
             return True
         if preconditions and len(preconditions) > 20:
             pre_norm = re.sub(r'\s+', ' ', preconditions.strip().lower())
