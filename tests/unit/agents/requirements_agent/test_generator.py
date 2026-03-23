@@ -256,7 +256,8 @@ class TestGenerateForAll:
         ]
         results = gen.generate_for_all(reqs, max_tests=1, include_negative=False, include_edge=False)
         assert gen._domain == "healthcare"
-        assert len(results) == 2
+        # AC-aware: each MockRequirement has 2 ACs, effective_max = max(1, 2) = 2 per req
+        assert len(results) == 4
 
     def test_explicit_domain_not_overridden(self):
         llm = MockLLMClient()

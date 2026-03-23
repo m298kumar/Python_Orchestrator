@@ -237,7 +237,9 @@ class TestFullPipeline:
         )
         assert result.success is True
         tcs = result.artifacts["test_cases"]
-        assert len(tcs) == len(reqs) * 2
+        # AC-aware coverage: at least one TC per acceptance criterion
+        # Each req has 3 ACs, so effective_max = max(2, 3) = 3 per req
+        assert len(tcs) == len(reqs) * 3
         assert all(isinstance(tc, TestCaseArtifact) for tc in tcs)
 
     def test_pipeline_healthcare(self):
@@ -249,7 +251,8 @@ class TestFullPipeline:
         )
         assert result.success is True
         tcs = result.artifacts["test_cases"]
-        assert len(tcs) == len(reqs)
+        # AC-aware: each req has 3 ACs, effective_max = max(1, 3) = 3
+        assert len(tcs) == len(reqs) * 3
 
     def test_pipeline_banking(self):
         reqs = _load_fixture("requirements_banking.json")
@@ -260,7 +263,8 @@ class TestFullPipeline:
         )
         assert result.success is True
         tcs = result.artifacts["test_cases"]
-        assert len(tcs) == len(reqs)
+        # AC-aware: each req has 3 ACs, effective_max = max(1, 3) = 3
+        assert len(tcs) == len(reqs) * 3
 
     def test_pipeline_outputs_valid_artifacts(self):
         reqs = _load_fixture("requirements_ecommerce.json")[:1]
@@ -285,7 +289,8 @@ class TestFullPipeline:
             config={"max_tests": 1, "include_negative": False, "include_edge": False},
         )
         assert result.metadata["total_requirements"] == 3
-        assert result.metadata["total_test_cases"] == 3
+        # AC-aware: each req has 3 ACs, effective_max = max(1, 3) = 3
+        assert result.metadata["total_test_cases"] == 9
 
 
 # ── Sanitiser Integration Tests ─────────────────────────────────────────────

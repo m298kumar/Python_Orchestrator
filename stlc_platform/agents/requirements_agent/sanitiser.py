@@ -102,6 +102,9 @@ class TestCaseSanitiser:
         # Work with mutable dict, then reconstruct
         data = tc.model_dump()
 
+        # 0. Strip markdown formatting artifacts from all text fields
+        data = self._strip_markdown(data)
+
         # 1. Description
         if (not data["description"]
                 or self._is_instruction_text(data["description"])
@@ -186,6 +189,9 @@ class TestCaseSanitiser:
             test_type,
         )
 
+        # 8. Test level — derive from AC type instead of trusting LLM
+        data["test_level"] = self._classify_test_level(ac_type, test_type)
+
         # Reconstruct as Pydantic model
         result = TestCaseArtifact(**data)
 
@@ -196,6 +202,48 @@ class TestCaseSanitiser:
         return result
 
     # -- Detection helpers -------------------------------------------------------
+
+    @staticmethod
+    def _strip_md_text(text: str) -> str:
+        """Strip markdown bold/italic markers and backticks from a string."""
+        # Remove ***, **, * markers (bold/italic)
+        text = re.sub(r'\*{1,3}([^*]+?)\*{1,3}', r'\1', text)
+        # Remove remaining stray asterisks
+        text = re.sub(r'(?<!\w)\*+|\*+(?!\w)', '', text)
+        # Remove backtick code markers
+        text = re.sub(r'`([^`]+)`', r'\1', text)
+        return text.strip()
+
+    def _strip_markdown(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Strip markdown artifacts from all text fields in a test case dict."""
+        text_fields = [
+            "title", "description", "preconditions", "expected_outcome",
+            "given", "when", "then", "component",
+        ]
+        for field in text_fields:
+            if field in data and isinstance(data[field], str):
+                data[field] = self._strip_md_text(data[field])
+
+        # Clean steps
+        steps = data.get("steps", [])
+        for step in steps:
+            if isinstance(step, dict):
+                if "action" in step and isinstance(step["action"], str):
+                    step["action"] = self._strip_md_text(step["action"])
+                if "expected_result" in step and isinstance(step["expected_result"], str):
+                    step["expected_result"] = self._strip_md_text(step["expected_result"])
+
+        # Clean tags — remove entries with markdown/json garbage
+        tags = data.get("tags", [])
+        if isinstance(tags, list):
+            data["tags"] = [
+                t for t in tags
+                if isinstance(t, str)
+                and not re.search(r'[{}\[\]*/\\:"]', t)
+                and len(t.strip()) > 1
+            ]
+
+        return data
 
     def _is_instruction_text(self, text: str) -> bool:
         t = text.lower()
@@ -278,6 +326,31 @@ class TestCaseSanitiser:
             if val_norm[:60] in pre_norm or pre_norm[:60] in val_norm:
                 return True
         return False
+
+    @staticmethod
+    def _classify_test_level(ac_type: str, test_type: str) -> str:
+        """Derive test_level from AC type and test type.
+
+        Mapping:
+          - ui_behaviour → e2e (requires full UI rendering)
+          - security, eligibility → integration (multi-component checks)
+          - data_valid → unit (input validation logic)
+          - timing → integration (async/timed behaviour)
+          - edge_case test_type → integration (boundary across components)
+          - general → integration (default for functional tests)
+        """
+        ac_level_map = {
+            "ui_behaviour": "e2e",
+            "security": "integration",
+            "eligibility": "integration",
+            "data_valid": "unit",
+            "timing": "integration",
+        }
+        level = ac_level_map.get(ac_type, "integration")
+        # Edge cases typically cross component boundaries
+        if test_type == "edge_case" and level == "unit":
+            level = "integration"
+        return level
 
     def _clean_tags(
         self,

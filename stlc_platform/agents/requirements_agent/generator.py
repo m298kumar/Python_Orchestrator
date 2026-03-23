@@ -215,9 +215,14 @@ class TestCaseGenerator:
         all_tc: List[TestCaseArtifact] = []
         for req in requirements:
             try:
+                # Ensure full AC coverage: at least one TC per acceptance criterion
+                acs = getattr(req, "acceptance_criteria", None) or []
+                ac_count = len(acs) if isinstance(acs, list) else 0
+                effective_max = max(max_tests, ac_count) if ac_count > 0 else max_tests
+
                 tcs = self.generate_for_requirement(
                     requirement=req,
-                    max_tests=max_tests,
+                    max_tests=effective_max,
                     include_negative=include_negative,
                     include_edge=include_edge,
                     tc_format=tc_format,
@@ -332,7 +337,7 @@ class TestCaseGenerator:
             description=item.get("description", "").strip(),
             preconditions=item.get("preconditions", "").strip(),
             test_type=slot["test_type"],
-            priority=item.get("priority", getattr(requirement, "priority", "Medium")),
+            priority=getattr(requirement, "priority", "Medium"),
             steps=[
                 TestStepArtifact(
                     action=s.action if hasattr(s, "action") else s["action"],  # type: ignore[index]

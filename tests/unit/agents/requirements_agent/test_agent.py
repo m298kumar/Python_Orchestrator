@@ -114,7 +114,8 @@ class TestExecute:
         result = agent.execute(artifacts, config)
         assert result.success is True
         assert "test_cases" in result.artifacts
-        assert len(result.artifacts["test_cases"]) == 1
+        # AC-aware: MockRequirement has 2 ACs, effective_max = max(1, 2) = 2
+        assert len(result.artifacts["test_cases"]) == 2
         assert isinstance(result.artifacts["test_cases"][0], TestCaseArtifact)
 
     def test_metadata_populated(self, agent):
@@ -144,7 +145,8 @@ class TestExecute:
         config = {"max_tests": 1, "include_negative": False, "include_edge": False}
         result = agent.execute(artifacts, config)
         assert result.success is True
-        assert result.metadata["total_test_cases"] == 2
+        # AC-aware: each MockRequirement has 2 ACs, effective_max = max(1, 2) = 2 per req
+        assert result.metadata["total_test_cases"] == 4
 
     def test_custom_config(self, agent):
         artifacts = {

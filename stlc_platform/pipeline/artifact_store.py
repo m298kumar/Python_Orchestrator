@@ -7,7 +7,9 @@ Includes ArtifactResolver for resolving $stage.key and $config.key references.
 
 from __future__ import annotations
 
+import csv
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -91,6 +93,77 @@ class ArtifactStore:
         manifest_file.write_text(
             json.dumps(manifest, indent=2), encoding="utf-8"
         )
+
+        # Export human-readable files (.feature, .csv)
+        self._export_files()
+
+    def _export_files(self) -> None:
+        """Export human-readable files from artifacts (feature files, CSV)."""
+        if self._run_dir is None:
+            return
+        logger = logging.getLogger(__name__)
+
+        # Export .feature files from BDD stage
+        for stage_id in ("generate_bdd_code",):
+            if stage_id not in self._artifacts:
+                continue
+            features = self._artifacts[stage_id].get("feature_files", [])
+            if not features:
+                continue
+            features_dir = self._run_dir / "features"
+            features_dir.mkdir(exist_ok=True)
+            for i, feat in enumerate(features):
+                if isinstance(feat, BaseModel):
+                    feat = feat.model_dump()
+                if isinstance(feat, dict):
+                    filename = feat.get("filename", f"feature_{i}.feature")
+                    content = feat.get("content", "")
+                elif isinstance(feat, str):
+                    # Already serialized as plain string content
+                    filename = f"feature_{i}.feature"
+                    content = feat
+                else:
+                    continue
+                if content:
+                    (features_dir / filename).write_text(content, encoding="utf-8")
+            logger.info("Exported %d .feature files to %s", len(features), features_dir)
+
+        # Export test_cases.csv from requirements stage
+        for stage_id in ("parse_requirements",):
+            if stage_id not in self._artifacts:
+                continue
+            test_cases = self._artifacts[stage_id].get("test_cases", [])
+            if not test_cases:
+                continue
+            csv_path = self._run_dir / "test_cases.csv"
+            fieldnames = [
+                "tc_id", "req_id", "title", "description", "test_type",
+                "priority", "category", "component", "preconditions",
+                "steps", "expected_outcome", "given", "when", "then",
+                "tags", "test_level", "estimated_duration",
+            ]
+            with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+                writer.writeheader()
+                for tc in test_cases:
+                    if isinstance(tc, BaseModel):
+                        tc = tc.model_dump()
+                    row = dict(tc)
+                    # Flatten steps to readable text
+                    steps = row.get("steps", [])
+                    if isinstance(steps, list):
+                        step_lines = []
+                        for i, s in enumerate(steps, 1):
+                            act = s.get("action", "") if isinstance(s, dict) else str(s)
+                            exp = s.get("expected_result", "") if isinstance(s, dict) else ""
+                            step_lines.append(f"{i}. {act} -> {exp}")
+                        row["steps"] = "\n".join(step_lines)
+                    # Flatten tags
+                    tags = row.get("tags", [])
+                    if isinstance(tags, list):
+                        row["tags"] = ", ".join(str(t) for t in tags)
+                    writer.writerow(row)
+            logger.info("Exported %d test cases to %s", len(test_cases), csv_path)
 
     def load_from_disk(self, up_to_stage: Optional[str] = None) -> List[str]:
         """Load persisted artifacts from disk. Returns list of loaded stage_ids."""
