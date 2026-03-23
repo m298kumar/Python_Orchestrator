@@ -124,6 +124,11 @@ class PipelineOrchestrator:
                 self._stage_results[result.stage_id] = result
                 if result.success:
                     completed.append(result.stage_id)
+                elif result.skipped:
+                    # Optional stages with missing inputs are skipped, not failed
+                    if result.stage_id not in self._skipped_stages:
+                        self._skipped_stages.append(result.stage_id)
+                    self._mark_downstream_skipped(result.stage_id)
                 else:
                     self._failed_stages.append(result.stage_id)
                     # Skip downstream stages of failed non-optional stages
@@ -231,8 +236,25 @@ class PipelineOrchestrator:
         t0 = time.monotonic()
 
         try:
-            # Resolve input references
-            resolved_inputs = self._resolver.resolve(stage.input_map)
+            # Resolve input references — skip optional stages with missing inputs
+            try:
+                resolved_inputs = self._resolver.resolve(stage.input_map)
+            except KeyError as resolve_err:
+                if stage.optional:
+                    logger.info(
+                        "Skipping optional stage '%s': %s", stage_id, resolve_err
+                    )
+                    sr = StageResult(
+                        stage_id=stage_id,
+                        success=False,
+                        skipped=True,
+                        duration_seconds=round(time.monotonic() - t0, 3),
+                        error=f"Skipped (missing input): {resolve_err}",
+                    )
+                    if self._on_stage_complete:
+                        self._on_stage_complete(sr)
+                    return sr
+                raise  # re-raise for non-optional stages
 
             # Apply execution profile filter to inputs
             if self._execution_profile:
