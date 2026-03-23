@@ -63,33 +63,20 @@ def _deep_merge_dicts(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str
 
 
 def _load_initial_config() -> None:
-    """Load config from the config loader on first access."""
+    """Load config from the YAML file on first access.
+
+    Reads directly from the YAML dict (not the OllamaConfig dataclass)
+    so that all fields — including ``api_key`` and ``provider`` — are preserved.
+    """
     global _config
     if _config.get("_loaded"):
         return
     try:
-        from stlc_platform.core.config_loader import load_config
-        cfg = load_config()
-        _config["project"] = (
-            getattr(cfg, "project", {}).__dict__
-            if hasattr(getattr(cfg, "project", None), "__dict__")
-            else {}
-        )
-        # Populate llm from the OllamaConfig dataclass + provider field
-        ollama_dict = (
-            getattr(cfg, "ollama", {}).__dict__
-            if hasattr(getattr(cfg, "ollama", None), "__dict__")
-            else {}
-        )
-        llm_data = dict(ollama_dict)
-        llm_data["provider"] = getattr(cfg, "llm_provider", "ollama")
-        _config["llm"] = llm_data
-
-        _config["output"] = (
-            getattr(cfg, "output", {}).__dict__
-            if hasattr(getattr(cfg, "output", None), "__dict__")
-            else {}
-        )
+        from stlc_platform.core.config_loader import _find_project_root, _load_yaml
+        yaml_cfg = _load_yaml(_find_project_root() / "config" / "stlc_config.yaml")
+        _config["project"] = yaml_cfg.get("project", {})
+        _config["llm"] = yaml_cfg.get("llm", {})
+        _config["output"] = yaml_cfg.get("output", yaml_cfg.get("export", {}))
     except Exception:
         pass
     _config["_loaded"] = True

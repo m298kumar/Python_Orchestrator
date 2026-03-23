@@ -1,169 +1,233 @@
-# STLC Automation Platform — Master Configuration
-# ================================================
-# This file drives all agents. Override any value via environment variables
-# prefixed with STLC_ (e.g., STLC_LLM__MODEL overrides llm.model).
-
 project:
-  name: "My Application"
-  domain: ""  # auto-detected from requirements if empty
+  name: My Application
+  domain: FinTech
   tech_stack:
-    platform: web           # web | mobile | api | desktop
-    frontend: ""            # react | angular | vue | flutter | native
-    backend: rest           # rest | graphql | grpc | soap
-    database: ""            # postgres | mysql | mongo | dynamodb
-    auth: ""                # jwt | oauth2 | session | saml
-
+    platform: web
+    frontend: ''
+    backend: rest
+    database: ''
+    auth: ''
+  platform: mobile
 llm:
-  provider: ollama          # ollama | openai | anthropic | azure
-  model: "phi4-mini:3.8b"
-  base_url: "http://localhost:11434"
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+  base_url: http://localhost:11434
   temperature: 0.6
   num_ctx: 8192
   timeout: 450
   num_predict: 3200
-  # OpenAI / Anthropic (used when provider != ollama)
-  api_key: ""               # or set STLC_LLM__API_KEY env var
-
+  api_key: ''
 chromadb:
-  persist_directory: "./chroma_db"
-  collection_name: "requirements"
-  embedding_backend: ollama  # ollama | sentence_transformer
-  ollama_embedding_model: "qwen3-embedding:0.6b"
-  ollama_embedding_url: "http://localhost:11434/api/embeddings"
-  sentence_transformer_model: "all-MiniLM-L6-v2"
-
+  persist_directory: ./chroma_db
+  collection_name: requirements
+  embedding_backend: ollama
+  ollama_embedding_model: qwen3-embedding:0.6b
+  ollama_embedding_url: http://localhost:11434/api/embeddings
+  sentence_transformer_model: all-MiniLM-L6-v2
 test_generation:
   max_per_requirement: 6
   include_negative: true
   include_edge_cases: true
   format: gherkin
-
-  # AC type classification keywords (Phase 2)
   ac_types:
     security:
-      keywords: ["password", "auth", "login", "encrypt", "token", "credential",
-                 "access control", "permission", "role", "session", "mfa",
-                 "two-factor", "oauth", "ssl", "tls", "certificate",
-                 "vulnerability", "injection", "xss", "csrf", "sanitize"]
+      keywords:
+      - password
+      - auth
+      - login
+      - encrypt
+      - token
+      - credential
+      - access control
+      - permission
+      - role
+      - session
+      - mfa
+      - two-factor
+      - oauth
+      - ssl
+      - tls
+      - certificate
+      - vulnerability
+      - injection
+      - xss
+      - csrf
+      - sanitize
     timing:
-      keywords: ["timeout", "expire", "deadline", "schedule", "interval",
-                 "within * minutes", "within * seconds", "within * hours",
-                 "before", "after", "duration", "elapsed", "countdown",
-                 "real-time", "delay", "latency", "ttl"]
+      keywords:
+      - timeout
+      - expire
+      - deadline
+      - schedule
+      - interval
+      - within * minutes
+      - within * seconds
+      - within * hours
+      - before
+      - after
+      - duration
+      - elapsed
+      - countdown
+      - real-time
+      - delay
+      - latency
+      - ttl
     eligibility:
-      keywords: ["eligible", "qualify", "condition", "criteria", "require",
-                 "must be", "only if", "prerequisite", "minimum", "maximum",
-                 "at least", "no more than", "threshold", "limit"]
+      keywords:
+      - eligible
+      - qualify
+      - condition
+      - criteria
+      - require
+      - must be
+      - only if
+      - prerequisite
+      - minimum
+      - maximum
+      - at least
+      - no more than
+      - threshold
+      - limit
     data_valid:
-      keywords: ["valid", "invalid", "format", "length", "range", "pattern",
-                 "regex", "mandatory", "optional", "required field",
-                 "alphanumeric", "numeric", "email", "phone", "date format",
-                 "min length", "max length", "character"]
+      keywords:
+      - valid
+      - invalid
+      - format
+      - length
+      - range
+      - pattern
+      - regex
+      - mandatory
+      - optional
+      - required field
+      - alphanumeric
+      - numeric
+      - email
+      - phone
+      - date format
+      - min length
+      - max length
+      - character
     ui_behaviour:
-      keywords: ["display", "show", "hide", "enable", "disable", "visible",
-                 "button", "dropdown", "modal", "popup", "tooltip", "scroll",
-                 "highlight", "focus", "hover", "toggle", "collapse", "expand",
-                 "placeholder", "label", "icon", "color", "font"]
+      keywords:
+      - display
+      - show
+      - hide
+      - enable
+      - disable
+      - visible
+      - button
+      - dropdown
+      - modal
+      - popup
+      - tooltip
+      - scroll
+      - highlight
+      - focus
+      - hover
+      - toggle
+      - collapse
+      - expand
+      - placeholder
+      - label
+      - icon
+      - color
+      - font
     general:
       keywords: []
-
-  # Domain detection keywords (Phase 5)
   domain_keywords:
     financial services:
-      - cheque
-      - banking
-      - deposit
-      - transaction
-      - account
-      - ledger
-      - transfer
-      - payment
+    - cheque
+    - banking
+    - deposit
+    - transaction
+    - account
+    - ledger
+    - transfer
+    - payment
     healthcare:
-      - patient
-      - clinical
-      - ehr
-      - prescription
-      - pharmacy
-      - diagnosis
-      - medical
-      - health
+    - patient
+    - clinical
+    - ehr
+    - prescription
+    - pharmacy
+    - diagnosis
+    - medical
+    - health
     retail e-commerce:
-      - product
-      - cart
-      - checkout
-      - inventory
-      - catalogue
-      - order
-      - shipping
+    - product
+    - cart
+    - checkout
+    - inventory
+    - catalogue
+    - order
+    - shipping
     insurance:
-      - policy
-      - claim
-      - premium
-      - underwriting
+    - policy
+    - claim
+    - premium
+    - underwriting
     education:
-      - student
-      - course
-      - enrol
-      - grade
-      - curriculum
-      - lms
+    - student
+    - course
+    - enrol
+    - grade
+    - curriculum
+    - lms
     IT service management:
-      - ticket
-      - incident
-      - asset
-      - sla
-      - helpdesk
-      - itil
-
-  # Sanitiser configuration (Phase 3)
+    - ticket
+    - incident
+    - asset
+    - sla
+    - helpdesk
+    - itil
   sanitiser:
     min_desc_length: 15
     min_step_length: 10
     max_step_count: 20
     min_step_count: 1
-
-  # Component suffix map (Phase 3)
   component_suffix_map:
-    login: "Login Screen"
-    register: "Registration Screen"
-    dashboard: "Dashboard"
-    settings: "Settings Page"
-    profile: "Profile Page"
-    search: "Search Page"
-    checkout: "Checkout Page"
-    cart: "Shopping Cart"
-
+    login: Login Screen
+    register: Registration Screen
+    dashboard: Dashboard
+    settings: Settings Page
+    profile: Profile Page
+    search: Search Page
+    checkout: Checkout Page
+    cart: Shopping Cart
 bdd:
-  language: python          # python | java | javascript | csharp
-  framework: behave         # behave | pytest_bdd | cucumber | cucumber_js | specflow
-  automation_lib: playwright  # selenium | playwright | cypress | requests | rest_assured
-
+  language: python
+  framework: behave
+  automation_lib: playwright
 crawler:
-  base_url: ""
+  base_url: ''
   max_depth: 3
   max_pages: 100
   wait_for_network_idle: true
   respect_robots_txt: true
   rate_limit_ms: 1000
   auth:
-    type: ""                # form | oauth | bearer | none
-    login_url: ""
-    username: ""
-    password: ""            # or set STLC_CRAWLER__AUTH__PASSWORD env var
-
+    type: ''
+    login_url: ''
+    username: ''
+    password: ''
 api_testing:
-  framework: pytest_requests  # pytest_requests | rest_assured | karate | supertest
-  openapi_spec: ""          # path to swagger/openapi spec file
-  base_url: ""
-
+  framework: pytest_requests
+  openapi_spec: ''
+  base_url: ''
 export:
-  output_dir: "./output"
+  output_dir: ./output
   formats:
-    - csv
-    - zephyr
-    - json
+  - csv
+  - zephyr
+  - json
   zephyr:
-    project_key: "PROJ"
-    folder_prefix: "Generated Tests"
-    default_status: "Draft"
-    default_labels: "automated,generated"
+    project_key: PROJ
+    folder_prefix: Generated Tests
+    default_status: Draft
+    default_labels: automated,generated
+output:
+  output_dir: ./output
+  csv_filename: test_cases.csv
+  zephyr_filename: zephyr_test_cases.csv
+  report_filename: generation_report.json
