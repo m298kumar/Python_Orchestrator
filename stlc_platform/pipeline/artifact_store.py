@@ -160,6 +160,7 @@ class ArtifactResolver:
         Patterns:
             $stage_id.artifact_key  -> store.get(stage_id, artifact_key)
             $config.dotted.path     -> nested config lookup
+            $runtime.llm_client     -> auto-create LLM client from config
             literal_value           -> pass through
         """
         if not isinstance(ref, str) or not ref.startswith("$"):
@@ -171,6 +172,10 @@ class ArtifactResolver:
             config_path = ref_body[len("config."):]
             return self._resolve_config_path(config_path)
 
+        if ref_body.startswith("runtime."):
+            runtime_key = ref_body[len("runtime."):]
+            return self._resolve_runtime(runtime_key)
+
         # $stage_id.artifact_key
         parts = ref_body.split(".", 1)
         if len(parts) != 2:
@@ -179,6 +184,48 @@ class ArtifactResolver:
             )
         stage_id, artifact_key = parts
         return self._store.get(stage_id, artifact_key)
+
+    def _resolve_runtime(self, key: str) -> Any:
+        """Resolve runtime references like llm_client."""
+        if key == "llm_client":
+            return self._create_llm_client()
+        raise KeyError(f"Unknown runtime key: '{key}'")
+
+    def _create_llm_client(self) -> Any:
+        """Create an LLM client based on config settings."""
+        from stlc_platform.core.llm.base_client import BaseLLMClient
+
+        llm_cfg = self._config.get("llm", {})
+        provider = llm_cfg.get("provider", "ollama")
+        model = llm_cfg.get("model", "")
+        api_key = llm_cfg.get("api_key", "")
+        base_url = llm_cfg.get("base_url", "")
+
+        if provider == "ollama":
+            from stlc_platform.core.llm.ollama_client import OllamaClient
+            return OllamaClient(
+                model=model or "phi4-mini:3.8b",
+                base_url=base_url or "http://localhost:11434",
+            )
+        elif provider == "openai":
+            from stlc_platform.core.llm.openai_client import OpenAIClient
+            import os
+            return OpenAIClient(
+                model=model or "gpt-4o-mini",
+                api_key=api_key or os.environ.get("OPENAI_API_KEY", ""),
+            )
+        elif provider == "anthropic":
+            from stlc_platform.core.llm.anthropic_client import AnthropicClient
+            import os
+            return AnthropicClient(
+                model=model or "claude-sonnet-4-20250514",
+                api_key=api_key or os.environ.get("ANTHROPIC_API_KEY", ""),
+            )
+        else:
+            raise ValueError(
+                f"Unsupported LLM provider: '{provider}'. "
+                "Supported: ollama, openai, anthropic"
+            )
 
     def _resolve_config_path(self, dotted_path: str) -> Any:
         """Resolve a dotted config path like 'llm.model'."""
