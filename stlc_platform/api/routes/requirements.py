@@ -2,11 +2,14 @@
 Requirements Routes
 ===================
 Upload, list, and manage requirements.
+
+Supported upload formats: JSON, YAML, CSV, Excel (.xlsx), TXT, PDF, DOCX, Markdown.
 """
 
 from __future__ import annotations
 
-import json
+import tempfile
+from pathlib import Path
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
@@ -17,6 +20,8 @@ router = APIRouter(prefix="/api/requirements", tags=["requirements"])
 
 # In-memory requirements store: req_id -> dict
 _requirements: Dict[str, Dict[str, Any]] = {}
+
+_SUPPORTED_EXTENSIONS = {"json", "yaml", "yml", "csv", "xlsx", "txt", "pdf", "docx", "md"}
 
 
 def _dict_to_response(d: Dict[str, Any]) -> RequirementResponse:
@@ -33,43 +38,47 @@ def _dict_to_response(d: Dict[str, Any]) -> RequirementResponse:
 
 @router.post("/upload", response_model=list[RequirementResponse], status_code=201)
 async def upload_requirements(file: UploadFile = File(...)) -> list[RequirementResponse]:
-    """Upload a requirements file (JSON or YAML)."""
+    """Upload a requirements file (JSON, YAML, CSV, Excel, TXT, PDF, DOCX, Markdown)."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-    if ext not in ("json", "yaml", "yml"):
+    if ext not in _SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type '.{ext}'. Use .json or .yaml",
+            detail=(
+                f"Unsupported file type '.{ext}'. "
+                f"Supported: {', '.join(sorted('.' + e for e in _SUPPORTED_EXTENSIONS))}"
+            ),
         )
 
+    # Save to a temp file so RequirementsReader can parse it
     content = await file.read()
+    suffix = "." + ext
     try:
-        if ext == "json":
-            data = json.loads(content)
-        else:
-            import yaml
-            data = yaml.safe_load(content)
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=suffix, mode="wb"
+        ) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        from stlc_platform.agents.requirements_agent.reader import RequirementsReader
+        reader = RequirementsReader()
+        parsed = reader.read(tmp_path)
+    except ImportError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing dependency for .{ext} files: {e}",
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse file: {e}")
-
-    # Accept either a list of dicts or a dict with a "requirements" key
-    if isinstance(data, dict) and "requirements" in data:
-        items = data["requirements"]
-    elif isinstance(data, list):
-        items = data
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail="File must contain a list of requirements or a dict with a 'requirements' key",
-        )
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
 
     results: List[RequirementResponse] = []
-    for i, item in enumerate(items):
-        if not isinstance(item, dict):
-            continue
-        req_id = item.get("req_id", f"REQ-{len(_requirements) + i + 1:04d}")
+    for i, req in enumerate(parsed):
+        item = req.to_dict()
+        req_id = item.get("req_id") or f"REQ-{len(_requirements) + i + 1:04d}"
         item["req_id"] = req_id
         _requirements[req_id] = item
         results.append(_dict_to_response(item))

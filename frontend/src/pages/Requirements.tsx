@@ -77,7 +77,7 @@ function UploadZone({ onUpload, uploading, uploadResult }: UploadZoneProps) {
       <input
         ref={inputRef}
         type="file"
-        accept=".json,.yaml,.yml"
+        accept=".json,.yaml,.yml,.csv,.xlsx,.txt,.pdf,.docx,.md"
         className="hidden"
         onChange={(e) => handleFiles(e.target.files)}
       />
@@ -91,9 +91,11 @@ function UploadZone({ onUpload, uploading, uploadResult }: UploadZoneProps) {
         <div className="flex flex-col items-center gap-2">
           <FileUp className="h-8 w-8 text-gray-400" />
           <p className="text-sm text-gray-600">
-            Drag and drop a <span className="font-medium">.json</span> or{" "}
-            <span className="font-medium">.yaml</span> file here, or{" "}
+            Drag and drop a requirements file here, or{" "}
             <span className="text-indigo-600 font-medium">click to browse</span>
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Supports: CSV, Excel, JSON, YAML, TXT, PDF, DOCX, Markdown
           </p>
         </div>
       )}
@@ -295,7 +297,7 @@ export default function Requirements() {
           <Upload className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500 text-lg font-medium">No requirements uploaded yet</p>
           <p className="text-gray-400 text-sm mt-1">
-            Upload a JSON or YAML file to get started.
+            Upload a CSV, Excel, JSON, YAML, TXT, PDF, or DOCX file to get started.
           </p>
         </div>
       ) : (
