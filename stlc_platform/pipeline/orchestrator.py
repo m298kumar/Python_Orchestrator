@@ -6,6 +6,7 @@ DAG-based pipeline executor with parallel stage support via ThreadPoolExecutor.
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,6 +22,8 @@ from stlc_platform.pipeline.artifact_store import ArtifactResolver, ArtifactStor
 from stlc_platform.pipeline.dag import PipelineDAG
 from stlc_platform.pipeline.skill_loader import SkillLoader
 from stlc_platform.pipeline.profile_loader import ExecutionProfile, ProfileLoader
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -270,9 +273,12 @@ class PipelineOrchestrator:
                 duration_seconds=round(duration, 3),
                 error="; ".join(result.errors) if result.errors else "",
             )
+            if not result.success:
+                logger.warning("Stage '%s' agent returned failure: %s", stage_id, sr.error)
 
         except Exception as e:
             duration = time.monotonic() - t0
+            logger.error("Stage '%s' failed: %s", stage_id, e, exc_info=True)
             sr = StageResult(
                 stage_id=stage_id,
                 success=False,

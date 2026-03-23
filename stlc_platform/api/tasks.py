@@ -58,9 +58,23 @@ def run_pipeline_background(
         merged_config = deep_merge(base_config, config)
 
         # Inject uploaded requirements from the in-memory store (if any)
+        # Convert dicts to Requirement dataclass instances since agents
+        # expect objects with attributes (e.g. req.req_id), not dicts.
         from stlc_platform.api.routes.requirements import _requirements
         if _requirements and "requirements" not in merged_config:
-            merged_config["requirements"] = list(_requirements.values())
+            from stlc_platform.agents.requirements_agent.reader import Requirement
+            reqs = []
+            for d in _requirements.values():
+                reqs.append(Requirement(
+                    req_id=d.get("req_id", ""),
+                    title=d.get("title", ""),
+                    description=d.get("description", ""),
+                    priority=d.get("priority", "Medium"),
+                    category=d.get("category", "Functional"),
+                    acceptance_criteria=d.get("acceptance_criteria", []),
+                    tags=d.get("tags", []),
+                ))
+            merged_config["requirements"] = reqs
 
         config = merged_config
 
