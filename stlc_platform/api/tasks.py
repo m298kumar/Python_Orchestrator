@@ -145,9 +145,23 @@ def submit_pipeline_run(
     resume_from: Optional[str] = None,
     max_workers: int = 4,
     profile: Optional[str] = None,
+    loop: Optional[asyncio.AbstractEventLoop] = None,
 ) -> None:
-    """Submit a pipeline run to the background thread pool."""
-    loop = asyncio.get_event_loop()
+    """Submit a pipeline run to the background thread pool.
+
+    The caller should pass ``loop`` explicitly (e.g. from an async route
+    via ``asyncio.get_running_loop()``). If not provided, the function
+    tries to obtain the running loop, falling back to ``None`` so the
+    pipeline still executes but without WebSocket broadcasting.
+    """
+    if loop is None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running event loop (e.g. called from a sync context).
+            # Pipeline will run but WebSocket broadcasts will be skipped.
+            loop = None
+
     _executor.submit(
         run_pipeline_background,
         run_id=run_id,

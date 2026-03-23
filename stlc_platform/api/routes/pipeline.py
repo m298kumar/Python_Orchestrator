@@ -4,6 +4,8 @@ Pipeline Routes
 Run, list, and manage STLC pipeline executions.
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 
 from stlc_platform.api.deps import get_run_manager
@@ -18,11 +20,12 @@ router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
 
 @router.post("/run", response_model=PipelineRunStatus, status_code=201)
-def create_run(req: PipelineRunRequest) -> PipelineRunStatus:
+async def create_run(req: PipelineRunRequest) -> PipelineRunStatus:
     """Create and trigger a new pipeline run."""
     mgr = get_run_manager()
     run_id = mgr.create_run(pipeline_name=req.pipeline_path)
 
+    loop = asyncio.get_running_loop()
     submit_pipeline_run(
         run_id=run_id,
         pipeline_path=req.pipeline_path,
@@ -30,6 +33,7 @@ def create_run(req: PipelineRunRequest) -> PipelineRunStatus:
         resume_from=req.resume_from,
         max_workers=req.max_workers,
         profile=req.profile,
+        loop=loop,
     )
 
     run = mgr.get_run(run_id)
@@ -92,7 +96,7 @@ def get_run(run_id: str) -> PipelineRunStatus:
 
 
 @router.post("/runs/{run_id}/resume", response_model=PipelineRunStatus, status_code=200)
-def resume_run(run_id: str, resume_from: str | None = None) -> PipelineRunStatus:
+async def resume_run(run_id: str, resume_from: str | None = None) -> PipelineRunStatus:
     """Resume a failed pipeline run from a specific stage."""
     mgr = get_run_manager()
     r = mgr.get_run(run_id)
@@ -116,11 +120,13 @@ def resume_run(run_id: str, resume_from: str | None = None) -> PipelineRunStatus
     # Reset run state for resume
     mgr.update_run(run_id, status="pending", error_message=None, stages_failed=[])
 
+    loop = asyncio.get_running_loop()
     submit_pipeline_run(
         run_id=run_id,
         pipeline_path=r["pipeline_name"],
         config=r.get("metadata", {}).get("config", {}),
         resume_from=stage,
+        loop=loop,
     )
 
     updated = mgr.get_run(run_id)
