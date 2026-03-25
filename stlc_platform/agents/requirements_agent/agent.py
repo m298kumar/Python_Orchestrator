@@ -153,6 +153,18 @@ class TestGenerationAgent(BaseAgent):
                 tc_format=tc_format,
             )
 
+            # Collect token usage from the LLM client (Phase C)
+            tokens_used = 0
+            input_tokens = 0
+            output_tokens = 0
+            try:
+                accumulated = llm_client.accumulated_tokens
+                tokens_used = accumulated.total_tokens
+                input_tokens = accumulated.input_tokens
+                output_tokens = accumulated.output_tokens
+            except (AttributeError, Exception):
+                pass
+
             return AgentResult(
                 success=True,
                 artifacts={"test_cases": test_cases},
@@ -161,6 +173,9 @@ class TestGenerationAgent(BaseAgent):
                     "total_requirements": len(requirements),
                     "domain": generator._domain,
                     "tc_format": tc_format,
+                    "tokens_used": tokens_used,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
                 },
             )
 

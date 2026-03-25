@@ -159,6 +159,17 @@ class TestCaseGenerator:
                 except Exception:
                     pass
 
+            # Calculate max_prompt_tokens from LLM context window budget
+            # Reserve ~60% of context for prompt, rest for output
+            try:
+                _num_predict = getattr(self.llm, "num_predict", None) or getattr(self.llm, "max_tokens", None)
+                _num_predict = int(_num_predict) if _num_predict is not None else 3200
+                _num_ctx = getattr(self.llm, "num_ctx", None)
+                _num_ctx = int(_num_ctx) if _num_ctx is not None else 8192
+                max_prompt_tokens = max((_num_ctx - _num_predict) * 6 // 10, 1024)
+            except (TypeError, ValueError):
+                max_prompt_tokens = 3000  # safe default
+
             prompt = self.prompt_renderer.render_user_prompt(
                 requirement=requirement,
                 slot=slot,
@@ -168,6 +179,7 @@ class TestCaseGenerator:
                 tc_format=tc_format,
                 examples=examples,
                 feedback_constraints=feedback_constraints,
+                max_prompt_tokens=max_prompt_tokens,
             )
 
             best_tc: Optional[TestCaseArtifact] = None
@@ -188,6 +200,8 @@ class TestCaseGenerator:
                     raw = self.llm.generate_test_case(
                         prompt=current_prompt,
                         system_prompt=system_prompt,
+                        slot=slot,
+                        requirement=requirement,
                     )
                     tc = self._parse(raw, requirement, slot)
                 except Exception as e:

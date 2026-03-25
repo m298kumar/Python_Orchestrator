@@ -302,20 +302,31 @@ class BaseLLMClient(ABC):
         prompt: str,
         system_prompt: Optional[str] = None,
         use_cache: bool = True,
+        slot: Optional[Dict[str, Any]] = None,
+        requirement: Optional[Any] = None,
     ) -> dict:
         """
-        Generate a single test case with retry, JSON repair, and caching.
+        Generate a single test case with classified-retry, JSON repair, and caching.
 
-        Retry strategy:
-          Attempt 1: base temperature
-          Attempt 2: +0.05 temperature if parse error or hollow response
+        Retry strategy (Phase C — classified-retry):
+          Attempt 1: base temperature with original prompt
+          Attempt 2: classify failure → adapt prompt → retry with adapted prompt
           Hard failure: returns {raw_response: ...} to trigger synthesise_tc()
+
+        When slot and requirement are provided, failures are classified using
+        FailureClassifier and the prompt is adapted with failure-specific
+        instructions before retry. Without them, falls back to blind retry
+        with temperature increase (backward compatible).
 
         Cache: when enabled, checks cache before calling LLM. Stores
         successful responses for future lookups.
         """
+        from stlc_platform.core.llm.failure_classifier import FailureClassifier
+
         base_temp = getattr(self, "temperature", 0.6)
         raw = ""
+        classifier = FailureClassifier()
+        current_prompt = prompt
 
         # Check cache first
         cache_key = None
@@ -339,7 +350,7 @@ class BaseLLMClient(ABC):
 
             try:
                 raw = self.generate(
-                    prompt=prompt,
+                    prompt=current_prompt,
                     system_prompt=system_prompt,
                     temperature=temp,
                     json_schema=TESTCASE_JSON_SCHEMA,
@@ -369,6 +380,15 @@ class BaseLLMClient(ABC):
                         f"    [yellow]  attempt {attempt} parse failed: {e} "
                         f"| raw: {raw[:120]}[/yellow]"
                     )
+                    # Classify failure and adapt prompt for next attempt
+                    if attempt == 1 and slot is not None:
+                        classification = classifier.classify(raw, None, slot, requirement)
+                        if classification:
+                            current_prompt = classifier.adapt_prompt(prompt, classification, slot)
+                            console.print(
+                                f"    [dim]  failure classified: {classification.failure_type.value} "
+                                f"→ adapting prompt[/dim]"
+                            )
                     continue
 
             # Content sanity check
@@ -377,6 +397,15 @@ class BaseLLMClient(ABC):
                     f"    [yellow]  attempt {attempt} hollow response "
                     f"(schema-valid but empty fields)[/yellow]"
                 )
+                # Classify and adapt for next attempt
+                if attempt == 1 and slot is not None:
+                    classification = classifier.classify(raw, parsed, slot, requirement)
+                    if classification:
+                        current_prompt = classifier.adapt_prompt(prompt, classification, slot)
+                        console.print(
+                            f"    [dim]  failure classified: {classification.failure_type.value} "
+                            f"→ adapting prompt[/dim]"
+                        )
                 continue
 
             # Success — cache the raw response
