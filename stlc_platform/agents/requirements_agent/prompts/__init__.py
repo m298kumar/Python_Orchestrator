@@ -143,6 +143,21 @@ class PromptRenderer:
         template = self._env.get_template("few_shot_block.j2")
         return template.render(examples=examples[:2])
 
+    def render_feedback_block(self, feedback_constraints: Optional[List[Any]] = None) -> str:
+        """Render the feedback constraints block.
+
+        Args:
+            feedback_constraints: List of AgentFeedbackArtifact objects.
+
+        Returns:
+            Formatted feedback block string, or empty string if no feedback.
+        """
+        if not feedback_constraints:
+            return ""
+
+        template = self._env.get_template("feedback_block.j2")
+        return template.render(feedback_constraints=feedback_constraints)
+
     def render_user_prompt(
         self,
         requirement: Any,
@@ -153,6 +168,7 @@ class PromptRenderer:
         tc_format: str = "gherkin",
         examples: Optional[List[Dict[str, Any]]] = None,
         tech_stack: Optional[Dict[str, str]] = None,
+        feedback_constraints: Optional[List[Any]] = None,
     ) -> str:
         """Render the complete user prompt for one test case slot.
 
@@ -199,6 +215,9 @@ class PromptRenderer:
         # Context block
         context_block = f"\nRELATED REQUIREMENTS (context only):\n{context}\n" if context else ""
 
+        # Feedback block — inject learned constraints from user feedback
+        feedback_block = self.render_feedback_block(feedback_constraints)
+
         # AC type label
         ac_type_label = {
             'eligibility':  'eligibility rule',
@@ -231,6 +250,7 @@ class PromptRenderer:
             total=total,
             all_ac_text=all_ac_text,
             context_block=context_block,
+            feedback_block=feedback_block,
             few_shot_block=few_shot_block,
             cot_instruction=COT_INSTRUCTION,
             type_context=TYPE_CONTEXT.get(tt, ""),

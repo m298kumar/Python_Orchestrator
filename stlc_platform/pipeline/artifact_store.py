@@ -259,10 +259,32 @@ class ArtifactResolver:
         return self._store.get(stage_id, artifact_key)
 
     def _resolve_runtime(self, key: str) -> Any:
-        """Resolve runtime references like llm_client."""
+        """Resolve runtime references like llm_client, feedback_store."""
         if key == "llm_client":
             return self._create_llm_client()
+        if key == "feedback_store":
+            return self._create_feedback_store()
         raise KeyError(f"Unknown runtime key: '{key}'")
+
+    def _create_feedback_store(self) -> Any:
+        """Create a FeedbackStore, optionally with ChromaDB semantic search."""
+        from stlc_platform.pipeline.feedback_store import FeedbackStore
+        from pathlib import Path
+
+        # Try to create with ChromaDB for semantic search
+        chroma_store = None
+        try:
+            from stlc_platform.core.storage.chroma_store import RequirementsVectorStore
+            chroma_cfg = self._config.get("chromadb", {})
+            if chroma_cfg:
+                chroma_store = RequirementsVectorStore(config=chroma_cfg)
+        except Exception:
+            pass  # ChromaDB optional — degrade to JSON-only
+
+        return FeedbackStore(
+            persist_path=Path("./feedback"),
+            chroma_store=chroma_store,
+        )
 
     def _create_llm_client(self) -> Any:
         """Create an LLM client based on config settings."""

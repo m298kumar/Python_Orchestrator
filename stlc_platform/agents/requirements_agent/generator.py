@@ -65,6 +65,7 @@ class TestCaseGenerator:
         domain: str = "",
         scorer: Optional[TestCaseScorer] = None,
         scorer_config: Optional[ScorerConfig] = None,
+        feedback_store: Any = None,
     ):
         self.llm = llm_client
         self.prompt_renderer = prompt_renderer or PromptRenderer()
@@ -79,6 +80,7 @@ class TestCaseGenerator:
         self._domain = domain
         self._tc_counter = 0
         self.scorer = scorer or TestCaseScorer(config=scorer_config)
+        self.feedback_store = feedback_store
 
     def generate_for_requirement(
         self,
@@ -111,6 +113,21 @@ class TestCaseGenerator:
         if self.vector_store:
             try:
                 context = self.vector_store.get_context_for_requirement(requirement)
+            except Exception:
+                pass
+
+        # Retrieve feedback constraints for this agent + requirement context
+        feedback_constraints: list = []
+        if self.feedback_store:
+            try:
+                feedback_constraints = self.feedback_store.retrieve(
+                    agent_id="test_generation",
+                    context={
+                        "requirement": requirement,
+                        "query": getattr(requirement, "title", ""),
+                    },
+                    limit=3,
+                )
             except Exception:
                 pass
 
@@ -150,6 +167,7 @@ class TestCaseGenerator:
                 context=context,
                 tc_format=tc_format,
                 examples=examples,
+                feedback_constraints=feedback_constraints,
             )
 
             best_tc: Optional[TestCaseArtifact] = None
@@ -228,6 +246,23 @@ class TestCaseGenerator:
                 "quality_score": best_report.overall_score,
                 "quality_issues": best_report.issues,
             })
+
+            # Auto-store high-quality TCs as few-shot examples in ChromaDB
+            auto_threshold = self.scorer.config.auto_example_threshold
+            if (
+                best_report.overall_score >= auto_threshold
+                and self.vector_store
+                and hasattr(self.vector_store, "store_approved_tc")
+            ):
+                try:
+                    self.vector_store.store_approved_tc(
+                        tc_dict=best_tc.model_dump(),
+                        ac_type=ac_type_label,
+                        test_type=test_type,
+                        domain=self._domain or "",
+                    )
+                except Exception:
+                    pass  # non-critical — don't fail generation for example storage
 
             results.append(best_tc)
 

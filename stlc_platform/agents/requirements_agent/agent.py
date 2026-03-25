@@ -113,6 +113,7 @@ class TestGenerationAgent(BaseAgent):
         requirements = artifacts["requirements"]
         llm_client = artifacts["llm_client"]
         vector_store = artifacts.get("vector_store")
+        feedback_store = artifacts.get("feedback_store")
 
         # Build tech stack context
         tech_stack_config = config.get("tech_stack") or artifacts.get("tech_stack")
@@ -134,6 +135,7 @@ class TestGenerationAgent(BaseAgent):
             tech_stack=tech_stack,
             vector_store=vector_store,
             domain=config.get("domain", "") or artifacts.get("domain", ""),
+            feedback_store=feedback_store,
         )
 
         # Extract config

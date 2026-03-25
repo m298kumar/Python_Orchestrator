@@ -13,6 +13,7 @@ stages:
     input:
       requirements: "$config.requirements"
       llm_client: "$runtime.llm_client"
+      feedback_store: "$runtime.feedback_store"
     output: [test_cases]
 
   - id: crawl_application

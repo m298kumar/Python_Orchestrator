@@ -1,0 +1,8 @@
+{% if feedback_constraints %}
+
+LEARNED CONSTRAINTS (from prior review feedback — you MUST follow these):
+{% for fb in feedback_constraints %}
+  - [{{ fb.feedback_type }}] {{ fb.message }}
+{% endfor %}
+
+{% endif %}
