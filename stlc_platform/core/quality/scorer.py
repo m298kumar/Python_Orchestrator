@@ -87,16 +87,42 @@ class ScorerConfig:
         "structural": 0.20,
     })
 
+    _REQUIRED_DIMENSIONS = {"coverage", "clarity", "executability", "uniqueness", "structural"}
+
+    def __post_init__(self) -> None:
+        """Validate config after construction."""
+        # Ensure all 5 dimensions are present
+        missing = self._REQUIRED_DIMENSIONS - set(self.weights.keys())
+        if missing:
+            raise ValueError(f"Missing weight dimensions: {missing}")
+
+        # Normalize weights if they don't sum to ~1.0
+        total = sum(self.weights.values())
+        if total <= 0:
+            raise ValueError("Weight values must be positive and sum > 0")
+        if not (0.95 <= total <= 1.05):
+            # Auto-normalize instead of rejecting
+            self.weights = {k: v / total for k, v in self.weights.items()}
+
+        # Validate threshold ordering
+        if self.regenerate_threshold > self.accept_threshold:
+            raise ValueError(
+                f"regenerate_threshold ({self.regenerate_threshold}) must be "
+                f"<= accept_threshold ({self.accept_threshold})"
+            )
+
     @classmethod
     def from_config(cls, cfg: Dict[str, Any]) -> "ScorerConfig":
         """Build from a quality_gate config dict."""
         qg = cfg.get("quality_gate", {})
+        if not qg:
+            return cls()
         return cls(
             accept_threshold=qg.get("accept_threshold", 0.65),
             regenerate_threshold=qg.get("regenerate_threshold", 0.40),
             max_regeneration_attempts=qg.get("max_regeneration_attempts", 2),
             auto_example_threshold=qg.get("auto_example_threshold", 0.80),
-            weights=qg.get("weights", cls().weights),
+            weights=qg.get("weights", cls.__dataclass_fields__["weights"].default_factory()),
         )
 
 

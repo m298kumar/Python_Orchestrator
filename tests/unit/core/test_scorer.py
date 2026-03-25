@@ -420,3 +420,74 @@ class TestHelpers:
         assert "Login Screen" in text
         assert "Dashboard" in text
         assert tc.description in text
+
+
+# ── ScorerConfig Validation ─────────────────────────────────────────────────
+
+
+class TestScorerConfigValidation:
+    """Tests for ScorerConfig validation added during audit."""
+
+    def test_default_config_valid(self):
+        cfg = ScorerConfig()
+        total = sum(cfg.weights.values())
+        assert abs(total - 1.0) < 0.05
+
+    def test_weights_auto_normalize(self):
+        """Weights that don't sum to 1.0 are auto-normalized."""
+        cfg = ScorerConfig(weights={
+            "coverage": 0.5,
+            "clarity": 0.5,
+            "executability": 0.5,
+            "uniqueness": 0.5,
+            "structural": 0.5,
+        })
+        total = sum(cfg.weights.values())
+        assert abs(total - 1.0) < 0.01
+
+    def test_missing_dimension_raises(self):
+        """Missing a required dimension raises ValueError."""
+        with pytest.raises(ValueError, match="Missing weight dimensions"):
+            ScorerConfig(weights={
+                "coverage": 0.25,
+                "clarity": 0.25,
+                # missing executability, uniqueness, structural
+            })
+
+    def test_zero_weights_raises(self):
+        """All-zero weights raise ValueError."""
+        with pytest.raises(ValueError, match="positive"):
+            ScorerConfig(weights={
+                "coverage": 0.0,
+                "clarity": 0.0,
+                "executability": 0.0,
+                "uniqueness": 0.0,
+                "structural": 0.0,
+            })
+
+    def test_threshold_ordering_violation(self):
+        """regenerate_threshold > accept_threshold raises ValueError."""
+        with pytest.raises(ValueError, match="regenerate_threshold"):
+            ScorerConfig(
+                accept_threshold=0.40,
+                regenerate_threshold=0.65,
+            )
+
+    def test_from_config_empty_dict(self):
+        """from_config with empty dict returns defaults."""
+        cfg = ScorerConfig.from_config({})
+        assert cfg.accept_threshold == 0.65
+        assert cfg.regenerate_threshold == 0.40
+
+    def test_from_config_partial(self):
+        """from_config with partial quality_gate fills defaults."""
+        cfg = ScorerConfig.from_config({
+            "quality_gate": {"accept_threshold": 0.80}
+        })
+        assert cfg.accept_threshold == 0.80
+        assert cfg.regenerate_threshold == 0.40  # default
+
+    def test_from_config_no_quality_gate_key(self):
+        """Config without quality_gate key returns defaults."""
+        cfg = ScorerConfig.from_config({"other_key": "value"})
+        assert cfg.accept_threshold == 0.65

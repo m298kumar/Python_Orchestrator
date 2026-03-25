@@ -1,8 +1,16 @@
 {% if feedback_constraints %}
 
-LEARNED CONSTRAINTS (from prior review feedback — you MUST follow these):
+LEARNED CONSTRAINTS (from prior review feedback — follow these strictly):
 {% for fb in feedback_constraints %}
-  - [{{ fb.feedback_type }}] {{ fb.message }}
+{% if fb.feedback_type == 'constraint' %}
+  - MUST: {{ fb.message }}
+{% elif fb.feedback_type == 'correction' %}
+  - FIX: {{ fb.message }}
+{% elif fb.feedback_type == 'preference' %}
+  - PREFER: {{ fb.message }}
+{% else %}
+  - NOTE: {{ fb.message }}
+{% endif %}
 {% endfor %}
 
 {% endif %}

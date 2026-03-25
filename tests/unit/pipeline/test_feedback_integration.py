@@ -105,7 +105,7 @@ class TestFeedbackStoreSemanticSearch:
         assert mock_collection.upsert.called
 
     def test_semantic_retrieve_with_mock_chroma(self, tmp_path):
-        """Semantic retrieval queries ChromaDB with context."""
+        """Semantic retrieval queries ChromaDB with context and maps via fb_index."""
         mock_store = MagicMock()
         mock_client = MagicMock()
         mock_store._client = mock_client
@@ -114,13 +114,13 @@ class TestFeedbackStoreSemanticSearch:
         mock_collection.get.return_value = {"ids": []}
         mock_client.get_or_create_collection.return_value = mock_collection
 
-        # Set up query results
+        # Set up query results — use fb_index for mapping
         mock_collection.query.return_value = {
             "metadatas": [[{
                 "agent_id": "test_generation",
                 "feedback_type": "correction",
-                "message": "Always validate error messages",
                 "created_at": "2026-01-01T00:00:00",
+                "fb_index": 0,
             }]],
             "distances": [[0.2]],  # 0.8 similarity — above threshold
         }
@@ -154,8 +154,8 @@ class TestFeedbackStoreSemanticSearch:
             "metadatas": [[{
                 "agent_id": "test_generation",
                 "feedback_type": "correction",
-                "message": "Unrelated feedback",
                 "created_at": "",
+                "fb_index": 0,
             }]],
             "distances": [[0.9]],
         }
@@ -189,7 +189,7 @@ class TestFeedbackPromptInjection:
         assert renderer.render_feedback_block([]) == ""
 
     def test_render_feedback_block_with_items(self):
-        """Feedback items are formatted into the block."""
+        """Feedback items are formatted with type-specific emphasis."""
         renderer = PromptRenderer()
         fb1 = AgentFeedbackArtifact(
             agent_id="test_generation",
@@ -201,13 +201,21 @@ class TestFeedbackPromptInjection:
             feedback_type="constraint",
             message="Use data-testid selectors, not CSS classes",
         )
+        fb3 = AgentFeedbackArtifact(
+            agent_id="test_generation",
+            feedback_type="preference",
+            message="Prefer shorter step descriptions",
+        )
 
-        block = renderer.render_feedback_block([fb1, fb2])
+        block = renderer.render_feedback_block([fb1, fb2, fb3])
         assert "LEARNED CONSTRAINTS" in block
         assert "Always include error message text" in block
         assert "Use data-testid selectors" in block
-        assert "[correction]" in block
-        assert "[constraint]" in block
+        assert "Prefer shorter step descriptions" in block
+        # Type-specific prefixes
+        assert "FIX:" in block
+        assert "MUST:" in block
+        assert "PREFER:" in block
 
     def test_user_prompt_includes_feedback_block(self):
         """render_user_prompt passes feedback through to template."""
@@ -235,6 +243,7 @@ class TestFeedbackPromptInjection:
         )
         assert "LEARNED CONSTRAINTS" in prompt
         assert "Must verify error message text exactly" in prompt
+        assert "FIX:" in prompt  # correction type gets FIX: prefix
 
     def test_user_prompt_without_feedback_has_no_block(self):
         """No feedback → no LEARNED CONSTRAINTS section in prompt."""

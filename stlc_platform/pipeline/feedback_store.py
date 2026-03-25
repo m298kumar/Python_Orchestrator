@@ -229,7 +229,14 @@ class FeedbackStore:
                 if doc_id not in existing_ids:
                     self._index_in_chroma(fb, doc_id=doc_id)
         except Exception as e:
-            logger.debug("Reindex skipped: %s", e)
+            logger.warning("Feedback re-index failed (semantic search may be incomplete): %s", e)
+
+    def _feedback_index(self, feedback: AgentFeedbackArtifact) -> int:
+        """Find the index of a feedback entry in the in-memory list."""
+        for i, fb in enumerate(self._feedback):
+            if fb is feedback:
+                return i
+        return len(self._feedback) - 1
 
     def _index_in_chroma(
         self, feedback: AgentFeedbackArtifact, doc_id: Optional[str] = None
@@ -238,7 +245,7 @@ class FeedbackStore:
         if self._chroma_collection is None:
             return
         try:
-            idx = len(self._feedback) - 1
+            idx = self._feedback_index(feedback)
             fid = doc_id or f"fb_{feedback.agent_id}_{idx}"
             document = (
                 f"{feedback.feedback_type}: {feedback.message}"
@@ -247,7 +254,7 @@ class FeedbackStore:
                 "agent_id": feedback.agent_id,
                 "feedback_type": feedback.feedback_type,
                 "created_at": feedback.created_at or "",
-                "message": feedback.message[:500],
+                "fb_index": idx,  # stable index for lookup
             }
             self._chroma_collection.upsert(
                 documents=[document],
@@ -255,7 +262,7 @@ class FeedbackStore:
                 ids=[fid],
             )
         except Exception as e:
-            logger.debug("Failed to index feedback in ChromaDB: %s", e)
+            logger.warning("Failed to index feedback in ChromaDB: %s", e)
 
     def _semantic_retrieve(
         self,
@@ -281,14 +288,14 @@ class FeedbackStore:
         if "requirement" in context:
             req = context["requirement"]
             if hasattr(req, "title"):
-                query_parts.append(req.title)
+                query_parts.append(getattr(req, "title", ""))
             if hasattr(req, "description"):
-                query_parts.append(req.description[:200])
+                query_parts.append(getattr(req, "description", "")[:200])
 
-        if not query_parts:
+        query_text = " ".join(p for p in query_parts if p).strip()
+        if not query_text:
+            logger.debug("Semantic retrieve skipped: empty query text")
             return []
-
-        query_text = " ".join(query_parts)
 
         try:
             count = self._chroma_collection.count()
@@ -305,22 +312,20 @@ class FeedbackStore:
             if not results["metadatas"] or not results["metadatas"][0]:
                 return []
 
-            # Map ChromaDB results back to in-memory feedback objects
+            # Map ChromaDB results back to in-memory feedback using stable index
             matched: List[AgentFeedbackArtifact] = []
+            seen_indices: set = set()
             for meta, dist in zip(results["metadatas"][0], results["distances"][0]):
                 similarity = 1 - dist
                 if similarity < 0.3:  # minimum relevance threshold
                     continue
-                msg = meta.get("message", "")
-                # Find matching feedback in memory
-                for fb in self._feedback:
-                    if (
-                        fb.agent_id == agent_id
-                        and fb.message[:500] == msg
-                        and fb not in matched
-                    ):
-                        matched.append(fb)
-                        break
+                fb_index = meta.get("fb_index")
+                if fb_index is not None and isinstance(fb_index, int):
+                    if 0 <= fb_index < len(self._feedback) and fb_index not in seen_indices:
+                        fb = self._feedback[fb_index]
+                        if fb.agent_id == agent_id:
+                            matched.append(fb)
+                            seen_indices.add(fb_index)
 
             return matched[:limit]
 
