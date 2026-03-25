@@ -13,7 +13,13 @@ class TestAnthropicClient:
     def _make_client(self, **kwargs):
         """Create an AnthropicClient with mocked SDK and config."""
         from stlc_platform.core.llm.anthropic_client import AnthropicClient
+        from stlc_platform.core.llm.base_client import TokenUsage
         client = AnthropicClient.__new__(AnthropicClient)
+        # Base class attributes (normally set by BaseLLMClient.__init__)
+        client._last_token_usage = TokenUsage()
+        client._accumulated_tokens = TokenUsage()
+        client._cache = None
+        # AnthropicClient attributes
         client.api_key = "sk-ant-test-key"
         client.model = kwargs.get("model", "claude-sonnet-4-20250514")
         client.temperature = kwargs.get("temperature", 0.6)

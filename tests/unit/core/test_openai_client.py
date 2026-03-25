@@ -15,7 +15,13 @@ class TestOpenAIClient:
         with patch.dict("os.environ", {"STLC_LLM__API_KEY": "sk-test-key-123"}, clear=False):
             with patch("stlc_platform.core.llm.openai_client.OpenAIClient.__init__", return_value=None):
                 from stlc_platform.core.llm.openai_client import OpenAIClient
+                from stlc_platform.core.llm.base_client import TokenUsage
                 client = OpenAIClient.__new__(OpenAIClient)
+                # Base class attributes (normally set by BaseLLMClient.__init__)
+                client._last_token_usage = TokenUsage()
+                client._accumulated_tokens = TokenUsage()
+                client._cache = None
+                # OpenAIClient attributes
                 client.api_key = "sk-test-key-123"
                 client.model = kwargs.get("model", "gpt-4o")
                 client.base_url = kwargs.get("base_url", None)

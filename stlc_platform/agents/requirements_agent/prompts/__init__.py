@@ -169,6 +169,7 @@ class PromptRenderer:
         examples: Optional[List[Dict[str, Any]]] = None,
         tech_stack: Optional[Dict[str, str]] = None,
         feedback_constraints: Optional[List[Any]] = None,
+        max_prompt_tokens: Optional[int] = None,
     ) -> str:
         """Render the complete user prompt for one test case slot.
 
@@ -181,6 +182,10 @@ class PromptRenderer:
             tc_format: Test case format ('gherkin' or 'standard').
             examples: Few-shot examples from ChromaDB.
             tech_stack: Tech stack config for verb substitution.
+            feedback_constraints: List of AgentFeedbackArtifact objects.
+            max_prompt_tokens: Max approximate token budget. If the rendered
+                prompt exceeds this, sections are progressively trimmed:
+                few_shot_block → context_block → AC list truncation.
 
         Returns:
             Complete user prompt string.
@@ -243,7 +248,7 @@ class PromptRenderer:
         if tc_format == "gherkin":
             gherkin_section = f"\nGIVEN / WHEN / THEN -- fill exactly as shown:\n{gwt_hint}\n"
 
-        return template.render(
+        rendered = template.render(
             requirement=requirement,
             slot=slot,
             test_number=test_number,
@@ -263,6 +268,68 @@ class PromptRenderer:
             req_tag=req_tag,
             tt=tt,
         )
+
+        # ── Context Window Management (Phase C) ────────────────────────────
+        # Progressive trimming if the prompt exceeds the token budget.
+        # Approximation: 1 token ≈ 4 characters (conservative for English).
+        if max_prompt_tokens is not None and max_prompt_tokens > 0:
+            est_tokens = len(rendered) // 4
+
+            # Trim 1: Remove few-shot block
+            if est_tokens > max_prompt_tokens and few_shot_block:
+                rendered = template.render(
+                    requirement=requirement, slot=slot,
+                    test_number=test_number, total=total,
+                    all_ac_text=all_ac_text,
+                    context_block=context_block,
+                    feedback_block=feedback_block,
+                    few_shot_block="",
+                    cot_instruction=COT_INSTRUCTION,
+                    type_context=TYPE_CONTEXT.get(tt, ""),
+                    hints=hints, gwt_hint=gwt_hint,
+                    gherkin_section=gherkin_section,
+                    ac=ac, ac_type_label=ac_type_label,
+                    cat_tag=cat_tag, req_tag=req_tag, tt=tt,
+                )
+                est_tokens = len(rendered) // 4
+
+            # Trim 2: Remove context block
+            if est_tokens > max_prompt_tokens and context_block:
+                rendered = template.render(
+                    requirement=requirement, slot=slot,
+                    test_number=test_number, total=total,
+                    all_ac_text=all_ac_text,
+                    context_block="",
+                    feedback_block=feedback_block,
+                    few_shot_block="",
+                    cot_instruction=COT_INSTRUCTION,
+                    type_context=TYPE_CONTEXT.get(tt, ""),
+                    hints=hints, gwt_hint=gwt_hint,
+                    gherkin_section=gherkin_section,
+                    ac=ac, ac_type_label=ac_type_label,
+                    cat_tag=cat_tag, req_tag=req_tag, tt=tt,
+                )
+                est_tokens = len(rendered) // 4
+
+            # Trim 3: Truncate AC list to target AC only
+            if est_tokens > max_prompt_tokens:
+                trimmed_ac_text = f"  AC: {ac}"
+                rendered = template.render(
+                    requirement=requirement, slot=slot,
+                    test_number=test_number, total=total,
+                    all_ac_text=trimmed_ac_text,
+                    context_block="",
+                    feedback_block=feedback_block,
+                    few_shot_block="",
+                    cot_instruction=COT_INSTRUCTION,
+                    type_context=TYPE_CONTEXT.get(tt, ""),
+                    hints=hints, gwt_hint=gwt_hint,
+                    gherkin_section=gherkin_section,
+                    ac=ac, ac_type_label=ac_type_label,
+                    cat_tag=cat_tag, req_tag=req_tag, tt=tt,
+                )
+
+        return rendered
 
     def _parse_hints(self, rendered: str) -> Dict[str, str]:
         """Parse a rendered hints template into a dict."""

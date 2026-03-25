@@ -8,18 +8,38 @@ Why an ABC instead of a Protocol:
   - We want to enforce implementation at class definition time (fail-fast)
   - Providers share retry logic and JSON repair via base class methods
   - Protocol would allow duck-typing, but ABCs give clearer error messages
+
+Phase C enhancements:
+  - Token tracking: last_token_usage() reports input/output tokens per call
+  - Response cache: optional LRU cache avoids redundant LLM calls
+  - Failure classification: integrated into generate_test_case retry loop
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import re
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 from rich.console import Console
 
 console = Console()
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TokenUsage:
+    """Token counts from a single LLM call."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+    @property
+    def total_tokens(self) -> int:
+        return self.input_tokens + self.output_tokens
 
 
 # ── JSON Schema for test case output ─────────────────────────────────────────
@@ -220,7 +240,14 @@ class BaseLLMClient(ABC):
     The base class provides:
       - generate_test_case(): structured output with retry + JSON repair
       - JSON schema, repair, and hollow check utilities
+      - Token tracking via last_token_usage() / accumulated_tokens
+      - Optional response cache via set_cache()
     """
+
+    def __init__(self) -> None:
+        self._last_token_usage: TokenUsage = TokenUsage()
+        self._accumulated_tokens: TokenUsage = TokenUsage()
+        self._cache: Optional[Any] = None  # LLMResponseCache
 
     @abstractmethod
     def generate(
@@ -243,21 +270,69 @@ class BaseLLMClient(ABC):
         """List available models from the provider."""
         ...
 
+    # ── Token tracking ──────────────────────────────────────────────────────
+
+    def last_token_usage(self) -> TokenUsage:
+        """Token counts from the most recent generate() call."""
+        return self._last_token_usage
+
+    @property
+    def accumulated_tokens(self) -> TokenUsage:
+        """Accumulated token counts across all generate() calls."""
+        return self._accumulated_tokens
+
+    def reset_token_counts(self) -> None:
+        """Reset accumulated token counts."""
+        self._accumulated_tokens = TokenUsage()
+
+    def _record_tokens(self, input_tokens: int, output_tokens: int) -> None:
+        """Record token usage from a generate() call. Called by subclasses."""
+        self._last_token_usage = TokenUsage(input_tokens, output_tokens)
+        self._accumulated_tokens.input_tokens += input_tokens
+        self._accumulated_tokens.output_tokens += output_tokens
+
+    # ── Cache ───────────────────────────────────────────────────────────────
+
+    def set_cache(self, cache: Any) -> None:
+        """Attach an LLMResponseCache instance."""
+        self._cache = cache
+
     def generate_test_case(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
+        use_cache: bool = True,
     ) -> dict:
         """
-        Generate a single test case with retry and JSON repair.
+        Generate a single test case with retry, JSON repair, and caching.
 
         Retry strategy:
           Attempt 1: base temperature
           Attempt 2: +0.05 temperature if parse error or hollow response
           Hard failure: returns {raw_response: ...} to trigger synthesise_tc()
+
+        Cache: when enabled, checks cache before calling LLM. Stores
+        successful responses for future lookups.
         """
         base_temp = getattr(self, "temperature", 0.6)
         raw = ""
+
+        # Check cache first
+        cache_key = None
+        if use_cache and self._cache is not None:
+            from stlc_platform.core.llm.cache import LLMResponseCache
+            cache_key = LLMResponseCache.cache_key(
+                system_prompt or "", prompt, base_temp
+            )
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                try:
+                    parsed = json.loads(cached)
+                    if not is_hollow(parsed):
+                        console.print("    [dim]  cache hit[/dim]")
+                        return parsed
+                except json.JSONDecodeError:
+                    pass  # stale cache entry — regenerate
 
         for attempt in range(1, 3):
             temp = base_temp if attempt == 1 else min(base_temp + 0.05, 1.0)
@@ -304,7 +379,10 @@ class BaseLLMClient(ABC):
                 )
                 continue
 
-            # Success
+            # Success — cache the raw response
+            if cache_key and self._cache is not None:
+                self._cache.put(cache_key, cleaned)
+
             title = parsed.get("title", "?")[:70]
             steps_count = len(parsed.get("steps", []))
             console.print(

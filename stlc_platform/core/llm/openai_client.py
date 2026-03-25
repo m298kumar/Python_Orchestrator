@@ -31,6 +31,7 @@ class OpenAIClient(BaseLLMClient):
         timeout: Optional[int] = None,
         max_tokens: Optional[int] = None,
     ):
+        super().__init__()
         try:
             import openai  # noqa: F401
         except ImportError:
@@ -137,6 +138,14 @@ class OpenAIClient(BaseLLMClient):
             response = self._client.chat.completions.create(**kwargs)
             content = response.choices[0].message.content or ""
             content = content.strip()
+
+            # Extract token counts from OpenAI response
+            usage = getattr(response, "usage", None)
+            if usage:
+                self._record_tokens(
+                    getattr(usage, "prompt_tokens", 0),
+                    getattr(usage, "completion_tokens", 0),
+                )
 
             if self.debug:
                 console.print(f"[dim]-- RAW RESPONSE ({len(content)} chars) --[/dim]")

@@ -31,6 +31,7 @@ class OllamaClient(BaseLLMClient):
         timeout: Optional[int] = None,
         num_predict: Optional[int] = None,
     ):
+        super().__init__()
         # Import config lazily to avoid circular imports during early init
         from stlc_platform.core.config_loader import config
 
@@ -105,10 +106,19 @@ class OllamaClient(BaseLLMClient):
                 timeout=self.timeout,
             )
             resp.raise_for_status()
-            content: str = resp.json()["message"]["content"].strip()
+            resp_json = resp.json()
+            content: str = resp_json["message"]["content"].strip()
+
+            # Extract token counts from Ollama response
+            prompt_tokens = resp_json.get("prompt_eval_count", 0)
+            completion_tokens = resp_json.get("eval_count", 0)
+            self._record_tokens(prompt_tokens, completion_tokens)
 
             if self.debug:
                 console.print(f"[dim]-- RAW RESPONSE ({len(content)} chars) --[/dim]")
+                console.print(
+                    f"[dim]  tokens: prompt={prompt_tokens} completion={completion_tokens}[/dim]"
+                )
                 console.print(f"[dim]{content[:600]}[/dim]")
                 console.print("[dim]-- END --[/dim]\n")
 

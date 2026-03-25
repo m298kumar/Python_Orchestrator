@@ -49,6 +49,7 @@ class AnthropicClient(BaseLLMClient):
 
         from stlc_platform.core.config_loader import config
 
+        super().__init__()
         _api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "") or os.getenv("STLC_LLM__API_KEY", "")
         if not _api_key:
             raise ValueError(
@@ -135,6 +136,14 @@ class AnthropicClient(BaseLLMClient):
             response = self._client.messages.create(**kwargs)
             content = response.content[0].text if response.content else ""
             content = content.strip()
+
+            # Extract token counts from Anthropic response
+            usage = getattr(response, "usage", None)
+            if usage:
+                self._record_tokens(
+                    getattr(usage, "input_tokens", 0),
+                    getattr(usage, "output_tokens", 0),
+                )
 
             if self.debug:
                 console.print(f"[dim]-- RAW RESPONSE ({len(content)} chars) --[/dim]")
