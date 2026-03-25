@@ -86,6 +86,8 @@ class TestCaseArtifact(BaseModel):
     then: str = ""
     estimated_duration: str = "5"
     test_level: str = "unit"  # unit | api | integration | e2e (v1.1 test pyramid)
+    quality_score: float = 0.0  # 0.0-1.0 from TestCaseScorer (v1.2 quality gate)
+    quality_issues: List[str] = Field(default_factory=list)  # human-readable issues
 
 
 # ── Stage 2: BDD Code Generation ────────────────────────────────────────────

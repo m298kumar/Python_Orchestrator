@@ -9,8 +9,8 @@ project:
     auth: ''
   platform: mobile
 llm:
-  provider: anthropic
-  model: claude-sonnet-4-20250514
+  provider: ollama
+  model: phi4-mini:3.8b
   base_url: http://localhost:11434
   temperature: 0.6
   num_ctx: 8192
@@ -226,6 +226,17 @@ export:
     folder_prefix: Generated Tests
     default_status: Draft
     default_labels: automated,generated
+quality_gate:
+  accept_threshold: 0.65
+  regenerate_threshold: 0.40
+  max_regeneration_attempts: 2
+  auto_example_threshold: 0.80
+  weights:
+    coverage: 0.25
+    clarity: 0.20
+    executability: 0.20
+    uniqueness: 0.15
+    structural: 0.20
 output:
   output_dir: ./output
   csv_filename: test_cases.csv

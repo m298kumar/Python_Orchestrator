@@ -32,6 +32,7 @@ from stlc_platform.agents.requirements_agent.component_resolver import Component
 from stlc_platform.agents.requirements_agent.domain_detector import DomainDetector
 from stlc_platform.agents.requirements_agent.prompts import PromptRenderer
 from stlc_platform.agents.requirements_agent.tech_stack import TechStackContext
+from stlc_platform.core.quality.scorer import QualityReport, ScorerConfig, TestCaseScorer
 
 console = Console()
 
@@ -62,6 +63,8 @@ class TestCaseGenerator:
         tech_stack: Optional[TechStackContext] = None,
         vector_store: Any = None,
         domain: str = "",
+        scorer: Optional[TestCaseScorer] = None,
+        scorer_config: Optional[ScorerConfig] = None,
     ):
         self.llm = llm_client
         self.prompt_renderer = prompt_renderer or PromptRenderer()
@@ -75,6 +78,7 @@ class TestCaseGenerator:
         self.vector_store = vector_store
         self._domain = domain
         self._tc_counter = 0
+        self.scorer = scorer or TestCaseScorer(config=scorer_config)
 
     def generate_for_requirement(
         self,
@@ -118,6 +122,7 @@ class TestCaseGenerator:
         )
 
         results: List[TestCaseArtifact] = []
+        max_regen = self.scorer.config.max_regeneration_attempts
 
         for i, slot in enumerate(slots):
             ac_type_label = slot.get("ac_type", "general")
@@ -147,30 +152,84 @@ class TestCaseGenerator:
                 examples=examples,
             )
 
-            tc = None
-            for attempt in range(1, 3):
+            best_tc: Optional[TestCaseArtifact] = None
+            best_report: Optional[QualityReport] = None
+
+            for attempt in range(1, 2 + max_regen):
+                tc = None
+                current_prompt = prompt
+
+                # On regeneration attempts, append quality issue hints
+                if attempt > 1 and best_report and best_report.issues:
+                    hint = "\n\nIMPORTANT — fix these issues from previous attempt:\n"
+                    for issue in best_report.issues[:5]:
+                        hint += f"  - {issue}\n"
+                    current_prompt = prompt + hint
+
                 try:
                     raw = self.llm.generate_test_case(
-                        prompt=prompt,
+                        prompt=current_prompt,
                         system_prompt=system_prompt,
                     )
                     tc = self._parse(raw, requirement, slot)
                 except Exception as e:
                     console.print(f"    [yellow]  attempt {attempt} error: {e}[/yellow]")
-                if tc:
+
+                if not tc:
+                    continue
+
+                # Sanitise
+                tc = self.sanitiser.sanitise(
+                    tc=tc,
+                    slot=slot,
+                    requirement=requirement,
+                )
+
+                # Score
+                report = self.scorer.score(
+                    tc=tc,
+                    slot=slot,
+                    requirement=requirement,
+                    existing_tcs=results,
+                )
+
+                # Keep the best attempt
+                if best_tc is None or report.overall_score > best_report.overall_score:
+                    best_tc = tc
+                    best_report = report
+
+                # Accept if quality is sufficient
+                if report.suggestion == "accept":
                     break
 
-            if not tc:
-                tc = self._synthesise_tc(requirement, slot)
+                if attempt == 1 and report.suggestion == "fallback":
+                    # Don't waste retries on very poor output
+                    break
 
-            # Sanitise
-            tc = self.sanitiser.sanitise(
-                tc=tc,
-                slot=slot,
-                requirement=requirement,
-            )
+                if attempt > 1:
+                    console.print(
+                        f"    [yellow]  regen {attempt - 1}: "
+                        f"score {report.overall_score:.2f} ({report.suggestion})[/yellow]"
+                    )
 
-            results.append(tc)
+            # If no LLM attempt produced a TC, synthesise
+            if best_tc is None:
+                best_tc = self._synthesise_tc(requirement, slot)
+                best_tc = self.sanitiser.sanitise(
+                    tc=best_tc, slot=slot, requirement=requirement,
+                )
+                best_report = self.scorer.score(
+                    tc=best_tc, slot=slot,
+                    requirement=requirement, existing_tcs=results,
+                )
+
+            # Stamp quality metadata onto the TC
+            best_tc = best_tc.model_copy(update={
+                "quality_score": best_report.overall_score,
+                "quality_issues": best_report.issues,
+            })
+
+            results.append(best_tc)
 
         return results
 
