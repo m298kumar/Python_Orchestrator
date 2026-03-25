@@ -30,6 +30,11 @@ import type { ConfigResponse, LLMTestResponse } from "../api/client";
 
 const PROVIDER_MODELS: Record<string, string[]> = {
   ollama: [
+    "qwen2.5:32b-instruct-q4_K_M",
+    "nemotron-cascade-2",
+    "qwen3.5:35b-a3b",
+    "gpt-oss:20b",
+    "qwen2.5:7b-instruct",
     "phi4-mini:3.8b",
     "llama3:8b",
     "llama3.1:8b",

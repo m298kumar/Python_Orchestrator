@@ -88,7 +88,7 @@ def _env_override(yaml_val: Any, env_key: str, cast_type: type = str) -> Any:
 @dataclass
 class OllamaConfig:
     base_url: str = "http://localhost:11434"
-    model: str = "phi4-mini:3.8b"
+    model: str = "qwen2.5:7b-instruct"
     temperature: float = 0.6
     num_ctx: int = 8192
     timeout: int = 450

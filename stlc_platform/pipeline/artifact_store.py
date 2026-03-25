@@ -277,7 +277,7 @@ class ArtifactResolver:
         if provider == "ollama":
             from stlc_platform.core.llm.ollama_client import OllamaClient
             return OllamaClient(
-                model=model or "phi4-mini:3.8b",
+                model=model or "qwen2.5:7b-instruct",
                 base_url=base_url or "http://localhost:11434",
             )
         elif provider == "openai":

@@ -110,11 +110,11 @@ class ModelRouter:
               tiers:
                 lightweight:
                   provider: ollama
-                  model: phi4-mini:3.8b
+                  model: qwen2.5:7b-instruct
                   temperature: 0.4
                 standard:
                   provider: ollama
-                  model: phi4-mini:3.8b
+                  model: qwen2.5:7b-instruct
                   temperature: 0.6
                 advanced:
                   provider: openai
@@ -145,21 +145,21 @@ class ModelRouter:
                 "lightweight": ModelTier(
                     name="lightweight",
                     provider="ollama",
-                    model="phi4-mini:3.8b",
+                    model="qwen2.5:7b-instruct",
                     temperature=0.4,
                     max_tokens=2000,
                 ),
                 "standard": ModelTier(
                     name="standard",
                     provider="ollama",
-                    model="phi4-mini:3.8b",
+                    model="qwen2.5:7b-instruct",
                     temperature=0.6,
                     max_tokens=3200,
                 ),
                 "advanced": ModelTier(
                     name="advanced",
                     provider="ollama",
-                    model="phi4-mini:3.8b",
+                    model="qwen2.5:32b-instruct-q4_K_M",
                     temperature=0.7,
                     max_tokens=4096,
                 ),
@@ -260,4 +260,4 @@ class ModelRouter:
             return next(iter(self._tiers.values()))
 
         # No tiers configured at all — return a default
-        return ModelTier(name="standard", provider="ollama", model="phi4-mini:3.8b")
+        return ModelTier(name="standard", provider="ollama", model="qwen2.5:7b-instruct")
