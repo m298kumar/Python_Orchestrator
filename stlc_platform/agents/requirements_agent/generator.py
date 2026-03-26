@@ -141,6 +141,16 @@ class TestCaseGenerator:
         results: List[TestCaseArtifact] = []
         max_regen = self.scorer.config.max_regeneration_attempts
 
+        # Calculate max_prompt_tokens once (LLM attributes don't change between slots)
+        try:
+            _num_predict = getattr(self.llm, "num_predict", None) or getattr(self.llm, "max_tokens", None)
+            _num_predict = int(_num_predict) if _num_predict is not None else 3200
+            _num_ctx = getattr(self.llm, "num_ctx", None)
+            _num_ctx = int(_num_ctx) if _num_ctx is not None else 8192
+            max_prompt_tokens = max((_num_ctx - _num_predict) * 6 // 10, 1024)
+        except (TypeError, ValueError):
+            max_prompt_tokens = 3000  # safe default
+
         for i, slot in enumerate(slots):
             ac_type_label = slot.get("ac_type", "general")
             test_type = slot["test_type"]
@@ -158,17 +168,6 @@ class TestCaseGenerator:
                     )
                 except Exception:
                     pass
-
-            # Calculate max_prompt_tokens from LLM context window budget
-            # Reserve ~60% of context for prompt, rest for output
-            try:
-                _num_predict = getattr(self.llm, "num_predict", None) or getattr(self.llm, "max_tokens", None)
-                _num_predict = int(_num_predict) if _num_predict is not None else 3200
-                _num_ctx = getattr(self.llm, "num_ctx", None)
-                _num_ctx = int(_num_ctx) if _num_ctx is not None else 8192
-                max_prompt_tokens = max((_num_ctx - _num_predict) * 6 // 10, 1024)
-            except (TypeError, ValueError):
-                max_prompt_tokens = 3000  # safe default
 
             prompt = self.prompt_renderer.render_user_prompt(
                 requirement=requirement,

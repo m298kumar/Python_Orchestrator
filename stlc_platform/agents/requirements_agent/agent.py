@@ -162,7 +162,7 @@ class TestGenerationAgent(BaseAgent):
                 tokens_used = accumulated.total_tokens
                 input_tokens = accumulated.input_tokens
                 output_tokens = accumulated.output_tokens
-            except (AttributeError, Exception):
+            except Exception:
                 pass
 
             return AgentResult(

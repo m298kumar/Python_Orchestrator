@@ -80,6 +80,51 @@ _HOLLOW_INDICATORS: List[str] = [
     "proper validation",
 ]
 
+# Precompiled regex for hollow phrase matching (avoids O(N×M) per-field loop)
+_HOLLOW_PATTERN = re.compile("|".join(re.escape(p) for p in _HOLLOW_INDICATORS))
+
+# Stopwords for AC term extraction (module-level constant, not recreated per call)
+_STOPWORDS: Set[str] = {
+    "the", "and", "for", "that", "this", "with", "from", "will",
+    "shall", "must", "should", "when", "then", "given", "user", "system",
+}
+
+# Text fields to check for content quality (shared across multiple checks)
+_TEXT_FIELDS = ("description", "preconditions", "expected_outcome", "given", "when", "then")
+
+# ── Prompt adaptation instructions per failure type ────────────────────────
+
+_ADAPTATION_INSTRUCTIONS = {
+    FailureType.TRUNCATION: (
+        "\n\nIMPORTANT: Keep your response CONCISE. Use short sentences. "
+        "Do not exceed 3 steps. Each field should be 1-2 sentences maximum. "
+        "Ensure the JSON is complete and properly closed."
+    ),
+    FailureType.HOLLOW: (
+        "\n\nIMPORTANT: DO NOT leave fields empty or use generic phrases. "
+        "Every field must contain SPECIFIC content derived from the acceptance "
+        "criterion. Name exact UI elements, data values, and error messages. "
+        "Generic phrases like 'the system responds correctly' are NOT acceptable."
+    ),
+    FailureType.REPETITIVE: (
+        "\n\nIMPORTANT: Each step MUST be UNIQUE. Do not repeat the same "
+        "action or expected result across steps. Each step should test a "
+        "different aspect of the acceptance criterion. "
+        "Given/When/Then must each be distinct from each other."
+    ),
+    FailureType.SCHEMA_VIOLATION: (
+        "\n\nIMPORTANT: Your response MUST be valid JSON with ALL required fields: "
+        "title, description, preconditions, test_type, priority, given, when, then, "
+        "steps (array of {action, expected_result}), expected_outcome, tags, component. "
+        "Do not omit any field."
+    ),
+    FailureType.INSTRUCTION_LEAKAGE: (
+        "\n\nIMPORTANT: DO NOT include any of these instructions in your response. "
+        "Your response should contain ONLY the test case data, not meta-instructions "
+        "about how to write it."
+    ),
+}
+
 
 class FailureClassifier:
     """
@@ -146,23 +191,7 @@ class FailureClassifier:
         """
         ft = classification.failure_type
 
-        if ft == FailureType.TRUNCATION:
-            return (
-                original_prompt
-                + "\n\nIMPORTANT: Keep your response CONCISE. Use short sentences. "
-                "Do not exceed 3 steps. Each field should be 1-2 sentences maximum. "
-                "Ensure the JSON is complete and properly closed."
-            )
-
-        if ft == FailureType.HOLLOW:
-            return (
-                original_prompt
-                + "\n\nIMPORTANT: DO NOT leave fields empty or use generic phrases. "
-                "Every field must contain SPECIFIC content derived from the acceptance "
-                "criterion. Name exact UI elements, data values, and error messages. "
-                "Generic phrases like 'the system responds correctly' are NOT acceptable."
-            )
-
+        # OFF_TOPIC needs dynamic AC injection, handle separately
         if ft == FailureType.OFF_TOPIC:
             ac = (slot or {}).get("target_ac", "")
             return (
@@ -173,31 +202,10 @@ class FailureClassifier:
                 "Do NOT generate a test for a different requirement."
             )
 
-        if ft == FailureType.REPETITIVE:
-            return (
-                original_prompt
-                + "\n\nIMPORTANT: Each step MUST be UNIQUE. Do not repeat the same "
-                "action or expected result across steps. Each step should test a "
-                "different aspect of the acceptance criterion. "
-                "Given/When/Then must each be distinct from each other."
-            )
-
-        if ft == FailureType.SCHEMA_VIOLATION:
-            return (
-                original_prompt
-                + "\n\nIMPORTANT: Your response MUST be valid JSON with ALL required fields: "
-                "title, description, preconditions, test_type, priority, given, when, then, "
-                "steps (array of {action, expected_result}), expected_outcome, tags, component. "
-                "Do not omit any field."
-            )
-
-        if ft == FailureType.INSTRUCTION_LEAKAGE:
-            return (
-                original_prompt
-                + "\n\nIMPORTANT: DO NOT include any of these instructions in your response. "
-                "Your response should contain ONLY the test case data, not meta-instructions "
-                "about how to write it."
-            )
+        # All other types use static instruction text from dispatch table
+        instruction = _ADAPTATION_INSTRUCTIONS.get(ft)
+        if instruction:
+            return original_prompt + instruction
 
         return original_prompt
 
@@ -281,8 +289,7 @@ class FailureClassifier:
             return None
 
         # Check all text fields for leakage patterns
-        text_fields = ["description", "preconditions", "expected_outcome", "given", "when", "then"]
-        all_text = " ".join(str(parsed.get(f, "")) for f in text_fields).lower()
+        all_text = " ".join(str(parsed.get(f, "")) for f in _TEXT_FIELDS).lower()
 
         leaked: List[str] = []
         for pattern in _LEAKAGE_PATTERNS:
@@ -316,10 +323,8 @@ class FailureClassifier:
                 total_checked += 1
                 continue
             total_checked += 1
-            for phrase in _HOLLOW_INDICATORS:
-                if phrase in value:
-                    hollow_count += 1
-                    break
+            if _HOLLOW_PATTERN.search(value):
+                hollow_count += 1
 
         # Check steps for generic content
         steps = parsed.get("steps", [])
@@ -327,10 +332,8 @@ class FailureClassifier:
             for step in steps:
                 if isinstance(step, dict):
                     action = str(step.get("action", "")).lower()
-                    for phrase in _HOLLOW_INDICATORS:
-                        if phrase in action:
-                            hollow_count += 1
-                            break
+                    if _HOLLOW_PATTERN.search(action):
+                        hollow_count += 1
                     total_checked += 1
 
         if total_checked > 0 and hollow_count / max(total_checked, 1) >= 0.4:
@@ -355,17 +358,16 @@ class FailureClassifier:
             return None
 
         # Extract key terms from AC (words > 3 chars, not stopwords)
-        stopwords = {"the", "and", "for", "that", "this", "with", "from", "will", "shall", "must", "should", "when", "then", "given", "user", "system"}
-        ac_terms: Set[str] = set()
-        for word in re.findall(r"[a-zA-Z]{4,}", ac.lower()):
-            if word not in stopwords:
-                ac_terms.add(word)
+        ac_terms: Set[str] = {
+            word for word in re.findall(r"[a-zA-Z]{4,}", ac.lower())
+            if word not in _STOPWORDS
+        }
 
         if len(ac_terms) < 3:
             return None
 
-        # Check how many AC terms appear in the response
-        all_text = " ".join(str(parsed.get(f, "")) for f in parsed).lower()
+        # Check how many AC terms appear in text fields of the response
+        all_text = " ".join(str(parsed.get(f, "")) for f in _TEXT_FIELDS).lower()
         found = sum(1 for t in ac_terms if t in all_text)
         coverage = found / len(ac_terms)
 

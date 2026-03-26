@@ -164,6 +164,6 @@ class LLMResponseCache:
             self._hits = data.get("hits", 0)
             self._misses = data.get("misses", 0)
             logger.debug("Loaded %d cache entries from disk", len(self._cache))
-        except (json.JSONDecodeError, Exception) as e:
+        except Exception as e:
             logger.warning("Failed to load LLM cache from disk: %s", e)
             self._cache = OrderedDict()

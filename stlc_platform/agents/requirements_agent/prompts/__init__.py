@@ -275,59 +275,39 @@ class PromptRenderer:
         if max_prompt_tokens is not None and max_prompt_tokens > 0:
             est_tokens = len(rendered) // 4
 
-            # Trim 1: Remove few-shot block
-            if est_tokens > max_prompt_tokens and few_shot_block:
-                rendered = template.render(
-                    requirement=requirement, slot=slot,
-                    test_number=test_number, total=total,
-                    all_ac_text=all_ac_text,
-                    context_block=context_block,
-                    feedback_block=feedback_block,
-                    few_shot_block="",
-                    cot_instruction=COT_INSTRUCTION,
-                    type_context=TYPE_CONTEXT.get(tt, ""),
-                    hints=hints, gwt_hint=gwt_hint,
-                    gherkin_section=gherkin_section,
-                    ac=ac, ac_type_label=ac_type_label,
-                    cat_tag=cat_tag, req_tag=req_tag, tt=tt,
-                )
-                est_tokens = len(rendered) // 4
-
-            # Trim 2: Remove context block
-            if est_tokens > max_prompt_tokens and context_block:
-                rendered = template.render(
-                    requirement=requirement, slot=slot,
-                    test_number=test_number, total=total,
-                    all_ac_text=all_ac_text,
-                    context_block="",
-                    feedback_block=feedback_block,
-                    few_shot_block="",
-                    cot_instruction=COT_INSTRUCTION,
-                    type_context=TYPE_CONTEXT.get(tt, ""),
-                    hints=hints, gwt_hint=gwt_hint,
-                    gherkin_section=gherkin_section,
-                    ac=ac, ac_type_label=ac_type_label,
-                    cat_tag=cat_tag, req_tag=req_tag, tt=tt,
-                )
-                est_tokens = len(rendered) // 4
-
-            # Trim 3: Truncate AC list to target AC only
             if est_tokens > max_prompt_tokens:
-                trimmed_ac_text = f"  AC: {ac}"
-                rendered = template.render(
-                    requirement=requirement, slot=slot,
-                    test_number=test_number, total=total,
-                    all_ac_text=trimmed_ac_text,
-                    context_block="",
-                    feedback_block=feedback_block,
-                    few_shot_block="",
-                    cot_instruction=COT_INSTRUCTION,
-                    type_context=TYPE_CONTEXT.get(tt, ""),
-                    hints=hints, gwt_hint=gwt_hint,
-                    gherkin_section=gherkin_section,
-                    ac=ac, ac_type_label=ac_type_label,
-                    cat_tag=cat_tag, req_tag=req_tag, tt=tt,
-                )
+                # Build shared render params once; override only what changes
+                render_params: Dict[str, Any] = {
+                    "requirement": requirement, "slot": slot,
+                    "test_number": test_number, "total": total,
+                    "all_ac_text": all_ac_text,
+                    "context_block": context_block,
+                    "feedback_block": feedback_block,
+                    "few_shot_block": few_shot_block,
+                    "cot_instruction": COT_INSTRUCTION,
+                    "type_context": TYPE_CONTEXT.get(tt, ""),
+                    "hints": hints, "gwt_hint": gwt_hint,
+                    "gherkin_section": gherkin_section,
+                    "ac": ac, "ac_type_label": ac_type_label,
+                    "cat_tag": cat_tag, "req_tag": req_tag, "tt": tt,
+                }
+
+                # Trim 1: Remove few-shot block
+                if few_shot_block:
+                    render_params["few_shot_block"] = ""
+                    rendered = template.render(**render_params)
+                    est_tokens = len(rendered) // 4
+
+                # Trim 2: Remove context block
+                if est_tokens > max_prompt_tokens and context_block:
+                    render_params["context_block"] = ""
+                    rendered = template.render(**render_params)
+                    est_tokens = len(rendered) // 4
+
+                # Trim 3: Truncate AC list to target AC only
+                if est_tokens > max_prompt_tokens:
+                    render_params["all_ac_text"] = f"  AC: {ac}"
+                    rendered = template.render(**render_params)
 
         return rendered
 

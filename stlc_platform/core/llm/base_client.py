@@ -325,8 +325,10 @@ class BaseLLMClient(ABC):
 
         base_temp = getattr(self, "temperature", 0.6)
         raw = ""
-        classifier = FailureClassifier()
         current_prompt = prompt
+
+        # Reuse a single classifier instance for the retry loop
+        classifier = FailureClassifier() if slot is not None else None
 
         # Check cache first
         cache_key = None
@@ -344,6 +346,22 @@ class BaseLLMClient(ABC):
                         return parsed
                 except json.JSONDecodeError:
                     pass  # stale cache entry — regenerate
+
+        def _try_classify_and_adapt(
+            raw_text: str,
+            parsed_tc: Optional[dict],
+        ) -> None:
+            """Classify failure on attempt 1 and adapt prompt for retry."""
+            nonlocal current_prompt
+            if classifier is None:
+                return
+            classification = classifier.classify(raw_text, parsed_tc, slot, requirement)
+            if classification:
+                current_prompt = classifier.adapt_prompt(prompt, classification, slot)
+                console.print(
+                    f"    [dim]  failure classified: {classification.failure_type.value} "
+                    f"→ adapting prompt[/dim]"
+                )
 
         for attempt in range(1, 3):
             temp = base_temp if attempt == 1 else min(base_temp + 0.05, 1.0)
@@ -380,15 +398,8 @@ class BaseLLMClient(ABC):
                         f"    [yellow]  attempt {attempt} parse failed: {e} "
                         f"| raw: {raw[:120]}[/yellow]"
                     )
-                    # Classify failure and adapt prompt for next attempt
-                    if attempt == 1 and slot is not None:
-                        classification = classifier.classify(raw, None, slot, requirement)
-                        if classification:
-                            current_prompt = classifier.adapt_prompt(prompt, classification, slot)
-                            console.print(
-                                f"    [dim]  failure classified: {classification.failure_type.value} "
-                                f"→ adapting prompt[/dim]"
-                            )
+                    if attempt == 1:
+                        _try_classify_and_adapt(raw, None)
                     continue
 
             # Content sanity check
@@ -397,15 +408,8 @@ class BaseLLMClient(ABC):
                     f"    [yellow]  attempt {attempt} hollow response "
                     f"(schema-valid but empty fields)[/yellow]"
                 )
-                # Classify and adapt for next attempt
-                if attempt == 1 and slot is not None:
-                    classification = classifier.classify(raw, parsed, slot, requirement)
-                    if classification:
-                        current_prompt = classifier.adapt_prompt(prompt, classification, slot)
-                        console.print(
-                            f"    [dim]  failure classified: {classification.failure_type.value} "
-                            f"→ adapting prompt[/dim]"
-                        )
+                if attempt == 1:
+                    _try_classify_and_adapt(raw, parsed)
                 continue
 
             # Success — cache the raw response
