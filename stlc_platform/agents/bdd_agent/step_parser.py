@@ -196,14 +196,6 @@ class StepParser:
 
         return (result, params)
 
-    def _make_param_name(self, value: str, index: int) -> str:
-        """Generate a descriptive parameter name from the value."""
-        # Slugify the value to make a reasonable param name
-        slug = re.sub(r"[^a-zA-Z0-9]", "_", value).strip("_").lower()
-        if not slug or len(slug) > 20:
-            return f"param{index + 1}"
-        return slug
-
     def _normalize(self, text: str) -> str:
         """Normalize step text for comparison."""
         # Lowercase, collapse whitespace

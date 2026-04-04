@@ -10,9 +10,9 @@ services:
     environment:
       - STLC_SERVE_FRONTEND=true
       - STLC_AUTH_ENABLED=${STLC_AUTH_ENABLED:-false}
-      - STLC_JWT_SECRET=${STLC_JWT_SECRET:-dev-secret-change-me}
+      - STLC_JWT_SECRET=${STLC_JWT_SECRET:?Set STLC_JWT_SECRET to a strong random secret}
       - STLC_ADMIN_USER=${STLC_ADMIN_USER:-admin}
-      - STLC_ADMIN_PASSWORD=${STLC_ADMIN_PASSWORD:-admin}
+      - STLC_ADMIN_PASSWORD=${STLC_ADMIN_PASSWORD:?Set STLC_ADMIN_PASSWORD}
       - STLC_API_KEYS=${STLC_API_KEYS:-}
       - STLC_LLM__BASE_URL=http://ollama:11434
       - STLC_CHROMADB__PERSIST_DIRECTORY=/data/chroma_db
@@ -23,6 +23,13 @@ services:
     depends_on:
       ollama:
         condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
   ollama:

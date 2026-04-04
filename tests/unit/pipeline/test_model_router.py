@@ -2,14 +2,13 @@
 Tests for ModelRouter — tiered model selection.
 """
 
-import pytest
 
+from stlc_platform.core.base_agent import AgentCapabilities
 from stlc_platform.pipeline.model_router import (
+    ComplexitySignals,
     ModelRouter,
     ModelTier,
-    ComplexitySignals,
 )
-from stlc_platform.core.base_agent import AgentCapabilities
 
 
 class TestModelTierDefaults:
@@ -46,8 +45,8 @@ class TestTierSelection:
             agent_id="bdd", agent_version="1.0",
             default_model_tier="lightweight",
         )
-        # Large input context
-        context = {"data": "x" * 50000, "items": list(range(100))}
+        # Large input context (~10000+ tokens via word-based estimation)
+        context = {"data": " ".join(["word"] * 10000), "items": list(range(100))}
         tier = router.select_tier(caps, input_context=context)
         assert tier.name == "standard"
 

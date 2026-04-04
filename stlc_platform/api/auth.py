@@ -10,39 +10,44 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 # Lazy imports for optional deps
 _jwt = None
 _passlib_ctx = None
+_init_lock = __import__("threading").Lock()
 
 
 def _ensure_jwt():
     global _jwt
     if _jwt is None:
-        try:
-            import jwt
+        with _init_lock:
+            if _jwt is None:
+                try:
+                    import jwt
 
-            _jwt = jwt
-        except ImportError:
-            raise ImportError(
-                "PyJWT required when auth is enabled: pip install PyJWT"
-            )
+                    _jwt = jwt
+                except ImportError:
+                    raise ImportError(
+                        "PyJWT required when auth is enabled: pip install PyJWT"
+                    )
     return _jwt
 
 
 def _ensure_passlib():
     global _passlib_ctx
     if _passlib_ctx is None:
-        try:
-            from passlib.context import CryptContext
+        with _init_lock:
+            if _passlib_ctx is None:
+                try:
+                    from passlib.context import CryptContext
 
-            _passlib_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        except ImportError:
-            raise ImportError(
-                "passlib required when auth is enabled: pip install passlib[bcrypt]"
-            )
+                    _passlib_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+                except ImportError:
+                    raise ImportError(
+                        "passlib required when auth is enabled: pip install passlib[bcrypt]"
+                    )
     return _passlib_ctx
 
 
@@ -56,6 +61,27 @@ JWT_EXPIRE_SECONDS = int(os.environ.get("STLC_JWT_EXPIRE_SECONDS", "3600"))
 API_KEYS = set(filter(None, os.environ.get("STLC_API_KEYS", "").split(",")))
 ADMIN_USER = os.environ.get("STLC_ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.environ.get("STLC_ADMIN_PASSWORD", "admin")
+
+# Hash the admin password at startup when auth is enabled
+_ADMIN_PASSWORD_HASH: Optional[str] = None
+
+# Warn loudly if auth is enabled but credentials/secrets are left at defaults
+if AUTH_ENABLED:
+    import logging as _auth_logging
+
+    _auth_logger = _auth_logging.getLogger(__name__)
+    if JWT_SECRET == "stlc-dev-secret-change-in-production":
+        raise RuntimeError(
+            "SECURITY: STLC_JWT_SECRET is set to the default value. "
+            "Set STLC_JWT_SECRET to a strong random secret before enabling auth."
+        )
+    if ADMIN_PASSWORD == "admin":
+        raise RuntimeError(
+            "SECURITY: STLC_ADMIN_PASSWORD is 'admin'. "
+            "Set STLC_ADMIN_PASSWORD to a strong password before enabling auth."
+        )
+    # Pre-hash the admin password using bcrypt (required when auth is enabled)
+    _ADMIN_PASSWORD_HASH = _ensure_passlib().hash(ADMIN_PASSWORD)
 
 
 @dataclass
@@ -98,8 +124,12 @@ def verify_token(token: str) -> AuthUser:
 
 
 def verify_password(plain: str, username: str) -> bool:
-    """Simple username/password check against env vars."""
-    return username == ADMIN_USER and plain == ADMIN_PASSWORD
+    """Verify password using bcrypt hash when available, plain comparison as fallback."""
+    if username != ADMIN_USER:
+        return False
+    if _ADMIN_PASSWORD_HASH is not None:
+        return _ensure_passlib().verify(plain, _ADMIN_PASSWORD_HASH)
+    return plain == ADMIN_PASSWORD
 
 
 def authenticate_user(username: str, password: str) -> Optional[AuthUser]:

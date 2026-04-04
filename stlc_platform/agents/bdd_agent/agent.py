@@ -9,18 +9,18 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from stlc_platform.agents.bdd_agent.feature_generator import FeatureFileGenerator
+from stlc_platform.agents.bdd_agent.gherkin_validator import GherkinValidator
+from stlc_platform.agents.bdd_agent.pom_generator import POMGenerator
+from stlc_platform.agents.bdd_agent.scaffolder import ProjectScaffolder
+from stlc_platform.agents.bdd_agent.step_def_generator import StepDefinitionGenerator
+from stlc_platform.agents.bdd_agent.step_parser import StepParser
 from stlc_platform.core.base_agent import (
     AgentCapabilities,
     AgentResult,
     BaseAgent,
     ValidationResult,
 )
-from stlc_platform.agents.bdd_agent.feature_generator import FeatureFileGenerator
-from stlc_platform.agents.bdd_agent.gherkin_validator import GherkinValidator
-from stlc_platform.agents.bdd_agent.pom_generator import POMGenerator
-from stlc_platform.agents.bdd_agent.scaffolder import ProjectScaffolder
-from stlc_platform.agents.bdd_agent.step_parser import StepParser
-from stlc_platform.agents.bdd_agent.step_def_generator import StepDefinitionGenerator
 
 
 class BDDAgent(BaseAgent):
@@ -104,6 +104,25 @@ class BDDAgent(BaseAgent):
         )
         automation_lib = config.get("automation_lib", "playwright")
 
+        # Build CSS selector lookup from optional crawler site model
+        site_model = artifacts.get("site_model")
+        selector_map: Dict[str, str] = {}
+        if site_model:
+            for page in getattr(site_model, "pages", []):
+                for element in getattr(page, "elements", []):
+                    name = (
+                        getattr(element, "name", "")
+                        or getattr(element, "text", "")
+                        or ""
+                    )
+                    selector = (
+                        getattr(element, "selector", "")
+                        or getattr(element, "css_selector", "")
+                        or ""
+                    )
+                    if name and selector:
+                        selector_map[name.lower().strip()] = selector
+
         try:
             # Step 1: Generate feature files
             feature_gen = FeatureFileGenerator(
@@ -141,7 +160,9 @@ class BDDAgent(BaseAgent):
                 override_dir=config.get("override_dir"),
             )
             step_defs = step_gen.generate(
-                parameterized_steps, feature_files
+                parameterized_steps,
+                feature_files,
+                selector_map=selector_map or None,
             )
 
             # Step 5: Generate POM stubs (optional, for web/mobile)
@@ -199,6 +220,7 @@ class BDDAgent(BaseAgent):
                     "framework": framework,
                     "language": language,
                     "automation_lib": automation_lib,
+                    "selectors_injected": len(selector_map) if selector_map else 0,
                     "validation_warnings": validation_warnings,
                 },
             )

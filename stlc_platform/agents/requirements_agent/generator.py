@@ -10,15 +10,17 @@ testable class with full dependency injection.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, Dict, List, Optional
 
 from rich.console import Console
 
-from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
-
 from stlc_platform.agents.requirements_agent.classifier import ACClassifier
+from stlc_platform.agents.requirements_agent.component_resolver import ComponentResolver
 from stlc_platform.agents.requirements_agent.constants import ac_to_title
+from stlc_platform.agents.requirements_agent.domain_detector import DomainDetector
+from stlc_platform.agents.requirements_agent.prompts import PromptRenderer
 from stlc_platform.agents.requirements_agent.sanitiser import TestCaseSanitiser
 from stlc_platform.agents.requirements_agent.synthesiser import (
     clean_duration,
@@ -28,12 +30,11 @@ from stlc_platform.agents.requirements_agent.synthesiser import (
     make_preconditions,
     synthesise_steps,
 )
-from stlc_platform.agents.requirements_agent.component_resolver import ComponentResolver
-from stlc_platform.agents.requirements_agent.domain_detector import DomainDetector
-from stlc_platform.agents.requirements_agent.prompts import PromptRenderer
 from stlc_platform.agents.requirements_agent.tech_stack import TechStackContext
+from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 from stlc_platform.core.quality.scorer import QualityReport, ScorerConfig, TestCaseScorer
 
+logger = logging.getLogger(__name__)
 console = Console()
 
 
@@ -113,7 +114,7 @@ class TestCaseGenerator:
         if self.vector_store:
             try:
                 context = self.vector_store.get_context_for_requirement(requirement)
-            except Exception:
+            except (AttributeError, RuntimeError, OSError):
                 pass
 
         # Retrieve feedback constraints for this agent + requirement context
@@ -128,7 +129,7 @@ class TestCaseGenerator:
                     },
                     limit=3,
                 )
-            except Exception:
+            except (AttributeError, RuntimeError, OSError):
                 pass
 
         slots = self._build_slot_plan(
@@ -166,7 +167,7 @@ class TestCaseGenerator:
                         test_type=test_type,
                         n=2,
                     )
-                except Exception:
+                except (AttributeError, RuntimeError, OSError):
                     pass
 
             prompt = self.prompt_renderer.render_user_prompt(
@@ -274,7 +275,7 @@ class TestCaseGenerator:
                         test_type=test_type,
                         domain=self._domain or "",
                     )
-                except Exception:
+                except (AttributeError, RuntimeError, OSError):
                     pass  # non-critical — don't fail generation for example storage
 
             results.append(best_tc)
@@ -338,6 +339,39 @@ class TestCaseGenerator:
                 console.print(f"  [green]OK {req.req_id}[/green]: {len(tcs)} test case(s)")
             except Exception as e:
                 console.print(f"  [red]ERR {req.req_id}: {e}[/red]")
+
+        # Phase D: Cross-requirement deduplication
+        import logging as _logging
+
+        from stlc_platform.core.quality.deduplicator import TestCaseDeduplicator
+
+        _dedup_logger = _logging.getLogger(__name__)
+        deduplicator = TestCaseDeduplicator(threshold=0.85)
+        dedup_result = deduplicator.deduplicate(all_tc)
+        if dedup_result.removed:
+            _dedup_logger.info(
+                "Deduplication removed %d duplicate TCs", len(dedup_result.removed)
+            )
+            console.print(
+                f"  [yellow]Dedup removed {len(dedup_result.removed)} "
+                f"near-duplicate TC(s)[/yellow]"
+            )
+        all_tc = dedup_result.kept
+
+        # Phase D4: Domain vocabulary enrichment from generated test cases
+        if self.vector_store:
+            try:
+                vocab_terms = self._extract_vocab(all_tc)
+                if vocab_terms:
+                    added = self.vector_store.add_vocab(
+                        vocab_terms, domain=self._domain or ""
+                    )
+                    if added:
+                        logger.info(
+                            "Enriched domain vocabulary with %d new terms", added
+                        )
+            except Exception as e:
+                logger.debug("Vocab enrichment skipped: %s", e)
 
         console.print(
             f"\n[bold green]{len(all_tc)} test cases "
@@ -509,3 +543,37 @@ class TestCaseGenerator:
             when=w,
             then=t,
         )
+
+    # -- Vocabulary extraction -------------------------------------------------
+
+    _GENERIC_TAGS = frozenset(
+        {"positive", "negative", "edge_case", "general", "synthesised"}
+    )
+
+    def _extract_vocab(self, test_cases: List[TestCaseArtifact]) -> List[str]:
+        """Extract component names and UI element names from generated test cases."""
+        terms: set[str] = set()
+        for tc in test_cases:
+            # Extract component field
+            comp = getattr(tc, "component", "")
+            if comp and comp.lower() not in ("general", "unknown", ""):
+                terms.add(comp)
+
+            # Extract tags that look like domain terms
+            for tag in getattr(tc, "tags", []):
+                if len(tag) > 3 and tag not in self._GENERIC_TAGS:
+                    terms.add(tag)
+
+            # Extract quoted strings from step actions (likely UI elements/features)
+            for step in getattr(tc, "steps", []):
+                action = (
+                    getattr(step, "action", "")
+                    if hasattr(step, "action")
+                    else (
+                        step.get("action", "") if isinstance(step, dict) else ""
+                    )
+                )
+                quoted = re.findall(r'"([^"]+)"', action)
+                terms.update(q for q in quoted if len(q) > 2)
+
+        return list(terms)[:50]  # Cap at 50 terms per batch

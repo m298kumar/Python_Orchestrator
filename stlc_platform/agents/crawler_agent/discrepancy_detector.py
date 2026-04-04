@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import re
 from typing import Dict, List, Set, Tuple
+import yaml
+import os
 
 from stlc_platform.core.contracts import (
     DiscrepancyArtifact,
@@ -22,32 +24,124 @@ from stlc_platform.core.contracts import (
 )
 
 
-# Keywords that indicate a page/screen reference in requirement text
-_PAGE_KEYWORDS = re.compile(
-    r"\b(page|screen|view|dashboard|form|panel|dialog|modal|popup|window|tab)\b",
-    re.IGNORECASE,
-)
+def _load_heuristics_config():
+    """Load heuristics configuration from YAML file."""
+    config_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..", "config", "heuristics.yaml"
+    )
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
 
-# Element type keywords in acceptance criteria
-_ELEMENT_PATTERNS: List[Tuple[str, re.Pattern]] = [
-    ("button", re.compile(r"\b(\w[\w\s]{0,30})\s+button\b", re.IGNORECASE)),
-    ("button", re.compile(r"\bbutton\s+([\w\s]{1,30})\b", re.IGNORECASE)),
-    ("link", re.compile(r"\b(\w[\w\s]{0,30})\s+link\b", re.IGNORECASE)),
-    ("link", re.compile(r"\blink\s+(?:to\s+)?([\w\s]{1,30})\b", re.IGNORECASE)),
-    ("input", re.compile(r"\b(\w[\w\s]{0,30})\s+(?:input|field|textbox|text\s*box)\b", re.IGNORECASE)),
-    ("input", re.compile(r"\b(?:input|field|textbox)\s+([\w\s]{1,30})\b", re.IGNORECASE)),
-    ("select", re.compile(r"\b(\w[\w\s]{0,30})\s+(?:dropdown|select|combo\s*box)\b", re.IGNORECASE)),
-    ("checkbox", re.compile(r"\b(\w[\w\s]{0,30})\s+checkbox\b", re.IGNORECASE)),
-    ("radio", re.compile(r"\b(\w[\w\s]{0,30})\s+radio\b", re.IGNORECASE)),
-]
+        # Compile page keywords regex
+        page_keywords_list = config.get(
+            "page_keywords",
+            [
+                "page",
+                "screen",
+                "view",
+                "dashboard",
+                "form",
+                "panel",
+                "dialog",
+                "modal",
+                "popup",
+                "window",
+                "tab",
+            ],
+        )
+        page_keywords_pattern = r"\b(" + "|".join(page_keywords_list) + r")\b"
+        page_keywords = re.compile(page_keywords_pattern, re.IGNORECASE)
 
-# Form field name patterns
-_FIELD_PATTERN = re.compile(
-    r"\b(username|password|email|phone|address|city|zip|card.?number|"
-    r"expiry|cvv|first.?name|last.?name|name|search|date|amount)\s*"
-    r"(?:field|input|textbox|box)?\b",
-    re.IGNORECASE,
-)
+        # Compile element patterns
+        element_patterns = []
+        element_configs = config.get("element_patterns", {})
+        for elem_type, patterns in element_configs.items():
+            for pattern_config in patterns:
+                pattern_str = pattern_config.get("pattern", "")
+                flags = 0
+                flag_str = pattern_config.get("flags", "IGNORECASE")
+                if flag_str == "IGNORECASE":
+                    flags = re.IGNORECASE
+                elif flag_str == 0:
+                    flags = 0
+                if pattern_str:
+                    element_patterns.append((elem_type, re.compile(pattern_str, flags)))
+
+        # Compile field patterns
+        field_patterns_list = config.get("field_patterns", [])
+        field_patterns_parts = []
+        for pattern_config in field_patterns_list:
+            pattern_str = pattern_config.get("pattern", "")
+            flags = 0
+            flag_str = pattern_config.get("flags", "IGNORECASE")
+            if flag_str == "IGNORECASE":
+                flags = re.IGNORECASE
+            elif flag_str == 0:
+                flags = 0
+            if pattern_str:
+                field_patterns_parts.append(pattern_str)
+
+        field_patterns_str = (
+            "|".join(field_patterns_parts)
+            if field_patterns_parts
+            else r"username|password|email|phone|address|city|zip|card.?number|expiry|cvv|first.?name|last.?name|name|search|date|amount"
+        )
+        field_patterns = re.compile(
+            rf"\b({field_patterns_str})\s*(?:field|input|textbox|box)?\b", re.IGNORECASE
+        )
+
+        return {
+            "page_keywords": page_keywords,
+            "element_patterns": element_patterns,
+            "field_pattern": field_patterns,
+        }
+    except Exception as e:
+        # Fallback to hardcoded values if config loading fails
+        print(f"Warning: Failed to load heuristics config: {e}. Using fallback values.")
+        page_keywords = re.compile(
+            r"\b(page|screen|view|dashboard|form|panel|dialog|modal|popup|window|tab)\b",
+            re.IGNORECASE,
+        )
+        element_patterns = [
+            ("button", re.compile(r"\b(\w[\w\s]{0,30})\s+button\b", re.IGNORECASE)),
+            ("button", re.compile(r"\bbutton\s+([\w\s]{1,30})\b", re.IGNORECASE)),
+            ("link", re.compile(r"\b(\w[\w\s]{0,30})\s+link\b", re.IGNORECASE)),
+            ("link", re.compile(r"\blink\s+(?:to\s+)?([\w\s]{1,30})\b", re.IGNORECASE)),
+            (
+                "input",
+                re.compile(
+                    r"\b(\w[\w\s]{0,30})\s+(?:input|field|textbox|text\s*box)\b", re.IGNORECASE
+                ),
+            ),
+            ("input", re.compile(r"\b(?:input|field|textbox)\s+([\w\s]{1,30})\b", re.IGNORECASE)),
+            (
+                "select",
+                re.compile(
+                    r"\b(\w[\w\s]{0,30})\s+(?:dropdown|select|combo\s*box)\b", re.IGNORECASE
+                ),
+            ),
+            ("checkbox", re.compile(r"\b(\w[\w\s]{0,30})\s+checkbox\b", re.IGNORECASE)),
+            ("radio", re.compile(r"\b(\w[\w\s]{0,30})\s+radio\b", re.IGNORECASE)),
+        ]
+        field_patterns = re.compile(
+            r"\b(username|password|email|phone|address|city|zip|card.?number|"
+            r"expiry|cvv|first.?name|last.?name|name|search|date|amount)\s*"
+            r"(?:field|input|textbox|box)?\b",
+            re.IGNORECASE,
+        )
+        return {
+            "page_keywords": page_keywords,
+            "element_patterns": element_patterns,
+            "field_pattern": field_patterns,
+        }
+
+
+# Load heuristics configuration
+_HEURISTICS_CONFIG = _load_heuristics_config()
+_PAGE_KEYWORDS = _HEURISTICS_CONFIG["page_keywords"]
+_ELEMENT_PATTERNS = _HEURISTICS_CONFIG["element_patterns"]
+_FIELD_PATTERN = _HEURISTICS_CONFIG["field_pattern"]
 
 
 class DiscrepancyDetector:
@@ -236,9 +330,7 @@ class DiscrepancyDetector:
             return "info"
         return default
 
-    def _compute_gate_decision(
-        self, items: List[DiscrepancyArtifact]
-    ) -> str:
+    def _compute_gate_decision(self, items: List[DiscrepancyArtifact]) -> str:
         """
         Determine the pipeline gate decision based on discrepancy severities.
 

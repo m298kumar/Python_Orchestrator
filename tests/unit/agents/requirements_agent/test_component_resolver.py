@@ -48,7 +48,7 @@ class TestComponentResolver:
 
     def test_tier2_chromadb_failure_falls_through(self):
         mock_store = MagicMock()
-        mock_store.lookup_component.side_effect = Exception("DB error")
+        mock_store.lookup_component.side_effect = RuntimeError("DB error")
         resolver = ComponentResolver(vector_store=mock_store)
         result = resolver.resolve("", "Dashboard", "Main Dashboard")
         assert "Dashboard" in result

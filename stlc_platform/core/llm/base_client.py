@@ -21,7 +21,7 @@ import json
 import logging
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from rich.console import Console
@@ -248,6 +248,7 @@ class BaseLLMClient(ABC):
         self._last_token_usage: TokenUsage = TokenUsage()
         self._accumulated_tokens: TokenUsage = TokenUsage()
         self._cache: Optional[Any] = None  # LLMResponseCache
+        self._cache_lock = __import__("threading").Lock()
 
     @abstractmethod
     def generate(
@@ -330,14 +331,15 @@ class BaseLLMClient(ABC):
         # Reuse a single classifier instance for the retry loop
         classifier = FailureClassifier() if slot is not None else None
 
-        # Check cache first
+        # Check cache first (thread-safe)
         cache_key = None
         if use_cache and self._cache is not None:
             from stlc_platform.core.llm.cache import LLMResponseCache
             cache_key = LLMResponseCache.cache_key(
                 system_prompt or "", prompt, base_temp
             )
-            cached = self._cache.get(cache_key)
+            with self._cache_lock:
+                cached = self._cache.get(cache_key)
             if cached is not None:
                 try:
                     parsed = json.loads(cached)
@@ -412,9 +414,10 @@ class BaseLLMClient(ABC):
                     _try_classify_and_adapt(raw, parsed)
                 continue
 
-            # Success — cache the raw response
+            # Success — cache the raw response (thread-safe)
             if cache_key and self._cache is not None:
-                self._cache.put(cache_key, cleaned)
+                with self._cache_lock:
+                    self._cache.put(cache_key, cleaned)
 
             title = parsed.get("title", "?")[:70]
             steps_count = len(parsed.get("steps", []))

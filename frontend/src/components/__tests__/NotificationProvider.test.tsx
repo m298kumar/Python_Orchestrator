@@ -1,12 +1,17 @@
+import type React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import NotificationProvider, { useNotification } from '../NotificationProvider';
 
-function TestConsumer({ message = 'Hello', type = 'success' }: { message?: string; type?: 'success' | 'error' | 'info' | 'warning' }) {
+function TestConsumer({
+  message = 'Hello',
+  type = 'success',
+}: {
+  message?: string;
+  type?: 'success' | 'error' | 'info' | 'warning';
+}) {
   const { notify } = useNotification();
-  return (
-    <button onClick={() => notify(message, type)}>Trigger</button>
-  );
+  return <button onClick={() => notify(message, type)}>Trigger</button>;
 }
 
 function renderWithProvider(ui: React.ReactElement) {
@@ -52,7 +57,7 @@ describe('NotificationProvider', () => {
 
     for (let i = 0; i < types.length; i++) {
       const { unmount } = renderWithProvider(
-        <TestConsumer message={`msg-${types[i]}`} type={types[i]} />
+        <TestConsumer message={`msg-${types[i]}`} type={types[i]} />,
       );
       fireEvent.click(screen.getByText('Trigger'));
       await waitFor(() => {
@@ -81,7 +86,7 @@ describe('NotificationProvider', () => {
       () => {
         expect(screen.queryByText('Dismiss me')).not.toBeInTheDocument();
       },
-      { timeout: 1000 }
+      { timeout: 1000 },
     );
   });
 });

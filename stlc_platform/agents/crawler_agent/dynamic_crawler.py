@@ -29,7 +29,6 @@ from urllib.parse import urlparse
 
 from stlc_platform.core.contracts import CrawledPageArtifact, PageElementArtifact
 
-
 # Check Playwright availability at import time
 _PLAYWRIGHT_AVAILABLE = False
 try:
@@ -164,64 +163,70 @@ class DynamicCrawler:
                 visited.add(url)
 
                 try:
-                    # Set up request interception
+                    # Set up request interception with a named handler
+                    # so we can properly remove it later (lambdas can't be removed by identity)
                     captured: List[CapturedRequest] = []
-                    page.on("response", lambda resp: self._on_response(resp, captured))
 
-                    # Navigate
-                    if self.wait_for_idle:
-                        page.goto(url, wait_until="networkidle")
-                    else:
-                        page.goto(url, wait_until="domcontentloaded")
+                    def _response_handler(resp: Any) -> None:
+                        self._on_response(resp, captured)
 
-                    # Wait a bit for any remaining async ops
-                    page.wait_for_timeout(500)
+                    page.on("response", _response_handler)
 
-                    # Extract page content
-                    title = page.title()
+                    try:
+                        # Navigate
+                        if self.wait_for_idle:
+                            page.goto(url, wait_until="networkidle")
+                        else:
+                            page.goto(url, wait_until="domcontentloaded")
 
-                    # Extract elements via page evaluation
-                    elements = self._extract_elements(page)
+                        # Wait a bit for any remaining async ops
+                        page.wait_for_timeout(500)
 
-                    # Extract forms
-                    forms = self._extract_forms(page)
+                        # Extract page content
+                        title = page.title()
 
-                    # Build API calls from captured requests
-                    api_calls = [
-                        {
-                            "method": r.method,
-                            "url": r.url,
-                            "status": r.status,
-                            "content_type": r.content_type,
-                        }
-                        for r in captured
-                        if r.is_api_call
-                    ]
+                        # Extract elements via page evaluation
+                        elements = self._extract_elements(page)
 
-                    # Create artifact
-                    page_artifact = CrawledPageArtifact(
-                        url=url,
-                        title=title,
-                        elements=elements,
-                        forms=forms,
-                        api_calls=api_calls,
-                    )
-                    result.pages.append(page_artifact)
-                    result.captured_requests.extend(captured)
-                    result.pages_visited += 1
+                        # Extract forms
+                        forms = self._extract_forms(page)
 
-                    # Screenshot
-                    if self.capture_screenshots:
-                        result.screenshots[url] = page.screenshot()
+                        # Build API calls from captured requests
+                        api_calls = [
+                            {
+                                "method": r.method,
+                                "url": r.url,
+                                "status": r.status,
+                                "content_type": r.content_type,
+                            }
+                            for r in captured
+                            if r.is_api_call
+                        ]
 
-                    # Discover links for BFS
-                    links = self._extract_links(page, url)
-                    for link in links:
-                        if link not in visited:
-                            queue.append((link, depth + 1))
+                        # Create artifact
+                        page_artifact = CrawledPageArtifact(
+                            url=url,
+                            title=title,
+                            elements=elements,
+                            forms=forms,
+                            api_calls=api_calls,
+                        )
+                        result.pages.append(page_artifact)
+                        result.captured_requests.extend(captured)
+                        result.pages_visited += 1
 
-                    # Remove response listener to avoid duplication
-                    page.remove_listener("response", lambda resp: None)
+                        # Screenshot
+                        if self.capture_screenshots:
+                            result.screenshots[url] = page.screenshot()
+
+                        # Discover links for BFS
+                        links = self._extract_links(page, url)
+                        for link in links:
+                            if link not in visited:
+                                queue.append((link, depth + 1))
+                    finally:
+                        # Remove the exact handler reference to avoid listener leak
+                        page.remove_listener("response", _response_handler)
 
                 except Exception as e:
                     result.errors.append(f"Error crawling {url}: {e}")
@@ -273,8 +278,8 @@ class DynamicCrawler:
                 content_type=content_type,
                 is_api_call=is_api,
             ))
-        except Exception:
-            pass  # Silently ignore capture errors
+        except (AttributeError, TypeError, OSError):
+            pass  # Ignore capture errors for non-critical network tracking
 
     def _extract_elements(self, page: Any) -> List[PageElementArtifact]:
         """Extract interactive elements from the live page via JS evaluation."""

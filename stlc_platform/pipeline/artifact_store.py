@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -20,6 +21,7 @@ class ArtifactStore:
     """In-memory artifact store with optional disk persistence."""
 
     def __init__(self, run_dir: Optional[Path] = None) -> None:
+        self._lock = threading.Lock()
         self._artifacts: Dict[str, Dict[str, Any]] = {}
         self._metadata: Dict[str, Dict[str, Any]] = {}
         self._run_dir = run_dir
@@ -31,60 +33,71 @@ class ArtifactStore:
         artifacts: Dict[str, Any],
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Store stage output artifacts."""
-        self._artifacts[stage_id] = artifacts
-        self._metadata[stage_id] = metadata or {}
-        if stage_id not in self._completed_order:
-            self._completed_order.append(stage_id)
+        """Store stage output artifacts (thread-safe)."""
+        with self._lock:
+            self._artifacts[stage_id] = artifacts
+            self._metadata[stage_id] = metadata or {}
+            if stage_id not in self._completed_order:
+                self._completed_order.append(stage_id)
 
     def get(self, stage_id: str, key: str) -> Any:
-        """Get a specific artifact by stage_id and key."""
-        if stage_id not in self._artifacts:
-            raise KeyError(f"No artifacts for stage '{stage_id}'.")
-        stage_artifacts = self._artifacts[stage_id]
-        if key not in stage_artifacts:
-            raise KeyError(
-                f"Artifact '{key}' not found in stage '{stage_id}'. "
-                f"Available: {list(stage_artifacts.keys())}"
-            )
-        return stage_artifacts[key]
+        """Get a specific artifact by stage_id and key (thread-safe)."""
+        with self._lock:
+            if stage_id not in self._artifacts:
+                raise KeyError(f"No artifacts for stage '{stage_id}'.")
+            stage_artifacts = self._artifacts[stage_id]
+            if key not in stage_artifacts:
+                raise KeyError(
+                    f"Artifact '{key}' not found in stage '{stage_id}'. "
+                    f"Available: {list(stage_artifacts.keys())}"
+                )
+            return stage_artifacts[key]
 
     def get_all(self, stage_id: str) -> Dict[str, Any]:
-        """Get all artifacts for a stage."""
-        if stage_id not in self._artifacts:
-            raise KeyError(f"No artifacts for stage '{stage_id}'.")
-        return self._artifacts[stage_id]
+        """Get all artifacts for a stage (thread-safe)."""
+        with self._lock:
+            if stage_id not in self._artifacts:
+                raise KeyError(f"No artifacts for stage '{stage_id}'.")
+            return self._artifacts[stage_id]
 
     def has_stage(self, stage_id: str) -> bool:
-        """Check if a stage has completed artifacts."""
-        return stage_id in self._artifacts
+        """Check if a stage has completed artifacts (thread-safe)."""
+        with self._lock:
+            return stage_id in self._artifacts
 
     @property
     def completed_stages(self) -> List[str]:
-        """Return completed stage IDs in order."""
-        return list(self._completed_order)
+        """Return completed stage IDs in order (thread-safe)."""
+        with self._lock:
+            return list(self._completed_order)
 
     def persist_to_disk(self) -> None:
-        """Flush all in-memory artifacts to run_dir as JSON."""
+        """Flush all in-memory artifacts to run_dir as JSON (thread-safe)."""
         if self._run_dir is None:
             return
+
+        # Snapshot data under lock to avoid races with concurrent store() calls
+        with self._lock:
+            order_snapshot = list(self._completed_order)
+            serialized: Dict[str, Dict[str, Any]] = {}
+            for stage_id in order_snapshot:
+                serialized[stage_id] = {
+                    "artifacts": self._serialize_artifacts(self._artifacts[stage_id]),
+                    "metadata": dict(self._metadata.get(stage_id, {})),
+                }
+
+        # Write to disk outside the lock (I/O can be slow)
         self._run_dir.mkdir(parents=True, exist_ok=True)
 
         manifest: Dict[str, Any] = {
-            "completed_order": self._completed_order,
+            "completed_order": order_snapshot,
             "stages": {},
         }
 
-        for stage_id in self._completed_order:
-            stage_data = self._serialize_artifacts(self._artifacts[stage_id])
-            stage_meta = self._metadata.get(stage_id, {})
+        for stage_id in order_snapshot:
             stage_file = self._run_dir / f"{stage_id}.json"
             stage_file.write_text(
-                json.dumps(
-                    {"artifacts": stage_data, "metadata": stage_meta},
-                    indent=2,
-                    default=str,
-                ),
+                json.dumps(serialized[stage_id], indent=2, default=str),
                 encoding="utf-8",
             )
             manifest["stages"][stage_id] = str(stage_file.name)
@@ -268,8 +281,9 @@ class ArtifactResolver:
 
     def _create_feedback_store(self) -> Any:
         """Create a FeedbackStore, optionally with ChromaDB semantic search."""
-        from stlc_platform.pipeline.feedback_store import FeedbackStore
         from pathlib import Path
+
+        from stlc_platform.pipeline.feedback_store import FeedbackStore
 
         # Try to create with ChromaDB for semantic search
         chroma_store = None
@@ -277,9 +291,11 @@ class ArtifactResolver:
             from stlc_platform.core.storage.chroma_store import RequirementsVectorStore
             chroma_cfg = self._config.get("chromadb", {})
             if chroma_cfg:
-                chroma_store = RequirementsVectorStore(config=chroma_cfg)
-        except Exception:
-            pass  # ChromaDB optional — degrade to JSON-only
+                chroma_store = RequirementsVectorStore(chromadb_config=chroma_cfg)
+        except (ImportError, OSError, ValueError) as exc:
+            logging.getLogger(__name__).debug(
+                "ChromaDB unavailable, using JSON-only feedback: %s", exc
+            )
 
         return FeedbackStore(
             persist_path=Path("./feedback"),
@@ -288,8 +304,6 @@ class ArtifactResolver:
 
     def _create_llm_client(self) -> Any:
         """Create an LLM client based on config settings."""
-        from stlc_platform.core.llm.base_client import BaseLLMClient
-
         llm_cfg = self._config.get("llm", {})
         provider = llm_cfg.get("provider", "ollama")
         model = llm_cfg.get("model", "")
@@ -303,15 +317,17 @@ class ArtifactResolver:
                 base_url=base_url or "http://localhost:11434",
             )
         elif provider == "openai":
-            from stlc_platform.core.llm.openai_client import OpenAIClient
             import os
+
+            from stlc_platform.core.llm.openai_client import OpenAIClient
             return OpenAIClient(
                 model=model or "gpt-4o-mini",
                 api_key=api_key or os.environ.get("OPENAI_API_KEY", ""),
             )
         elif provider == "anthropic":
-            from stlc_platform.core.llm.anthropic_client import AnthropicClient
             import os
+
+            from stlc_platform.core.llm.anthropic_client import AnthropicClient
             return AnthropicClient(
                 model=model or "claude-sonnet-4-20250514",
                 api_key=api_key or os.environ.get("ANTHROPIC_API_KEY", ""),

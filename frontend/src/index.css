@@ -39,7 +39,7 @@
   /* Custom scrollbar */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: theme("colors.gray.400") transparent;
+    scrollbar-color: theme('colors.gray.400') transparent;
   }
 
   .scrollbar-thin::-webkit-scrollbar {

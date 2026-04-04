@@ -10,53 +10,123 @@ in the generator to decide whether to keep, retry, or synthesise.
 
 from __future__ import annotations
 
-import math
+import os
 import re
-from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+import yaml
 
 from stlc_platform.core.contracts import TestCaseArtifact
 
 
-# ── Generic / vague phrases that indicate low-quality output ─────────────────
+def _load_scorer_heuristics_config():
+    """Load scorer heuristics configuration from YAML file."""
+    config_path = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "..",
+        "config",
+        "test_generation_heuristics.yaml",
+    )
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
 
-_GENERIC_PHRASES: List[str] = [
-    "the system responds correctly",
-    "the system behaves as expected",
-    "the expected result is observed",
-    "the action is performed",
-    "perform the action",
-    "trigger the feature",
-    "verify the outcome",
-    "check the result",
-    "observe the result",
-    "the test passes",
-    "the test is successful",
-    "complete the action",
-    "do the action",
-    "execute the test step",
-    "the system works as intended",
-    "ensure the system",
-    "the system should",
-    "appropriate message is displayed",
-    "relevant data is shown",
-    "proper validation occurs",
-]
+        generic_phrases = config.get(
+            "generic_phrases",
+            [
+                "the system responds correctly",
+                "the system behaves as expected",
+                "the expected result is observed",
+                "the action is performed",
+                "perform the action",
+                "trigger the feature",
+                "verify the outcome",
+                "check the result",
+                "observe the result",
+                "the test passes",
+                "the test is successful",
+                "complete the action",
+                "do the action",
+                "execute the test step",
+                "the system works as intended",
+                "ensure the system",
+                "the system should",
+                "appropriate message is displayed",
+                "relevant data is shown",
+                "proper validation occurs",
+            ],
+        )
 
-_INSTRUCTION_LEAK_PATTERNS: List[str] = [
-    "chain-of-thought",
-    "mentally answer",
-    "before writing each step",
-    "fill each field",
-    "copy this exactly",
-    "replace the example",
-    "one sentence explaining",
-    "be concrete",
-    "no vague",
-    "json",
-    "```",
-]
+        instruction_leak_patterns = config.get(
+            "instruction_leak_patterns",
+            [
+                "chain-of-thought",
+                "mentally answer",
+                "before writing each step",
+                "fill each field",
+                "copy this exactly",
+                "replace the example",
+                "one sentence explaining",
+                "be concrete",
+                "no vague",
+                "json",
+                "```",
+            ],
+        )
+
+        return {
+            "generic_phrases": generic_phrases,
+            "instruction_leak_patterns": instruction_leak_patterns,
+        }
+    except Exception as e:
+        # Fallback to hardcoded values if config loading fails
+        print(f"Warning: Failed to load scorer heuristics config: {e}. Using fallback values.")
+        return {
+            "generic_phrases": [
+                "the system responds correctly",
+                "the system behaves as expected",
+                "the expected result is observed",
+                "the action is performed",
+                "perform the action",
+                "trigger the feature",
+                "verify the outcome",
+                "check the result",
+                "observe the result",
+                "the test passes",
+                "the test is successful",
+                "complete the action",
+                "do the action",
+                "execute the test step",
+                "the system works as intended",
+                "ensure the system",
+                "the system should",
+                "appropriate message is displayed",
+                "relevant data is shown",
+                "proper validation occurs",
+            ],
+            "instruction_leak_patterns": [
+                "chain-of-thought",
+                "mentally answer",
+                "before writing each step",
+                "fill each field",
+                "copy this exactly",
+                "replace the example",
+                "one sentence explaining",
+                "be concrete",
+                "no vague",
+                "json",
+                "```",
+            ],
+        }
+
+
+# Load scorer heuristics configuration
+_SCORER_HEURISTICS_CONFIG = _load_scorer_heuristics_config()
+_GENERIC_PHRASES = _SCORER_HEURISTICS_CONFIG["generic_phrases"]
+_INSTRUCTION_LEAK_PATTERNS = _SCORER_HEURISTICS_CONFIG["instruction_leak_patterns"]
 
 _TRUNCATION_MARKERS = (":", "(", "{", "...", ",", "\\")
 
@@ -79,13 +149,16 @@ class ScorerConfig:
     regenerate_threshold: float = 0.40
     max_regeneration_attempts: int = 2
     auto_example_threshold: float = 0.80
-    weights: Dict[str, float] = field(default_factory=lambda: {
-        "coverage": 0.25,
-        "clarity": 0.20,
-        "executability": 0.20,
-        "uniqueness": 0.15,
-        "structural": 0.20,
-    })
+    weights: Dict[str, float] = field(
+        default_factory=lambda: {
+            "coverage": 0.25,
+            "clarity": 0.20,
+            "executability": 0.20,
+            "uniqueness": 0.15,
+            "structural": 0.20,
+        }
+    )
+    generic_phrases: Optional[List[str]] = None
 
     _REQUIRED_DIMENSIONS = {"coverage", "clarity", "executability", "uniqueness", "structural"}
 
@@ -123,6 +196,7 @@ class ScorerConfig:
             max_regeneration_attempts=qg.get("max_regeneration_attempts", 2),
             auto_example_threshold=qg.get("auto_example_threshold", 0.80),
             weights=qg.get("weights", cls.__dataclass_fields__["weights"].default_factory()),
+            generic_phrases=qg.get("generic_phrases"),
         )
 
 
@@ -131,6 +205,7 @@ class TestCaseScorer:
 
     def __init__(self, config: Optional[ScorerConfig] = None):
         self._config = config or ScorerConfig()
+        self._generic_phrases = self._config.generic_phrases or _GENERIC_PHRASES
 
     @property
     def config(self) -> ScorerConfig:
@@ -171,10 +246,7 @@ class TestCaseScorer:
         }
 
         weights = self._config.weights
-        overall = sum(
-            dimensions[dim] * weights.get(dim, 0.0)
-            for dim in dimensions
-        )
+        overall = sum(dimensions[dim] * weights.get(dim, 0.0) for dim in dimensions)
 
         if overall >= self._config.accept_threshold:
             suggestion = "accept"
@@ -215,7 +287,9 @@ class TestCaseScorer:
         term_coverage = matched / len(ac_terms) if ac_terms else 0
 
         if term_coverage < 0.15:
-            issues.append(f"TC does not reference target AC (only {matched}/{len(ac_terms)} key terms found)")
+            issues.append(
+                f"TC does not reference target AC (only {matched}/{len(ac_terms)} key terms found)"
+            )
             score -= 0.5
         elif term_coverage < 0.3:
             issues.append(f"Weak AC reference ({matched}/{len(ac_terms)} key terms)")
@@ -223,12 +297,33 @@ class TestCaseScorer:
 
         # Check test_type alignment
         if test_type == "negative":
-            negative_indicators = ["invalid", "reject", "error", "fail", "denied", "block", "incorrect", "wrong", "missing", "without"]
+            negative_indicators = [
+                "invalid",
+                "reject",
+                "error",
+                "fail",
+                "denied",
+                "block",
+                "incorrect",
+                "wrong",
+                "missing",
+                "without",
+            ]
             if not any(ind in tc_text for ind in negative_indicators):
                 issues.append("Negative test case lacks rejection/error indicators")
                 score -= 0.25
         elif test_type == "edge_case":
-            edge_indicators = ["boundary", "limit", "maximum", "minimum", "exact", "threshold", "zero", "empty", "overflow"]
+            edge_indicators = [
+                "boundary",
+                "limit",
+                "maximum",
+                "minimum",
+                "exact",
+                "threshold",
+                "zero",
+                "empty",
+                "overflow",
+            ]
             if not any(ind in tc_text for ind in edge_indicators):
                 issues.append("Edge case lacks boundary/limit indicators")
                 score -= 0.15
@@ -255,7 +350,7 @@ class TestCaseScorer:
         if len(tc_text_lower.strip()) < 50:
             issues.append("Insufficient text content to assess clarity")
             return 0.2
-        generic_count = sum(1 for phrase in _GENERIC_PHRASES if phrase in tc_text_lower)
+        generic_count = sum(1 for phrase in self._generic_phrases if phrase in tc_text_lower)
         if generic_count >= 3:
             issues.append(f"Contains {generic_count} generic phrases")
             score -= 0.4
@@ -264,7 +359,11 @@ class TestCaseScorer:
             score -= 0.15 * generic_count
 
         # Check GWT distinctness — given/when/then should not be identical
-        gwt = [tc.given.strip().lower(), tc.when.strip().lower(), tc.then.strip().lower()]
+        gwt = [
+            (tc.given or "").strip().lower(),
+            (tc.when or "").strip().lower(),
+            (tc.then or "").strip().lower(),
+        ]
         gwt_non_empty = [g for g in gwt if g]
         if len(gwt_non_empty) >= 2 and len(set(gwt_non_empty)) < len(gwt_non_empty):
             issues.append("GWT clauses are not distinct from each other")
@@ -273,7 +372,11 @@ class TestCaseScorer:
         # Steps should contain concrete nouns (screen names, button names, field names)
         step_texts = [s.action for s in tc.steps]
         has_specific = any(
-            re.search(r'(button|field|screen|page|menu|dropdown|checkbox|input|link|tab|icon|modal|dialog)', s, re.I)
+            re.search(
+                r"(button|field|screen|page|menu|dropdown|checkbox|input|link|tab|icon|modal|dialog)",
+                s,
+                re.I,
+            )
             for s in step_texts
         )
         if step_texts and not has_specific:
@@ -297,16 +400,16 @@ class TestCaseScorer:
 
         # Step count
         step_count = len(tc.steps)
-        if step_count < 3:
+        if step_count < 2:
+            issues.append(f"Only {step_count} step(s) — need at least 2")
+            score -= 0.6
+        elif step_count < 3:
             issues.append(f"Only {step_count} step(s) — need at least 3")
             score -= 0.4
-        elif step_count < 2:
-            score -= 0.6
 
         # Steps with expected_result
         steps_with_result = sum(
-            1 for s in tc.steps
-            if s.expected_result and len(s.expected_result.strip()) > 5
+            1 for s in tc.steps if s.expected_result and len(s.expected_result.strip()) > 5
         )
         if step_count > 0:
             result_ratio = steps_with_result / step_count
@@ -431,10 +534,7 @@ class TestCaseScorer:
             score -= 0.3
 
         # Check for hollow/empty steps
-        empty_steps = sum(
-            1 for s in tc.steps
-            if not s.action.strip() or len(s.action.strip()) < 5
-        )
+        empty_steps = sum(1 for s in tc.steps if not s.action.strip() or len(s.action.strip()) < 5)
         if empty_steps > 0:
             issues.append(f"{empty_steps} hollow/empty step(s)")
             score -= 0.15 * min(empty_steps, 3)
@@ -447,13 +547,50 @@ class TestCaseScorer:
     def _extract_key_terms(text: str) -> List[str]:
         """Extract meaningful terms (>= 4 chars, not stopwords) from text."""
         stopwords = {
-            "the", "this", "that", "with", "from", "have", "will", "shall",
-            "should", "must", "been", "being", "were", "when", "then",
-            "than", "they", "them", "their", "there", "here", "what",
-            "which", "where", "into", "also", "each", "only", "such",
-            "same", "more", "some", "upon", "does", "your", "after",
-            "before", "between", "through", "about", "given", "able",
-            "user", "system",
+            "the",
+            "this",
+            "that",
+            "with",
+            "from",
+            "have",
+            "will",
+            "shall",
+            "should",
+            "must",
+            "been",
+            "being",
+            "were",
+            "when",
+            "then",
+            "than",
+            "they",
+            "them",
+            "their",
+            "there",
+            "here",
+            "what",
+            "which",
+            "where",
+            "into",
+            "also",
+            "each",
+            "only",
+            "such",
+            "same",
+            "more",
+            "some",
+            "upon",
+            "does",
+            "your",
+            "after",
+            "before",
+            "between",
+            "through",
+            "about",
+            "given",
+            "able",
+            "user",
+            "system",
         }
         words = re.findall(r"[a-z]{4,}", text.lower())
         return [w for w in words if w not in stopwords]

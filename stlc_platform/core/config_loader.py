@@ -12,6 +12,7 @@ Also provides backward-compatible access patterns so existing code
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -143,6 +144,26 @@ class AppConfig:
     llm_provider: str = "ollama"
 
 
+_KNOWN_TOP_LEVEL_KEYS = {
+    "project", "llm", "chromadb", "test_generation", "bdd", "crawler",
+    "api_testing", "export", "quality_gate", "coverage", "circuit_breaker",
+    "metrics", "output", "stage_timeout_seconds",
+}
+
+
+def _validate_yaml_keys(yaml_cfg: Dict[str, Any]) -> None:
+    """Warn about unknown top-level keys in stlc_config.yaml."""
+    unknown = set(yaml_cfg.keys()) - _KNOWN_TOP_LEVEL_KEYS
+    if unknown:
+        _logger = logging.getLogger(__name__)
+        _logger.warning(
+            "Unknown keys in stlc_config.yaml (possible typos): %s. "
+            "Known keys: %s",
+            ", ".join(sorted(unknown)),
+            ", ".join(sorted(_KNOWN_TOP_LEVEL_KEYS)),
+        )
+
+
 def load_config() -> AppConfig:
     """
     Load config from YAML + .env + environment variables.
@@ -154,6 +175,9 @@ def load_config() -> AppConfig:
     # Load YAML
     root = _find_project_root()
     yaml_cfg = _load_yaml(root / "config" / "stlc_config.yaml")
+
+    # Validate top-level keys to catch typos early
+    _validate_yaml_keys(yaml_cfg)
 
     # Build config with YAML as base, env vars as overrides
     cfg = AppConfig()

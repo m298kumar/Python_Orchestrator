@@ -7,11 +7,10 @@ These wrap the internal artifact contracts for API serialization.
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
-
 
 # ── Pipeline ─────────────────────────────────────────────────────────────────
 
@@ -40,7 +39,7 @@ class PipelineRunStatus(BaseModel):
     """Status of a pipeline run."""
     run_id: str
     pipeline_name: str
-    status: str  # "running", "completed", "failed"
+    status: Literal["pending", "running", "completed", "failed"]
     started_at: str
     completed_at: Optional[str] = None
     stages_completed: List[str] = Field(default_factory=list)
@@ -99,31 +98,39 @@ class RequirementUpdate(BaseModel):
 
 # ── Test Cases ───────────────────────────────────────────────────────────────
 
+class TestStepResponse(BaseModel):
+    """A single test step."""
+    action: str = ""
+    expected_result: str = ""
+
+
 class TestCaseResponse(BaseModel):
     """A single test case."""
     tc_id: str
     req_id: str
     title: str
     description: str = ""
+    preconditions: str = ""
     test_type: str = ""
     priority: str = ""
     category: str = ""
     component: str = ""
+    steps: List[TestStepResponse] = Field(default_factory=list)
     given: str = ""
     when: str = ""
     then: str = ""
     expected_outcome: str = ""
     tags: List[str] = Field(default_factory=list)
     status: str = "generated"  # generated, approved, rejected
+    test_level: str = ""
+    quality_score: float = 0.0
 
 
 class TestCaseUpdate(BaseModel):
     """Editable fields of a test case."""
     title: Optional[str] = None
     description: Optional[str] = None
-    given: Optional[str] = None
-    when: Optional[str] = None
-    then: Optional[str] = None
+    steps: Optional[List[TestStepResponse]] = None
     expected_outcome: Optional[str] = None
     priority: Optional[str] = None
     tags: Optional[List[str]] = None
@@ -131,6 +138,12 @@ class TestCaseUpdate(BaseModel):
 
 class TestCaseAction(BaseModel):
     """Approve/reject a test case."""
+    reason: Optional[str] = None
+
+
+class BulkTestCaseAction(BaseModel):
+    """Bulk approve/reject test cases."""
+    tc_ids: List[str] = Field(..., min_length=1, max_length=500)
     reason: Optional[str] = None
 
 
@@ -184,7 +197,7 @@ class APITestFileResponse(BaseModel):
 class FeedbackRequest(BaseModel):
     """Submit feedback for an agent."""
     agent_id: str
-    feedback_type: str = Field(
+    feedback_type: Literal["correction", "preference", "constraint"] = Field(
         default="correction",
         description="correction, preference, or constraint",
     )
@@ -246,7 +259,7 @@ class WSMessage(BaseModel):
     event: str  # stage_start, stage_complete, stage_error, pipeline_complete
     run_id: str
     data: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 # ── Generic ──────────────────────────────────────────────────────────────────
@@ -256,6 +269,46 @@ class HealthResponse(BaseModel):
     version: str
     stage: int
     agents_registered: int
+
+
+# ── Metrics ─────────────────────────────────────────────────────────────────
+
+class MetricsResponse(BaseModel):
+    """Metrics for a single pipeline run."""
+    run_id: str
+    timestamp: str
+    pipeline_name: str = ""
+    total_test_cases: int = 0
+    avg_quality_score: float = 0.0
+    quality_distribution: Dict[str, int] = Field(default_factory=dict)
+    tokens_used: int = 0
+    estimated_cost_usd: float = 0.0
+    cache_hit_rate: float = 0.0
+    generation_time_seconds: float = 0.0
+    per_stage_durations: Dict[str, float] = Field(default_factory=dict)
+    per_ac_type_scores: Dict[str, float] = Field(default_factory=dict)
+    coverage_pct: float = 0.0
+    stages_completed: int = 0
+    stages_failed: int = 0
+    stages_skipped: int = 0
+
+
+class MetricsTrendResponse(BaseModel):
+    """Aggregated quality and cost trends."""
+    run_count: int
+    avg_quality_score: float
+    avg_generation_time: float
+    total_tokens: int
+    total_cost_usd: float
+    quality_trend: List[Dict[str, Any]] = Field(default_factory=list)
+    degradation_warning: Optional[str] = None
+
+
+class MetricsComparisonResponse(BaseModel):
+    """Side-by-side comparison of two pipeline runs."""
+    run_a: MetricsResponse
+    run_b: MetricsResponse
+    deltas: Dict[str, float] = Field(default_factory=dict)
 
 
 class ErrorResponse(BaseModel):

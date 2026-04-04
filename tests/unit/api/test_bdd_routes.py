@@ -1,27 +1,30 @@
 """
 Tests for /api/bdd/* endpoints.
 
-The BDD route uses a module-level dict ``_feature_files`` for storage.
-We clear it between tests to ensure isolation.
+Uses the shared FeatureFileStore via deps; we inject a fresh store per test.
 """
 
 import pytest
-
 from fastapi.testclient import TestClient
+from stlc_platform.api.deps import FeatureFileStore
 from stlc_platform.api.main import app
-from stlc_platform.api.routes import bdd as bdd_module
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
-def _clear_features():
-    """Clear the in-memory feature file store between tests."""
-    bdd_module._feature_files.clear()
-    yield
-    bdd_module._feature_files.clear()
+def _isolated_store(tmp_path, monkeypatch):
+    """Inject a fresh FeatureFileStore and redirect output_dir per test."""
+    store = FeatureFileStore()
+    monkeypatch.setattr(
+        "stlc_platform.api.routes.bdd.get_output_dir", lambda: tmp_path
+    )
+    monkeypatch.setattr(
+        "stlc_platform.api.routes.bdd.get_ff_store", lambda: store
+    )
+    monkeypatch.setattr("stlc_platform.api.deps._ff_store", store)
+    yield store
 
 
 @pytest.fixture()
@@ -29,8 +32,8 @@ def client():
     return TestClient(app)
 
 
-def _seed_feature(filename="login.feature", **overrides):
-    """Insert a feature file directly into the in-memory store."""
+def _seed_feature(store_fixture, filename="login.feature", **overrides):
+    """Insert a feature file into the injected store."""
     data = {
         "filename": filename,
         "req_id": "REQ-001",
@@ -39,7 +42,7 @@ def _seed_feature(filename="login.feature", **overrides):
         "content": "Feature: Login\n  Scenario: Valid login\n    Given a user\n",
     }
     data.update(overrides)
-    bdd_module._feature_files[filename] = data
+    store_fixture.populate([data])
     return data
 
 
@@ -62,9 +65,11 @@ class TestListFeatures:
         data = client.get("/api/bdd/features").json()
         assert len(data) == 0
 
-    def test_returns_seeded_features(self, client: TestClient):
-        _seed_feature("login.feature")
-        _seed_feature("checkout.feature", req_id="REQ-002")
+    def test_returns_seeded_features(
+        self, client: TestClient, _isolated_store
+    ):
+        _seed_feature(_isolated_store, "login.feature")
+        _seed_feature(_isolated_store, "checkout.feature", req_id="REQ-002")
         data = client.get("/api/bdd/features").json()
         assert len(data) == 2
 
@@ -80,8 +85,8 @@ class TestGetFeature:
         resp = client.get("/api/bdd/features/nonexistent")
         assert resp.status_code == 404
 
-    def test_known_returns_200(self, client: TestClient):
-        _seed_feature("login.feature")
+    def test_known_returns_200(self, client: TestClient, _isolated_store):
+        _seed_feature(_isolated_store, "login.feature")
         resp = client.get("/api/bdd/features/login.feature")
         assert resp.status_code == 200
         assert resp.json()["filename"] == "login.feature"

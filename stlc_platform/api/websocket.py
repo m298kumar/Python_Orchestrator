@@ -57,6 +57,7 @@ class ConnectionManager:
             try:
                 await ws.send_text(message)
             except Exception:
+                logger.debug("WebSocket send failed for run %s", run_id, exc_info=True)
                 dead.append(ws)
 
         for ws in dead:

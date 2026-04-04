@@ -30,6 +30,11 @@ COPY scripts/ ./scripts/
 # Built frontend from stage 1
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
+# Create non-root user
+RUN adduser --system --group --no-create-home stlc && \
+    mkdir -p /app/output /app/feedback && \
+    chown -R stlc:stlc /app
+
 # Environment defaults
 ENV STLC_SERVE_FRONTEND=true \
     STLC_AUTH_ENABLED=false \
@@ -39,5 +44,7 @@ EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"
+
+USER stlc
 
 CMD ["python", "-m", "uvicorn", "stlc_platform.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

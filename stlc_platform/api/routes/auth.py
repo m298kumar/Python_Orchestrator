@@ -39,8 +39,8 @@ def auth_status():
 def login(req: LoginRequest):
     """Authenticate and return a JWT token."""
     if not AUTH_ENABLED:
-        # When auth is disabled, return a token anyway for client compatibility
-        token = create_token(req.username, "admin")
+        # When auth is disabled, return a viewer-role token (not admin)
+        token = create_token("anonymous", "viewer")
         return TokenResponse(access_token=token, expires_in=JWT_EXPIRE_SECONDS)
 
     user = authenticate_user(req.username, req.password)

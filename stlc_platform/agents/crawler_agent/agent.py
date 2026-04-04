@@ -10,18 +10,18 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
+from stlc_platform.agents.crawler_agent.discrepancy_detector import DiscrepancyDetector
+from stlc_platform.agents.crawler_agent.dynamic_crawler import (
+    DynamicCrawler,
+    is_playwright_available,
+)
+from stlc_platform.agents.crawler_agent.page_parser import PageParser
+from stlc_platform.agents.crawler_agent.site_model_builder import SiteModelBuilder
 from stlc_platform.core.base_agent import (
     AgentCapabilities,
     AgentResult,
     BaseAgent,
     ValidationResult,
-)
-from stlc_platform.agents.crawler_agent.page_parser import PageParser
-from stlc_platform.agents.crawler_agent.site_model_builder import SiteModelBuilder
-from stlc_platform.agents.crawler_agent.discrepancy_detector import DiscrepancyDetector
-from stlc_platform.agents.crawler_agent.dynamic_crawler import (
-    DynamicCrawler,
-    is_playwright_available,
 )
 from stlc_platform.core.contracts import SiteModelArtifact
 
@@ -239,10 +239,10 @@ class CrawlerAgent(BaseAgent):
                 metadata=metadata,
             )
 
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, OSError) as e:
             return AgentResult(
                 success=False,
-                errors=[f"Crawler agent failed: {e}"],
+                errors=[f"Crawler agent failed: {type(e).__name__}: {e}"],
             )
 
     def get_capabilities(self) -> AgentCapabilities:

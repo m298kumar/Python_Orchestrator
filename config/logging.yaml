@@ -1,0 +1,52 @@
+# Logging Configuration
+# =====================
+
+version: 1
+disable_existing_loggers: false
+formatters:
+  default:
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: "%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d %(funcName)s"
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: default
+    stream: ext://sys.stdout
+  json_console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: json
+    stream: ext://sys.stdout
+  file:
+    class: logging.FileHandler
+    level: DEBUG
+    formatter: default
+    filename: logs/app.log
+  json_file:
+    class: logging.FileHandler
+    level: DEBUG
+    formatter: json
+    filename: logs/app.json.log
+root:
+  level: INFO
+  handlers: [console]
+loggers:
+  stlc_platform:
+    level: INFO
+    handlers: [json_console, json_file]
+    propagate: false
+  uvicorn:
+    level: INFO
+    handlers: [console]
+    propagate: false
+  uvicorn.error:
+    level: INFO
+    handlers: [console]
+    propagate: false
+  uvicorn.access:
+    level: INFO
+    handlers: [console]
+    propagate: false

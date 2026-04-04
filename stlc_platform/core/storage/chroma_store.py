@@ -10,12 +10,13 @@ Import path change:
 No logic changes from original — only import paths updated.
 """
 
+import json
+import logging
 import os
 import re
 import uuid
-import json
-import logging
 import warnings
+
 import requests
 
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="chromadb")
@@ -26,6 +27,7 @@ logging.getLogger("onnxruntime").setLevel(logging.ERROR)
 from rich.console import Console
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 # ── client factory ───────────────────────────────────────────────────────────
@@ -40,34 +42,34 @@ def _make_client(path):
     try:
         from dotenv import dotenv_values
         _dot_env_keys = set(dotenv_values().keys())
-    except Exception:
+    except (ImportError, OSError):
         _dot_env_keys = set()
 
     _saved_env = {k: os.environ.pop(k) for k in _dot_env_keys if k in os.environ}
     _orig_cwd = os.getcwd()
-    _tmpdir = tempfile.mkdtemp()
 
     try:
-        os.chdir(_tmpdir)
-        import chromadb
-        abs_path = path if os.path.isabs(path) else os.path.join(_orig_cwd, path)
-        _settings = chromadb.Settings(
-            is_persistent=True,
-            persist_directory=abs_path,
-            allow_reset=True,
-            anonymized_telemetry=False,
-        )
+        with tempfile.TemporaryDirectory() as _tmpdir:
+            os.chdir(_tmpdir)
+            try:
+                import chromadb
+                abs_path = path if os.path.isabs(path) else os.path.join(_orig_cwd, path)
+                _settings = chromadb.Settings(
+                    is_persistent=True,
+                    persist_directory=abs_path,
+                    allow_reset=True,
+                    anonymized_telemetry=False,
+                )
+            finally:
+                os.chdir(_orig_cwd)
+    except RuntimeError:
+        raise
     except Exception as e:
         raise RuntimeError(
             f"Could not create ChromaDB PersistentClient at '{path}': {e}\n"
             "Try: pip install --upgrade 'chromadb>=0.5.3'"
         ) from e
     finally:
-        os.chdir(_orig_cwd)
-        try:
-            os.rmdir(_tmpdir)
-        except Exception:
-            pass
         os.environ.update(_saved_env)
 
     try:
@@ -127,13 +129,13 @@ def _best_embedding_fn(chromadb_config):
             f"[green]Embedding:[/green] SentenceTransformer / {cfg.sentence_transformer_model}"
         )
         return fn
-    except Exception:
+    except (ImportError, RuntimeError, OSError):
         pass
     try:
         fn = ef.DefaultEmbeddingFunction()
         console.print("[green]Embedding:[/green] DefaultEmbeddingFunction (ONNX MiniLM)")
         return fn
-    except Exception:
+    except (ImportError, RuntimeError, OSError):
         pass
     console.print("[yellow]No embedding function — ChromaDB using internal default[/yellow]")
     return None
@@ -282,7 +284,7 @@ class RequirementsVectorStore:
         self._coll_reqs.add(documents=docs, metadatas=metas, ids=ids)
         console.print(f"[green]Added {len(requirements)} requirement(s)[/green]")
 
-    def search_similar(self, query, n_results=3, filter_metadata=None):
+    def search_similar(self, query, n_results=3, filter_metadata=None, min_similarity=0.3):
         self.initialize()
         count = self._coll_reqs.count()
         if count == 0:
@@ -297,26 +299,34 @@ class RequirementsVectorStore:
         res = self._coll_reqs.query(**kw)
         if not res["documents"] or not res["documents"][0]:
             return []
-        return [
-            {
-                "document": d,
-                "metadata": m,
-                "similarity_score": round(1 - dist, 4),
-            }
-            for d, m, dist in zip(
-                res["documents"][0], res["metadatas"][0], res["distances"][0]
-            )
-        ]
+        results = []
+        for d, m, dist in zip(
+            res["documents"][0], res["metadatas"][0], res["distances"][0]
+        ):
+            score = round(1 - dist, 4)
+            if score >= min_similarity:
+                results.append({
+                    "document": d,
+                    "metadata": m,
+                    "similarity_score": score,
+                })
+            else:
+                logger.debug(
+                    "search_similar: filtered out result (score=%.4f < threshold=%.2f)",
+                    score, min_similarity,
+                )
+        return results
 
     def get_context_for_requirement(self, requirement):
-        similar = self.search_similar(requirement.to_chroma_document(), n_results=3)
+        similar = self.search_similar(
+            requirement.to_chroma_document(), n_results=3, min_similarity=0.3,
+        )
         lines = []
         for item in similar:
-            if item["similarity_score"] > 0.3:
-                m = item["metadata"]
-                lines.append(
-                    f"- [{m['req_id']}] {m['title']} (similarity: {item['similarity_score']})"
-                )
+            m = item["metadata"]
+            lines.append(
+                f"- [{m['req_id']}] {m['title']} (similarity: {item['similarity_score']})"
+            )
         return "\n".join(lines) if lines else ""
 
     # ── Collection 2: TC Examples ────────────────────────────────────────────
@@ -340,7 +350,7 @@ class RequirementsVectorStore:
         console.print(f"[green]Stored example TC:[/green] {doc_id} ({ac_type}/{test_type})")
         return doc_id
 
-    def retrieve_examples(self, ac_text, ac_type, test_type, n=2):
+    def retrieve_examples(self, ac_text, ac_type, test_type, n=2, min_similarity=0.4):
         self.initialize()
         count = self._coll_tcs.count()
         if count == 0:
@@ -368,9 +378,16 @@ class RequirementsVectorStore:
                         tj = meta.get("tc_json", "")
                         if not tj:
                             continue
+                        score = round(1 - dist, 4)
+                        if score < min_similarity:
+                            logger.debug(
+                                "retrieve_examples: filtered out example (score=%.4f < threshold=%.2f)",
+                                score, min_similarity,
+                            )
+                            continue
                         try:
                             tc = json.loads(tj)
-                            tc["_similarity"] = round(1 - dist, 4)
+                            tc["_similarity"] = score
                             examples.append(tc)
                         except json.JSONDecodeError:
                             continue
@@ -466,6 +483,39 @@ class RequirementsVectorStore:
         if (1 - dist) > 0.25 and term:
             return term if term.lower().endswith("screen") else f"{term} Screen"
         return None
+
+    def add_vocab(self, terms: list, domain: str = "") -> int:
+        """Add domain vocabulary terms to the domain_vocab collection.
+
+        Args:
+            terms: List of vocabulary terms to add (component names, UI elements, etc.)
+            domain: Optional domain label.
+
+        Returns:
+            Number of new terms added (skips duplicates via upsert).
+        """
+        self.initialize()
+        if not terms:
+            return 0
+        docs, metas, ids = [], [], []
+        for term in terms:
+            term = term.strip()
+            if not term:
+                continue
+            safe = re.sub(r"[^a-z0-9]+", "_", term.lower()).strip("_")
+            doc_id = f"vocab_auto_{safe}"
+            ids.append(doc_id)
+            docs.append(f"term: {term} | domain: {domain}")
+            metas.append({
+                "vocab_type": "auto_term",
+                "term": term,
+                "domain": domain,
+                "source": "auto_extracted",
+            })
+        if not docs:
+            return 0
+        self._coll_vocab.upsert(documents=docs, metadatas=metas, ids=ids)
+        return len(docs)
 
     def get_domain_vocab_summary(self, category=""):
         self.initialize()

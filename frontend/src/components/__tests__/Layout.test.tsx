@@ -1,3 +1,4 @@
+import type React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -7,7 +8,7 @@ function renderLayout(children: React.ReactNode = <div>Page Content</div>) {
   return render(
     <MemoryRouter>
       <Layout>{children}</Layout>
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -17,10 +18,10 @@ describe('Layout', () => {
     expect(screen.getByText('STLC Platform')).toBeInTheDocument();
   });
 
-  it('renders 8 navigation links', () => {
+  it('renders 9 navigation links', () => {
     renderLayout();
     const links = screen.getAllByRole('link');
-    expect(links).toHaveLength(8);
+    expect(links).toHaveLength(9);
   });
 
   it('Dashboard link exists and points to "/"', () => {

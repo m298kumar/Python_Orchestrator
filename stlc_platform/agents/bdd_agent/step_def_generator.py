@@ -4,6 +4,11 @@ Step Definition Generator
 Generates step definition skeleton code for Python (Behave, Pytest-BDD),
 Java (Cucumber), and JavaScript (Cucumber.js) from parameterized step
 patterns using Jinja2 templates.
+
+Supports optional CSS selector injection from a crawler site model:
+when a ``selector_map`` is provided, the generator post-processes the
+rendered code and replaces ``TODO: implement this step`` placeholders
+with concrete selector hints wherever a fuzzy match is found.
 """
 
 from __future__ import annotations
@@ -14,12 +19,11 @@ from typing import ClassVar, Dict, List, Optional
 
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 
+from stlc_platform.agents.bdd_agent.step_parser import ParameterizedStep
 from stlc_platform.core.contracts import (
     FeatureFileArtifact,
     StepDefinitionArtifact,
 )
-from stlc_platform.agents.bdd_agent.step_parser import ParameterizedStep
-
 
 # -- Paths --
 _BUILTIN_TEMPLATES = Path(__file__).resolve().parent / "templates"
@@ -96,20 +100,33 @@ class StepDefinitionGenerator:
         self,
         steps: List[ParameterizedStep],
         features: Optional[List[FeatureFileArtifact]] = None,
+        selector_map: Optional[Dict[str, str]] = None,
     ) -> List[StepDefinitionArtifact]:
         """
         Generate step definition files from parameterized steps.
 
+        Args:
+            steps: Parameterized steps extracted from feature files.
+            features: Feature file artifacts (needed for pytest_bdd scenario refs).
+            selector_map: Optional mapping of element name (lowercased) to CSS
+                selector string, built from the crawler's site model.
+
         Returns one StepDefinitionArtifact per output file.
         """
         if self.framework == "behave":
-            return self._generate_behave(steps)
+            artifacts = self._generate_behave(steps)
         elif self.framework == "pytest_bdd":
-            return self._generate_pytest_bdd(steps, features or [])
+            artifacts = self._generate_pytest_bdd(steps, features or [])
         elif self.framework in ("cucumber_java", "cucumberjs"):
-            return self._generate_generic(steps)
+            artifacts = self._generate_generic(steps)
         else:
             raise ValueError(f"Unknown framework: {self.framework}")
+
+        # Post-process: inject real CSS selectors into TODO placeholders
+        if selector_map:
+            artifacts = self._inject_selectors(artifacts, selector_map)
+
+        return artifacts
 
     def _generate_behave(
         self, steps: List[ParameterizedStep]
@@ -321,3 +338,146 @@ class StepDefinitionGenerator:
         if slug and slug[0].isdigit():
             slug = f"n{slug}"
         return f"{prefix}{slug}" if slug else f"{prefix}unnamed"
+
+    # -- Selector injection helpers --
+
+    # Regex that matches the TODO placeholder line in generated step bodies.
+    # Captures the leading whitespace so the replacement keeps indentation.
+    _TODO_LINE_RE = re.compile(
+        r'^(?P<indent>\s*)raise NotImplementedError\("TODO: implement this step"\)',
+        re.MULTILINE,
+    )
+
+    # Pattern to capture the step-decorator line immediately before a function
+    # definition so we can extract the step text for selector matching.
+    _STEP_DECORATOR_RE = re.compile(
+        r"@(?:given|when|then)\(\s*(?:parsers\.parse\()?\s*['\"](.+?)['\"]\s*\)?\s*\)",
+    )
+
+    def _inject_selectors(
+        self,
+        artifacts: List[StepDefinitionArtifact],
+        selector_map: Dict[str, str],
+    ) -> List[StepDefinitionArtifact]:
+        """
+        Post-process generated step definition code: replace TODO
+        placeholders with CSS selector hints where a match is found
+        in *selector_map*.
+
+        Returns a new list of artifacts with updated content.
+        """
+        result = []
+        for artifact in artifacts:
+            new_content = self._replace_todos_with_selectors(
+                artifact.content, selector_map
+            )
+            result.append(
+                StepDefinitionArtifact(
+                    language=artifact.language,
+                    framework=artifact.framework,
+                    filename=artifact.filename,
+                    content=new_content,
+                    step_count=artifact.step_count,
+                )
+            )
+        return result
+
+    def _replace_todos_with_selectors(
+        self,
+        content: str,
+        selector_map: Dict[str, str],
+    ) -> str:
+        """
+        Walk through *content* line-by-line.  For each TODO placeholder,
+        look back to find the step decorator text, extract meaningful
+        words, and try to fuzzy-match against *selector_map*.
+        """
+        lines = content.split("\n")
+        out: List[str] = []
+
+        for i, line in enumerate(lines):
+            m = self._TODO_LINE_RE.match(line)
+            if not m:
+                out.append(line)
+                continue
+
+            indent = m.group("indent")
+
+            # Walk backwards to find the decorator text
+            step_text = self._find_step_text(lines, i)
+            if step_text:
+                selector = self._fuzzy_match_selector(step_text, selector_map)
+            else:
+                selector = None
+
+            if selector:
+                # Replace the TODO with a selector comment + the original raise
+                out.append(
+                    f'{indent}# Selector: "{selector}"'
+                )
+                out.append(line)
+            else:
+                out.append(line)
+
+        return "\n".join(out)
+
+    @staticmethod
+    def _find_step_text(lines: List[str], todo_index: int) -> str:
+        """
+        Search backwards from *todo_index* to find the nearest step
+        decorator line and return the step pattern text.
+        """
+        for j in range(todo_index - 1, max(todo_index - 6, -1), -1):
+            dm = StepDefinitionGenerator._STEP_DECORATOR_RE.search(lines[j])
+            if dm:
+                return dm.group(1)
+        return ""
+
+    @staticmethod
+    def _fuzzy_match_selector(
+        element_name: str,
+        selector_map: Dict[str, str],
+    ) -> Optional[str]:
+        """
+        Try to match *element_name* (step text) against keys in
+        *selector_map*.
+
+        Strategy (first match wins):
+          1. Exact match (lowercased).
+          2. Substring containment (either direction).
+          3. Word overlap (>50 % of words in common).
+
+        Returns the CSS selector string or ``None``.
+        """
+        if not selector_map or not element_name:
+            return None
+
+        name_lower = element_name.lower().strip()
+
+        # 1. Exact match
+        if name_lower in selector_map:
+            return selector_map[name_lower]
+
+        # 2. Substring containment
+        for key, selector in selector_map.items():
+            if name_lower in key or key in name_lower:
+                return selector
+
+        # 3. Word overlap (>50 %)
+        name_words = set(re.findall(r"[a-z]+", name_lower))
+        if not name_words:
+            return None
+
+        best_selector: Optional[str] = None
+        best_ratio = 0.0
+        for key, selector in selector_map.items():
+            key_words = set(re.findall(r"[a-z]+", key))
+            if not key_words:
+                continue
+            overlap = len(name_words & key_words)
+            ratio = overlap / max(len(name_words), len(key_words))
+            if ratio > 0.5 and ratio > best_ratio:
+                best_ratio = ratio
+                best_selector = selector
+
+        return best_selector

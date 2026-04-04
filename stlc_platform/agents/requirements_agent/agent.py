@@ -9,14 +9,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from stlc_platform.core.base_agent import (
-    AgentCapabilities,
-    AgentResult,
-    BaseAgent,
-    ValidationResult,
-)
-from stlc_platform.core.contracts import TestCaseArtifact  # noqa: F401 — re-exported
-
 from stlc_platform.agents.requirements_agent.classifier import ACClassifier
 from stlc_platform.agents.requirements_agent.component_resolver import ComponentResolver
 from stlc_platform.agents.requirements_agent.domain_detector import DomainDetector
@@ -24,6 +16,13 @@ from stlc_platform.agents.requirements_agent.generator import TestCaseGenerator
 from stlc_platform.agents.requirements_agent.prompts import PromptRenderer
 from stlc_platform.agents.requirements_agent.sanitiser import TestCaseSanitiser
 from stlc_platform.agents.requirements_agent.tech_stack import TechStackContext
+from stlc_platform.core.base_agent import (
+    AgentCapabilities,
+    AgentResult,
+    BaseAgent,
+    ValidationResult,
+)
+from stlc_platform.core.contracts import TestCaseArtifact  # noqa: F401 — re-exported
 
 
 class TestGenerationAgent(BaseAgent):
@@ -115,12 +114,31 @@ class TestGenerationAgent(BaseAgent):
         vector_store = artifacts.get("vector_store")
         feedback_store = artifacts.get("feedback_store")
 
+        # Attach LLM response cache if not already set (Fix #4)
+        if not getattr(llm_client, "_cache", None):
+            try:
+                from stlc_platform.core.llm.cache import LLMResponseCache
+                cache = LLMResponseCache(max_size=500)
+                llm_client.set_cache(cache)
+            except (ImportError, AttributeError):
+                pass  # cache is optional enhancement
+
         # Build tech stack context
         tech_stack_config = config.get("tech_stack") or artifacts.get("tech_stack")
         tech_stack = (
             artifacts.get("tech_stack_context")
             or TechStackContext.from_config(tech_stack_config)
         )
+
+        # Load scorer config from pipeline config if available (Fix #6)
+        scorer_config = None
+        quality_gate_cfg = config.get("quality_gate")
+        if quality_gate_cfg:
+            try:
+                from stlc_platform.core.quality.scorer import ScorerConfig
+                scorer_config = ScorerConfig.from_config(config)
+            except (ImportError, KeyError, TypeError, ValueError):
+                pass  # fall back to defaults
 
         # Wire up generator with all dependencies
         generator = TestCaseGenerator(
@@ -136,6 +154,7 @@ class TestGenerationAgent(BaseAgent):
             vector_store=vector_store,
             domain=config.get("domain", "") or artifacts.get("domain", ""),
             feedback_store=feedback_store,
+            scorer_config=scorer_config,
         )
 
         # Extract config
@@ -162,7 +181,7 @@ class TestGenerationAgent(BaseAgent):
                 tokens_used = accumulated.total_tokens
                 input_tokens = accumulated.input_tokens
                 output_tokens = accumulated.output_tokens
-            except Exception:
+            except AttributeError:
                 pass
 
             return AgentResult(

@@ -158,8 +158,8 @@ def _run_pipeline(
     from stlc_platform.pipeline.agent_registry import AgentRegistry
     from stlc_platform.pipeline.orchestrator import PipelineOrchestrator, StageResult
     from stlc_platform.pipeline.pipeline_loader import load_pipeline
-    from stlc_platform.pipeline.skill_loader import SkillLoader
     from stlc_platform.pipeline.profile_loader import ProfileLoader
+    from stlc_platform.pipeline.skill_loader import SkillLoader
 
     # Load pipeline
     try:
@@ -326,4 +326,121 @@ def feedback_list(agent: Optional[str], output: str) -> None:
         click.echo(
             f"  [{entry.feedback_type}] {entry.agent_id}: {entry.message}"
             f" (applied {entry.applied_count}x)"
+        )
+
+
+@main.group()
+def metrics() -> None:
+    """Pipeline metrics and quality trends."""
+
+
+@metrics.command("list")
+@click.option(
+    "--last", "-n", "last_n", default=20, type=int,
+    help="Number of recent runs to show.",
+)
+@click.option(
+    "--dir", "-d", "metrics_dir", default="output/metrics",
+    help="Metrics directory.",
+)
+def metrics_list(last_n: int, metrics_dir: str) -> None:
+    """List metrics for recent pipeline runs."""
+    from stlc_platform.pipeline.metrics_collector import MetricsCollector
+
+    collector = MetricsCollector(metrics_dir=Path(metrics_dir))
+    runs = collector.get_trends(last_n=last_n)
+
+    if not runs:
+        click.echo("No metrics found.")
+        return
+
+    click.echo(
+        f"{'Run ID':<14} {'Quality':>8} {'TCs':>5} {'Tokens':>8} "
+        f"{'Cost ($)':>9} {'Duration':>9} {'Timestamp'}"
+    )
+    click.echo("-" * 90)
+    for m in runs:
+        click.echo(
+            f"{m.run_id[:12]:<14} {m.avg_quality_score:>8.3f} "
+            f"{m.total_test_cases:>5} {m.tokens_used:>8} "
+            f"{m.estimated_cost_usd:>9.4f} {m.generation_time_seconds:>8.1f}s "
+            f"{m.timestamp[:19]}"
+        )
+    click.echo(f"\n{len(runs)} runs shown.")
+
+
+@metrics.command("trends")
+@click.option(
+    "--last", "-n", "last_n", default=10, type=int,
+    help="Number of runs for trend analysis.",
+)
+@click.option(
+    "--dir", "-d", "metrics_dir", default="output/metrics",
+    help="Metrics directory.",
+)
+def metrics_trends(last_n: int, metrics_dir: str) -> None:
+    """Show quality and cost trends over recent runs."""
+    from stlc_platform.pipeline.metrics_collector import MetricsCollector
+
+    collector = MetricsCollector(metrics_dir=Path(metrics_dir))
+    runs = collector.get_trends(last_n=last_n)
+
+    if not runs:
+        click.echo("No metrics found for trend analysis.")
+        return
+
+    avg_quality = sum(r.avg_quality_score for r in runs) / len(runs)
+    avg_time = sum(r.generation_time_seconds for r in runs) / len(runs)
+    total_tokens = sum(r.tokens_used for r in runs)
+    total_cost = sum(r.estimated_cost_usd for r in runs)
+
+    click.echo(f"Trends over last {len(runs)} runs:")
+    click.echo(f"  Avg quality score:    {avg_quality:.3f}")
+    click.echo(f"  Avg generation time:  {avg_time:.1f}s")
+    click.echo(f"  Total tokens used:    {total_tokens:,}")
+    click.echo(f"  Total cost:           ${total_cost:.4f}")
+
+    # Degradation check
+    if len(runs) >= 2:
+        warning = collector.detect_degradation(runs[0], runs[1:])
+        if warning:
+            click.echo(f"\n  WARNING: {warning}")
+
+
+@metrics.command("run")
+@click.argument("run_id")
+@click.option(
+    "--dir", "-d", "metrics_dir", default="output/metrics",
+    help="Metrics directory.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+def metrics_run(run_id: str, metrics_dir: str, as_json: bool) -> None:
+    """Show metrics for a specific pipeline run."""
+    from dataclasses import asdict
+
+    from stlc_platform.pipeline.metrics_collector import MetricsCollector
+
+    collector = MetricsCollector(metrics_dir=Path(metrics_dir))
+    m = collector.get_run(run_id)
+    if m is None:
+        click.echo(f"Error: No metrics found for run '{run_id}'.", err=True)
+        raise SystemExit(1)
+
+    if as_json:
+        click.echo(json.dumps(asdict(m), indent=2))
+    else:
+        click.echo(f"Run: {m.run_id}")
+        click.echo(f"  Pipeline:      {m.pipeline_name}")
+        click.echo(f"  Timestamp:     {m.timestamp}")
+        click.echo(f"  Test cases:    {m.total_test_cases}")
+        click.echo(f"  Avg quality:   {m.avg_quality_score:.3f}")
+        click.echo(f"  Distribution:  {m.quality_distribution}")
+        click.echo(f"  Tokens used:   {m.tokens_used:,}")
+        click.echo(f"  Cost:          ${m.estimated_cost_usd:.4f}")
+        click.echo(f"  Cache hit:     {m.cache_hit_rate:.1%}")
+        click.echo(f"  Gen time:      {m.generation_time_seconds:.1f}s")
+        click.echo(f"  Coverage:      {m.coverage_pct:.1%}")
+        click.echo(
+            f"  Stages:        {m.stages_completed} completed, "
+            f"{m.stages_failed} failed, {m.stages_skipped} skipped"
         )

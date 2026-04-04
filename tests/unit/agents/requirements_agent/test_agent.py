@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import List
-from unittest.mock import MagicMock
 
 import pytest
-
-from stlc_platform.core.base_agent import AgentCapabilities, AgentResult, ValidationResult
-from stlc_platform.core.contracts import TestCaseArtifact
 from stlc_platform.agents.requirements_agent.agent import TestGenerationAgent
+from stlc_platform.core.base_agent import AgentCapabilities
+from stlc_platform.core.contracts import TestCaseArtifact
 
 
 @dataclass
@@ -27,25 +25,121 @@ class MockRequirement:
 
 
 class MockLLMClient:
-    def generate_test_case(self, prompt, system_prompt=None):
-        return {
-            "title": "Test Title",
-            "description": "Test login functionality",
-            "preconditions": "Valid user account exists",
+    """Mock LLM that returns completely distinct TCs to survive dedup."""
+
+    _SCENARIOS = [
+        {
+            "title": "Verify successful login with valid credentials",
+            "description": "Authenticate user with correct username and password",
+            "preconditions": "Active user account exists in the database",
             "steps": [
-                {"action": "Navigate to login", "expected_result": "Login page loads"},
-                {"action": "Enter credentials", "expected_result": "Fields populated"},
-                {"action": "Click login", "expected_result": "Dashboard loads"},
+                {"action": "Navigate to login page", "expected_result": "Login form displayed"},
+                {"action": "Enter valid username", "expected_result": "Username accepted"},
+                {"action": "Submit credentials", "expected_result": "Redirected to dashboard"},
             ],
-            "expected_outcome": "User logged in",
+            "expected_outcome": "User session created and dashboard visible",
             "component": "Login Screen",
-            "given": "A valid user",
-            "when": "User logs in",
-            "then": "Dashboard shown",
+            "given": "An active user with valid credentials",
+            "when": "User submits the login form",
+            "then": "Dashboard is displayed with welcome message",
             "priority": "High",
             "tags": ["auth", "positive"],
-            "estimated_duration": "5",
-        }
+        },
+        {
+            "title": "Verify error message for invalid password",
+            "description": "System rejects incorrect password and shows alert",
+            "preconditions": "User account exists but wrong password used",
+            "steps": [
+                {"action": "Open authentication page", "expected_result": "Form renders"},
+                {"action": "Type wrong password", "expected_result": "Password field filled"},
+                {"action": "Click sign-in button", "expected_result": "Error banner appears"},
+            ],
+            "expected_outcome": "Red error banner shows invalid password message",
+            "component": "Error Handler",
+            "given": "A registered user with incorrect password",
+            "when": "User attempts authentication with bad credentials",
+            "then": "Error notification displayed and login blocked",
+            "priority": "High",
+            "tags": ["auth", "negative"],
+        },
+        {
+            "title": "Verify password reset email delivery",
+            "description": "Forgotten password triggers recovery email to user",
+            "preconditions": "Email server configured and user registered",
+            "steps": [
+                {"action": "Click forgot password link", "expected_result": "Recovery form shown"},
+                {"action": "Enter registered email", "expected_result": "Email field validated"},
+                {"action": "Submit recovery request", "expected_result": "Confirmation displayed"},
+            ],
+            "expected_outcome": "Recovery email sent within 30 seconds",
+            "component": "Password Recovery",
+            "given": "A registered user who forgot their password",
+            "when": "User requests password recovery via email",
+            "then": "Reset link delivered to registered email address",
+            "priority": "Medium",
+            "tags": ["recovery", "positive"],
+        },
+        {
+            "title": "Verify account lockout after failed attempts",
+            "description": "Multiple failed logins trigger temporary account freeze",
+            "preconditions": "Security policy requires lockout after 5 failures",
+            "steps": [
+                {"action": "Attempt login with wrong password 5 times", "expected_result": "Counter increments"},
+                {"action": "Try sixth login attempt", "expected_result": "Account locked message"},
+                {"action": "Wait 15 minutes and retry", "expected_result": "Login succeeds"},
+            ],
+            "expected_outcome": "Account temporarily frozen then auto-unlocked",
+            "component": "Security Module",
+            "given": "A user who has exhausted login attempts",
+            "when": "Sixth consecutive failed authentication occurs",
+            "then": "Account locked for 15 minutes with notification",
+            "priority": "High",
+            "tags": ["security", "edge_case"],
+        },
+        {
+            "title": "Verify session timeout and forced logout",
+            "description": "Idle session expires after configured inactivity period",
+            "preconditions": "Session timeout configured to 30 minutes",
+            "steps": [
+                {"action": "Login and remain idle for 31 minutes", "expected_result": "Timer expires"},
+                {"action": "Attempt navigation to protected page", "expected_result": "Redirected"},
+                {"action": "Check session cookie", "expected_result": "Cookie invalidated"},
+            ],
+            "expected_outcome": "Session destroyed and user redirected to login",
+            "component": "Session Manager",
+            "given": "An authenticated user with expired idle session",
+            "when": "User attempts action after 30 minute inactivity",
+            "then": "Session terminated and login page presented",
+            "priority": "Medium",
+            "tags": ["session", "timeout"],
+        },
+        {
+            "title": "Verify multi-factor authentication prompt",
+            "description": "Second factor requested after primary credential validation",
+            "preconditions": "MFA enabled for user account with TOTP configured",
+            "steps": [
+                {"action": "Complete primary login", "expected_result": "MFA challenge shown"},
+                {"action": "Enter TOTP code from authenticator", "expected_result": "Code verified"},
+                {"action": "Confirm MFA approval", "expected_result": "Full access granted"},
+            ],
+            "expected_outcome": "Two-factor verification completed successfully",
+            "component": "MFA Gateway",
+            "given": "A user with TOTP multi-factor authentication enabled",
+            "when": "User completes primary login and enters TOTP code",
+            "then": "Full application access granted after MFA verification",
+            "priority": "High",
+            "tags": ["mfa", "security"],
+        },
+    ]
+
+    def __init__(self):
+        self._call_count = 0
+
+    def generate_test_case(self, prompt, system_prompt=None, **kwargs):
+        scenario = self._SCENARIOS[self._call_count % len(self._SCENARIOS)].copy()
+        self._call_count += 1
+        scenario.setdefault("estimated_duration", "5")
+        return scenario
 
 
 class TestValidateInput:

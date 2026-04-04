@@ -224,7 +224,7 @@ class ACClassifier:
                     confidence=0.8,
                     method="llm",
                 )
-        except Exception:
+        except (AttributeError, RuntimeError, OSError, ValueError):
             pass
 
         # LLM failed or returned unknown type — fall back to general

@@ -1,0 +1,190 @@
+# Heuristics Configuration for Test Case Generation
+# ================================================
+
+# AC Type Classification Keywords
+security_keywords:
+  - biometric
+  - otp
+  - certificate pinning
+  - screenshot
+  - screen recording
+  - rooted
+  - jailbreak
+  - session timeout
+  - session hard
+  - encrypt
+  - hash
+  - auth token
+  - re-authenticate
+  - re-verify
+  - ssl
+  - tls
+  - certificate
+  - pinning
+  - security feature
+  - multi-factor
+  - mfa
+  - 2fa
+  - two-factor
+  - access token
+  - tamper
+  - intrusion
+  - anomaly detection
+  - fraud detection
+
+timing_keywords:
+  - "within "
+  - seconds
+  - minutes
+  - hours
+  - days
+  - timeout
+  - t+1
+  - t+2
+  - t+3
+  - millisecond
+  - latency
+  - cutoff
+  - business hours
+  - sla
+  - response time
+  - "no longer than"
+  - "at most"
+
+eligibility_keywords:
+  - eligible
+  - ineligible
+  - eligibility
+  - enrolled
+  - enroll
+  - "not allowed"
+  - "not permitted"
+  - "access denied"
+  - unauthorised
+  - unauthorized
+  - "restricted to"
+  - "only allowed"
+  - "must be a member"
+  - membership required
+  - "tier "
+  - " tier"
+  - subscription
+  - "licence required"
+  - "license required"
+  - "only users"
+  - "only customers"
+  - "only agents"
+  - "only staff"
+  - "only admin"
+  - "must present"
+  - "must provide valid"
+  - "requires role"
+  - "must have role"
+  - "must hold"
+  - "requires permission"
+  - "requires a valid"
+
+data_valid_keywords:
+  - validated
+  - validation
+  - "format validated"
+  - digits
+  - numeric
+  - "date picker"
+  - "future dates"
+  - minimum
+  - exactly
+  - "> 100"
+  - "< 40%"
+  - "< 75%"
+  - ">85%"
+  - ">95%"
+  - "confidence score"
+  - dpi
+  - characters
+  - "contrast ratio"
+  - blur
+  - "inline error"
+  - "must not exceed"
+  - "must be between"
+  - "required format"
+  - "allowed values"
+  - "cannot be empty"
+  - "max length"
+  - "min length"
+  - alphanumeric
+  - maximum
+  - "field is required"
+  - "mandatory field"
+
+ui_behaviour_keywords:
+  - shown
+  - displayed
+  - visible
+  - appears
+  - prompt
+  - button
+  - overlay
+  - badge
+  - spinner
+  - indicator
+  - launches
+  - screen
+  - message
+  - notification
+  - banner
+  - toast
+  - alert
+  - highlight
+  - colour
+  - color
+  - icon
+  - label
+  - shows
+  - listed
+  - accessible
+  - pre-populated
+  - paginated
+  - sorted
+  - "search by"
+  - "deep link"
+  - toggle
+  - thumbnail
+  - "pinch-to-zoom"
+  - "colour-coded"
+  - landscape
+  - "overlay guide"
+  - "sequential flow"
+  - "auto-capture"
+  - brightness
+  - "focus quality"
+
+# Scorer Generic Phrases (to be moved to scorer config)
+generic_phrases:
+  - "the system responds correctly"
+  - "the system behaves as expected"
+  - "the expected result is observed"
+  - "the action is performed"
+  - "perform the action"
+  - "trigger the feature"
+  - "verify the outcome"
+  - "check the result"
+  - "observe the result"
+  - "the test passes"
+  - "the test is successful"
+  - "complete the action"
+  - "do the action"
+  - "execute the test step"
+  - "the system works as intended"
+  - "ensure the system"
+  - "the system should"
+  - "appropriate message is displayed"
+  - "relevant data is shown"
+  - "proper validation occurs"
+
+# Coverage Tracker Settings
+# =========================
+coverage:
+  match_threshold: 0.5         # Minimum keyword overlap ratio for a TC to "cover" an AC
+  weak_quality_threshold: 0.5  # Below this score, coverage is considered weak
+  min_coverage_types: 1        # Minimum distinct test types (positive, negative, edge_case) per AC

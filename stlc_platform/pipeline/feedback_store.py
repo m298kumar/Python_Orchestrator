@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -49,9 +50,11 @@ class FeedbackStore:
         persist_path: Optional[Path] = None,
         chroma_store: Any = None,
     ) -> None:
+        self._lock = threading.RLock()
         self._persist_path = persist_path or Path("./feedback")
         self._chroma_store = chroma_store
         self._feedback: List[AgentFeedbackArtifact] = []
+        self._by_agent: Dict[str, List[AgentFeedbackArtifact]] = {}
         self._chroma_collection: Any = None
 
         # Load existing feedback from disk
@@ -68,14 +71,17 @@ class FeedbackStore:
         Args:
             feedback: The feedback artifact to store.
         """
-        # Set created_at if not set
-        if not feedback.created_at:
-            feedback.created_at = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            # Set created_at if not set
+            if not feedback.created_at:
+                feedback.created_at = datetime.now(timezone.utc).isoformat()
 
-        self._feedback.append(feedback)
-        self._persist_to_disk()
+            self._feedback.append(feedback)
+            self._by_agent.setdefault(feedback.agent_id, []).append(feedback)
+            snapshot = self._snapshot_for_persist()
 
-        # Also index in ChromaDB for semantic search
+        # I/O outside the lock to reduce contention
+        self._write_snapshot(snapshot)
         self._index_in_chroma(feedback)
 
     def retrieve(
@@ -100,33 +106,37 @@ class FeedbackStore:
         Returns:
             List of matching AgentFeedbackArtifact items.
         """
-        # Try semantic search first if context is available
-        if self._chroma_collection is not None and context:
-            semantic_results = self._semantic_retrieve(agent_id, context, limit)
-            if semantic_results:
-                # Increment applied_count for retrieved feedback
-                for f in semantic_results:
+        snapshot = None
+        with self._lock:
+            # Try semantic search first if context is available
+            if self._chroma_collection is not None and context:
+                semantic_results = self._semantic_retrieve(agent_id, context, limit)
+                if semantic_results:
+                    for f in semantic_results:
+                        f.applied_count += 1
+                    snapshot = self._snapshot_for_persist()
+                    return_val = semantic_results
+                else:
+                    return_val = None
+            else:
+                return_val = None
+
+            if return_val is None:
+                # Fallback: use agent_id index for O(1) lookup instead of O(n) scan
+                matching = list(self._by_agent.get(agent_id, []))
+                matching.sort(key=lambda f: (f.applied_count, f.created_at or ""), reverse=False)
+                results = matching[:limit]
+                for f in results:
                     f.applied_count += 1
-                self._persist_to_disk()
-                return semantic_results
+                if results:
+                    snapshot = self._snapshot_for_persist()
+                return_val = results
 
-        # Fallback: keyword filter + least-applied ordering
-        matching = [f for f in self._feedback if f.agent_id == agent_id]
+        # I/O outside the lock
+        if snapshot is not None:
+            self._write_snapshot(snapshot)
 
-        # Sort by applied_count (least-applied first) then by created_at (newest first)
-        matching.sort(key=lambda f: (f.applied_count, f.created_at or ""), reverse=False)
-
-        # Limit results
-        results = matching[:limit]
-
-        # Increment applied_count for retrieved feedback
-        for f in results:
-            f.applied_count += 1
-
-        if results:
-            self._persist_to_disk()
-
-        return results
+        return return_val
 
     def list_all(self, agent_id: Optional[str] = None) -> List[AgentFeedbackArtifact]:
         """
@@ -138,9 +148,10 @@ class FeedbackStore:
         Returns:
             List of all matching feedback items.
         """
-        if agent_id:
-            return [f for f in self._feedback if f.agent_id == agent_id]
-        return list(self._feedback)
+        with self._lock:
+            if agent_id:
+                return [f for f in self._feedback if f.agent_id == agent_id]
+            return list(self._feedback)
 
     def clear(self, agent_id: Optional[str] = None) -> int:
         """
@@ -153,30 +164,39 @@ class FeedbackStore:
         Returns:
             Number of entries removed.
         """
-        if agent_id:
-            before = len(self._feedback)
-            self._feedback = [f for f in self._feedback if f.agent_id != agent_id]
-            removed = before - len(self._feedback)
-        else:
-            removed = len(self._feedback)
-            self._feedback = []
+        with self._lock:
+            if agent_id:
+                before = len(self._feedback)
+                self._feedback = [f for f in self._feedback if f.agent_id != agent_id]
+                self._by_agent.pop(agent_id, None)
+                removed = before - len(self._feedback)
+            else:
+                removed = len(self._feedback)
+                self._feedback = []
+                self._by_agent.clear()
 
-        self._persist_to_disk()
+            snapshot = self._snapshot_for_persist()
+
+        # I/O outside the lock
+        self._write_snapshot(snapshot)
         return removed
 
     @property
     def count(self) -> int:
         """Total number of stored feedback entries."""
-        return len(self._feedback)
+        with self._lock:
+            return len(self._feedback)
 
-    def _persist_to_disk(self) -> None:
-        """Save all feedback to a JSON file."""
+    def _snapshot_for_persist(self) -> List[Dict[str, Any]]:
+        """Create a serializable snapshot of feedback (call under lock)."""
+        return [f.model_dump() for f in self._feedback]
+
+    def _write_snapshot(self, snapshot: List[Dict[str, Any]]) -> None:
+        """Write a pre-serialized snapshot to disk (call outside lock)."""
         self._persist_path.mkdir(parents=True, exist_ok=True)
         feedback_file = self._persist_path / "feedback.json"
-
-        data = [f.model_dump() for f in self._feedback]
         feedback_file.write_text(
-            json.dumps(data, indent=2, default=str), encoding="utf-8"
+            json.dumps(snapshot, indent=2, default=str), encoding="utf-8"
         )
 
     def _load_from_disk(self) -> None:
@@ -188,9 +208,13 @@ class FeedbackStore:
         try:
             data = json.loads(feedback_file.read_text(encoding="utf-8"))
             self._feedback = [AgentFeedbackArtifact(**item) for item in data]
-        except (json.JSONDecodeError, TypeError, Exception):
+            # Build agent_id index
+            for fb in self._feedback:
+                self._by_agent.setdefault(fb.agent_id, []).append(fb)
+        except (json.JSONDecodeError, TypeError, ValueError, KeyError):
             # Corrupted file — start fresh
             self._feedback = []
+            self._by_agent = {}
 
     # ── ChromaDB Semantic Search ──────────────────────────────────────────
 

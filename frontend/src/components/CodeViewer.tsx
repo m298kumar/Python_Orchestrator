@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { Copy, Check, FileCode } from "lucide-react";
+import { useState, useCallback } from 'react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Copy, Check, FileCode } from 'lucide-react';
 
 interface Props {
   code: string;
@@ -31,9 +31,7 @@ export default function CodeViewer({ code, language, filename }: Props) {
             </>
           )}
           {!filename && (
-            <span className="font-mono text-xs uppercase tracking-wide">
-              {language}
-            </span>
+            <span className="font-mono text-xs uppercase tracking-wide">{language}</span>
           )}
         </div>
         <button
@@ -62,16 +60,16 @@ export default function CodeViewer({ code, language, filename }: Props) {
         showLineNumbers
         customStyle={{
           margin: 0,
-          padding: "1rem",
-          fontSize: "0.8125rem",
-          lineHeight: "1.6",
-          background: "transparent",
+          padding: '1rem',
+          fontSize: '0.8125rem',
+          lineHeight: '1.6',
+          background: 'transparent',
         }}
         lineNumberStyle={{
-          minWidth: "2.5em",
-          paddingRight: "1em",
-          color: "#636d83",
-          userSelect: "none",
+          minWidth: '2.5em',
+          paddingRight: '1em',
+          color: '#636d83',
+          userSelect: 'none',
         }}
       >
         {code}

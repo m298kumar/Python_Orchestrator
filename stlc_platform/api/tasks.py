@@ -11,7 +11,6 @@ import asyncio
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from stlc_platform.api.deps import get_agent_registry, get_run_manager, get_ws_manager
@@ -20,6 +19,28 @@ logger = logging.getLogger(__name__)
 
 # Shared thread pool for background pipeline runs
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pipeline")
+
+# Active orchestrators: run_id -> PipelineOrchestrator (for cancellation support)
+_active_orchestrators: Dict[str, Any] = {}
+
+
+def _populate_route_stores(run_id: str) -> None:
+    """Load pipeline artifacts from disk into frontend-facing API route stores.
+
+    Called after a pipeline run completes so that the Test Cases and BDD
+    pages immediately show generated output without a server restart.
+    """
+    try:
+        from stlc_platform.api.routes.test_cases import load_test_cases_from_run
+        load_test_cases_from_run(run_id)
+    except Exception:
+        logger.warning("Could not populate test cases for run %s", run_id, exc_info=True)
+
+    try:
+        from stlc_platform.api.routes.bdd import load_feature_files_from_run
+        load_feature_files_from_run(run_id)
+    except Exception:
+        logger.warning("Could not populate feature files for run %s", run_id, exc_info=True)
 
 
 def run_pipeline_background(
@@ -39,8 +60,8 @@ def run_pipeline_background(
     """
     from stlc_platform.pipeline.orchestrator import PipelineOrchestrator
     from stlc_platform.pipeline.pipeline_loader import load_pipeline
-    from stlc_platform.pipeline.skill_loader import SkillLoader
     from stlc_platform.pipeline.profile_loader import ProfileLoader
+    from stlc_platform.pipeline.skill_loader import SkillLoader
 
     run_mgr = get_run_manager()
     ws_mgr = get_ws_manager()
@@ -88,7 +109,7 @@ def run_pipeline_background(
         domain = config.get("project", {}).get("domain", "")
         skill_loader = SkillLoader(domain=domain)
 
-        run_dir = Path("./output") / ".stlc_runs" / run_id
+        run_dir = get_run_manager()._persist_dir / ".stlc_runs" / run_id
 
         def on_stage_start(stage_id: str) -> None:
             run_mgr.update_run(run_id, current_stage=stage_id)
@@ -128,14 +149,19 @@ def run_pipeline_background(
             skill_loader=skill_loader,
             execution_profile=execution_profile,
         )
+        _active_orchestrators[run_id] = orchestrator
 
         result = orchestrator.run(resume_from=resume_from)
+        _active_orchestrators.pop(run_id, None)
         duration = time.monotonic() - start_time
 
         # Store result
         run_mgr.store_metadata(run_id, {
             "pipeline_result": result.model_dump(),
         })
+
+        # Populate frontend-facing route stores from disk artifacts
+        _populate_route_stores(run_id)
 
         if result.status == "completed":
             run_mgr.set_completed(run_id, duration)
@@ -152,6 +178,15 @@ def run_pipeline_background(
                 loop,
             )
 
+            # Broadcast degradation warning if present in result
+            if result.error_message and "DEGRADATION ALERT" in (result.error_message or ""):
+                asyncio.run_coroutine_threadsafe(
+                    ws_mgr.broadcast(run_id, "degradation_warning", {
+                        "message": result.error_message,
+                    }),
+                    loop,
+                )
+
     except Exception as e:
         duration = time.monotonic() - start_time
         logger.exception("Pipeline run %s failed", run_id)
@@ -162,6 +197,15 @@ def run_pipeline_background(
                 ws_mgr.broadcast(run_id, "pipeline_error", {"error": str(e)}),
                 loop,
             )
+
+
+def cancel_pipeline_run(run_id: str) -> bool:
+    """Cancel an active pipeline run. Returns True if an active orchestrator was found."""
+    orch = _active_orchestrators.get(run_id)
+    if orch is not None:
+        orch.cancel()
+        return True
+    return False
 
 
 def submit_pipeline_run(

@@ -2,9 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('react-syntax-highlighter', () => ({
-  Prism: ({ children }: { children: string }) => (
-    <pre data-testid="code-block">{children}</pre>
-  ),
+  Prism: ({ children }: { children: string }) => <pre data-testid="code-block">{children}</pre>,
 }));
 vi.mock('react-syntax-highlighter/dist/esm/styles/prism', () => ({
   oneDark: {},
@@ -23,9 +21,7 @@ describe('CodeViewer', () => {
   });
 
   it('shows filename in the header when provided', () => {
-    render(
-      <CodeViewer code={sampleCode} language="javascript" filename="app.js" />
-    );
+    render(<CodeViewer code={sampleCode} language="javascript" filename="app.js" />);
     expect(screen.getByText('app.js')).toBeInTheDocument();
   });
 
@@ -36,9 +32,7 @@ describe('CodeViewer', () => {
 
   it('renders a copy button', () => {
     render(<CodeViewer code={sampleCode} language="javascript" />);
-    expect(
-      screen.getByRole('button', { name: /copy/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy/i })).toBeInTheDocument();
   });
 
   it('calls navigator.clipboard.writeText when copy is clicked', async () => {

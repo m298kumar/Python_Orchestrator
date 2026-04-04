@@ -6,6 +6,7 @@ List and inspect generated API test files.
 
 from __future__ import annotations
 
+import threading
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException
@@ -16,13 +17,16 @@ router = APIRouter(prefix="/api/api-tests", tags=["api-tests"])
 
 # In-memory store: filename -> dict
 _api_test_files: Dict[str, Dict[str, Any]] = {}
+_api_tests_lock = threading.Lock()
 
 
 @router.get("/", response_model=list[APITestFileResponse])
 def list_api_tests() -> list[APITestFileResponse]:
     """List generated API test files (without content)."""
+    with _api_tests_lock:
+        files_snapshot = list(_api_test_files.values())
     results: List[APITestFileResponse] = []
-    for f in _api_test_files.values():
+    for f in files_snapshot:
         results.append(
             APITestFileResponse(
                 filename=f.get("filename", ""),
@@ -40,11 +44,12 @@ def list_api_tests() -> list[APITestFileResponse]:
 @router.get("/{filename}", response_model=APITestFileResponse)
 def get_api_test(filename: str) -> APITestFileResponse:
     """Get an API test file with its content."""
-    if filename not in _api_test_files:
+    with _api_tests_lock:
+        f = _api_test_files.get(filename)
+    if f is None:
         raise HTTPException(
             status_code=404, detail=f"API test file '{filename}' not found"
         )
-    f = _api_test_files[filename]
     return APITestFileResponse(
         filename=f.get("filename", ""),
         framework=f.get("framework", ""),

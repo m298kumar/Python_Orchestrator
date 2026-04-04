@@ -25,6 +25,7 @@ class StageNode:
     config_overrides: Dict[str, Any] = field(default_factory=dict)
     retry_count: int = 0
     optional: bool = False
+    timeout_seconds: float = 0.0  # 0 = no timeout
 
 
 class PipelineDAG:

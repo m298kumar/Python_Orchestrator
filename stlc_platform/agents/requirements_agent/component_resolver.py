@@ -73,7 +73,7 @@ class ComponentResolver:
                 result = self._vector_store.lookup_component(category, req_title, ac_text)
                 if result:
                     return str(result)
-            except Exception:
+            except (AttributeError, RuntimeError, OSError):
                 pass  # graceful degradation
 
         # 3. Suffix map keyword match

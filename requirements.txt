@@ -40,3 +40,5 @@ PyJWT>=2.8.0
 
 # MCP Server
 mcp>=1.0.0        # Model Context Protocol — FastMCP server for tool exposure
+slowapi>=0.1.8
+python-json-logger>=2.0.7

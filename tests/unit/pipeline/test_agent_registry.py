@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import pytest
-
 from stlc_platform.pipeline.agent_registry import AgentRegistry
 
 
 class TestDefaultRegistry:
-    def test_default_has_four_agents(self):
+    def test_default_has_five_agents(self):
         registry = AgentRegistry.default()
         caps = registry.list_agents()
-        assert len(caps) == 4
+        assert len(caps) == 5
 
     def test_get_agent_by_id(self):
         registry = AgentRegistry.default()

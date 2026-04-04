@@ -6,10 +6,13 @@ Submit and list agent feedback entries.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Query
+
+logger = logging.getLogger(__name__)
 
 from stlc_platform.api.schemas import FeedbackRequest, FeedbackResponse
 from stlc_platform.core.contracts import AgentFeedbackArtifact
@@ -40,6 +43,7 @@ def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
         created_at=datetime.now(timezone.utc).isoformat(),
     )
     store.store(artifact)
+    logger.info("Feedback submitted for agent '%s': %s", req.agent_id, req.feedback_type)
 
     return FeedbackResponse(
         agent_id=artifact.agent_id,
@@ -53,6 +57,8 @@ def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
 @router.get("/", response_model=list[FeedbackResponse])
 def list_feedback(
     agent_id: Optional[str] = Query(None, description="Filter by agent ID"),
+    limit: int = Query(default=100, ge=1, le=500, description="Max items to return"),
+    offset: int = Query(default=0, ge=0, description="Number of items to skip"),
 ) -> list[FeedbackResponse]:
     """List feedback entries, optionally filtered by agent ID."""
     store = _get_feedback_store()
@@ -69,4 +75,4 @@ def list_feedback(
                 created_at=f.created_at,
             )
         )
-    return results
+    return results[offset : offset + limit]

@@ -6,10 +6,8 @@ feedback loop, CI output, and full pipeline E2E with mock agents.
 """
 
 import json
-import pytest
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from stlc_platform.core.base_agent import (
     AgentCapabilities,
@@ -18,14 +16,13 @@ from stlc_platform.core.base_agent import (
     ValidationResult,
 )
 from stlc_platform.core.contracts import AgentFeedbackArtifact
-from stlc_platform.pipeline.dag import PipelineDAG, StageNode
-from stlc_platform.pipeline.orchestrator import PipelineOrchestrator
 from stlc_platform.pipeline.agent_registry import AgentRegistry
-from stlc_platform.pipeline.skill_loader import SkillLoader
-from stlc_platform.pipeline.profile_loader import ProfileLoader, ExecutionProfile
-from stlc_platform.pipeline.model_router import ModelRouter
+from stlc_platform.pipeline.dag import PipelineDAG, StageNode
 from stlc_platform.pipeline.feedback_store import FeedbackStore
-
+from stlc_platform.pipeline.model_router import ModelRouter
+from stlc_platform.pipeline.orchestrator import PipelineOrchestrator
+from stlc_platform.pipeline.profile_loader import ExecutionProfile
+from stlc_platform.pipeline.skill_loader import SkillLoader
 
 # ── Mock Agents ───────────────────────────────────────────────────────────────
 
@@ -321,7 +318,10 @@ class MockCrawlerAgent(BaseAgent):
     def execute(self, artifacts, config):
         return AgentResult(
             success=True,
-            artifacts={"site_model": {"pages": 3}},
+            artifacts={
+                "site_model": {"pages": 3},
+                "discrepancy_report": {"total_discrepancies": 0, "items": []},
+            },
             metadata={"total_pages": 3},
         )
 
@@ -355,6 +355,29 @@ class MockAPITestAgent(BaseAgent):
         )
 
 
+class MockEnrichAgent(BaseAgent):
+    agent_id = "enrich_test_cases"
+    agent_version = "1.0"
+
+    def validate_input(self, artifacts):
+        return ValidationResult(valid=True)
+
+    def execute(self, artifacts, config):
+        # Pass through test_cases unchanged
+        test_cases = artifacts.get("test_cases", [])
+        return AgentResult(
+            success=True,
+            artifacts={"test_cases": test_cases},
+            metadata={"discrepancy_tcs_added": 0},
+        )
+
+    def get_capabilities(self):
+        return AgentCapabilities(
+            agent_id=self.agent_id, agent_version=self.agent_version,
+            default_model_tier="lightweight",
+        )
+
+
 class TestFullPipelineE2E:
     def test_full_stlc_pipeline_with_mocks(self, tmp_path):
         """Full 5-stage pipeline with mock agents, skills, and profiles."""
@@ -371,6 +394,8 @@ class TestFullPipelineE2E:
         registry.register("crawler_agent", MockCrawlerAgent)
         registry.register("api_test_generation", MockAPITestAgent)
         registry.register("api_test_agent", MockAPITestAgent)
+        registry.register("enrich_test_cases", MockEnrichAgent)
+        registry.register("enrichment_agent", MockEnrichAgent)
 
         skill_loader = SkillLoader(skills_dir=Path("config/skills"), domain="ecommerce")
         profile = ExecutionProfile(name="regression", filters={})

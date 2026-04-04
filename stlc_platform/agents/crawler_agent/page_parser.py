@@ -11,12 +11,10 @@ Uses the stdlib ``html.parser`` backend -- zero native dependencies.
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup, Tag
 
 from stlc_platform.core.contracts import CrawledPageArtifact, PageElementArtifact
-
 
 # Element types we care about and their HTML tag mappings
 _TAG_TYPE_MAP: Dict[str, str] = {
@@ -35,7 +33,7 @@ _EXTRA_SELECTORS = [
 ]
 
 # Link schemes to exclude
-_EXCLUDED_SCHEMES = {"javascript", "mailto", "tel", "data"}
+
 
 
 class PageParser:
@@ -211,42 +209,6 @@ class PageParser:
             })
 
         return forms
-
-    # ------------------------------------------------------------------
-    # Link extraction
-    # ------------------------------------------------------------------
-
-    def _extract_links(self, soup: BeautifulSoup, base_url: str) -> List[str]:
-        """
-        Extract and normalize all outbound links.
-
-        Filters out javascript:, mailto:, tel:, and anchor-only (#) links.
-        Converts relative URLs to absolute using base_url.
-        Deduplicates.
-        """
-        links: List[str] = []
-        seen: set = set()
-
-        for a_tag in soup.find_all("a", href=True):
-            href = str(a_tag["href"]).strip()
-
-            # Skip empty, anchor-only, and excluded schemes
-            if not href or href.startswith("#"):
-                continue
-
-            parsed = urlparse(href)
-            if parsed.scheme.lower() in _EXCLUDED_SCHEMES:
-                continue
-
-            # Normalize relative URLs
-            if base_url and not parsed.scheme:
-                href = urljoin(base_url, href)
-
-            if href not in seen:
-                seen.add(href)
-                links.append(href)
-
-        return links
 
     # ------------------------------------------------------------------
     # Text helpers

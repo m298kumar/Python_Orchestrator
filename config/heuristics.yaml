@@ -1,0 +1,48 @@
+# Heuristics Configuration for Discrepancy Detection
+# ==================================================
+
+page_keywords:
+  - page
+  - screen
+  - view
+  - dashboard
+  - form
+  - panel
+  - dialog
+  - modal
+  - popup
+  - window
+  - tab
+
+element_patterns:
+  button:
+    - pattern: \b(\w[\w\s]{0,30})\s+button\b
+    - flags: IGNORECASE
+  button_reverse:
+    - pattern: \bbutton\s+([\w\s]{1,30})\b
+    - flags: IGNORECASE
+  link:
+    - pattern: \b(\w[\w\s]{0,30})\s+link\b
+    - flags: IGNORECASE
+  link_reverse:
+    - pattern: \blink\s+(?:to\s+)?([\w\s]{1,30})\b
+    - flags: IGNORECASE
+  input:
+    - pattern: \b(\w[\w\s]{0,30})\s+(?:input|field|textbox|text\s*box)\b
+    - flags: IGNORECASE
+  input_reverse:
+    - pattern: \b(?:input|field|textbox)\s+([\w\s]{1,30})\b
+    - flags: IGNORECASE
+  select:
+    - pattern: \b(\w[\w\s]{0,30})\s+(?:dropdown|select|combo\s*box)\b
+    - flags: IGNORECASE
+  checkbox:
+    - pattern: \b(\w[\w\s]{0,30})\s+checkbox\b
+    - flags: IGNORECASE
+  radio:
+    - pattern: \b(\w[\w\s]{0,30})\s+radio\b
+    - flags: IGNORECASE
+
+field_patterns:
+  - pattern: \b(username|password|email|phone|address|city|zip|card.?number|expiry|cvv|first.?name|last.?name|name|search|date|amount)\s*(?:field|input|textbox|box)?\b
+    flags: IGNORECASE

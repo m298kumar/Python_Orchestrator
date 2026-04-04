@@ -9,6 +9,7 @@ and provides an LLM connection test endpoint.
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any, Dict
 
 from fastapi import APIRouter
@@ -24,7 +25,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
-# In-memory config state
+# In-memory config state (protected by _config_lock for thread safety)
+_config_lock = threading.Lock()
 _config: Dict[str, Any] = {
     "project": {},
     "llm": {},
@@ -69,17 +71,18 @@ def _load_initial_config() -> None:
     so that all fields — including ``api_key`` and ``provider`` — are preserved.
     """
     global _config
-    if _config.get("_loaded"):
-        return
-    try:
-        from stlc_platform.core.config_loader import _find_project_root, _load_yaml
-        yaml_cfg = _load_yaml(_find_project_root() / "config" / "stlc_config.yaml")
-        _config["project"] = yaml_cfg.get("project", {})
-        _config["llm"] = yaml_cfg.get("llm", {})
-        _config["output"] = yaml_cfg.get("output", yaml_cfg.get("export", {}))
-    except Exception:
-        pass
-    _config["_loaded"] = True
+    with _config_lock:
+        if _config.get("_loaded"):
+            return
+        try:
+            from stlc_platform.core.config_loader import _find_project_root, _load_yaml
+            yaml_cfg = _load_yaml(_find_project_root() / "config" / "stlc_config.yaml")
+            _config["project"] = yaml_cfg.get("project", {})
+            _config["llm"] = yaml_cfg.get("llm", {})
+            _config["output"] = yaml_cfg.get("output", yaml_cfg.get("export", {}))
+        except (ImportError, OSError, ValueError):
+            pass
+        _config["_loaded"] = True
 
 
 def _dot_to_nested(flat: Dict[str, Any]) -> Dict[str, Any]:
@@ -112,14 +115,15 @@ def _strip_masked(d: Dict[str, Any]) -> Dict[str, Any]:
 
 def _apply_updates(updates_flat: Dict[str, Any]) -> None:
     """Apply dot-notation updates to the in-memory config dict."""
-    for key, value in updates_flat.items():
-        parts = key.split(".")
-        target = _config
-        for part in parts[:-1]:
-            if part not in target or not isinstance(target[part], dict):
-                target[part] = {}
-            target = target[part]
-        target[parts[-1]] = value
+    with _config_lock:
+        for key, value in updates_flat.items():
+            parts = key.split(".")
+            target = _config
+            for part in parts[:-1]:
+                if part not in target or not isinstance(target[part], dict):
+                    target[part] = {}
+                target = target[part]
+            target[parts[-1]] = value
 
 
 def _persist_to_yaml(nested_updates: Dict[str, Any]) -> None:
@@ -141,11 +145,12 @@ def _persist_to_yaml(nested_updates: Dict[str, Any]) -> None:
 def get_config() -> ConfigResponse:
     """Return the current configuration with sensitive fields masked."""
     _load_initial_config()
-    return ConfigResponse(
-        project=_sanitize(_config.get("project", {})),
-        llm=_sanitize(_config.get("llm", {})),
-        output=_sanitize(_config.get("output", {})),
-    )
+    with _config_lock:
+        return ConfigResponse(
+            project=_sanitize(_config.get("project", {})),
+            llm=_sanitize(_config.get("llm", {})),
+            output=_sanitize(_config.get("output", {})),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -188,11 +193,12 @@ def update_config(update: ConfigUpdate) -> ConfigResponse:
     nested = _dot_to_nested(all_flat)
     _persist_to_yaml(nested)
 
-    return ConfigResponse(
-        project=_sanitize(_config.get("project", {})),
-        llm=_sanitize(_config.get("llm", {})),
-        output=_sanitize(_config.get("output", {})),
-    )
+    with _config_lock:
+        return ConfigResponse(
+            project=_sanitize(_config.get("project", {})),
+            llm=_sanitize(_config.get("llm", {})),
+            output=_sanitize(_config.get("output", {})),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -220,13 +226,32 @@ def test_llm_connection(req: LLMTestRequest) -> LLMTestResponse:
         )
 
 
+def _validate_base_url(url: str) -> str:
+    """Validate base_url to prevent SSRF attacks."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Unsupported scheme: {parsed.scheme}")
+    host = parsed.hostname or ""
+    # Block cloud metadata endpoints and common internal-only ranges
+    blocked = {"169.254.169.254", "metadata.google.internal", "100.100.100.200"}
+    if host in blocked:
+        raise ValueError(f"Blocked host: {host}")
+    return url
+
+
 def _test_ollama(req: LLMTestRequest) -> LLMTestResponse:
     """Test Ollama connectivity via its /api/tags endpoint."""
-    import urllib.request
-    import urllib.error
     import json
+    import urllib.error
+    import urllib.request
 
     base_url = (req.base_url or "http://localhost:11434").rstrip("/")
+    try:
+        _validate_base_url(base_url)
+    except ValueError as exc:
+        return LLMTestResponse(success=False, message=f"Invalid base URL: {exc}")
     url = f"{base_url}/api/tags"
 
     try:

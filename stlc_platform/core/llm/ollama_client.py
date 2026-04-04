@@ -55,7 +55,7 @@ class OllamaClient(BaseLLMClient):
             resp = requests.get(f"{self.base_url}/api/tags", timeout=10)
             if resp.status_code == 200:
                 return [m["name"] for m in resp.json().get("models", [])]
-        except Exception:
+        except (OSError, ValueError, KeyError):
             pass
         return []
 

@@ -23,11 +23,21 @@ stages:
     output: [site_model, discrepancy_report]
     optional: true
 
-  - id: generate_bdd_code
-    agent: bdd_agent
-    depends_on: [parse_requirements]
+  - id: enrich_test_cases
+    agent: enrich_test_cases
+    depends_on: [parse_requirements, crawl_application]
     input:
       test_cases: "$parse_requirements.test_cases"
+      discrepancy_report: "$crawl_application.discrepancy_report"
+    output: [test_cases]
+    optional: true
+
+  - id: generate_bdd_code
+    agent: bdd_agent
+    depends_on: [enrich_test_cases, crawl_application]
+    input:
+      test_cases: "$enrich_test_cases.test_cases"
+      site_model: "$crawl_application.site_model"
     output: [feature_files, step_definitions]
 
   - id: discover_apis

@@ -217,6 +217,16 @@ class ModelRouter:
         """Check if a named tier is configured."""
         return name in self._tiers
 
+    @staticmethod
+    def _estimate_tokens(text: str) -> int:
+        """Estimate token count using word-based heuristic (~1.3 tokens/word).
+
+        This is more accurate than len(text)//4 for English text because
+        tokenizers split on word boundaries, punctuation, and subwords.
+        """
+        words = len(text.split())
+        return max(1, int(words * 1.3))
+
     def _analyze_context(self, context: Dict[str, Any]) -> ComplexitySignals:
         """Extract complexity signals from input context."""
         signals = ComplexitySignals()
@@ -224,12 +234,12 @@ class ModelRouter:
         # Estimate token count from string values
         for value in context.values():
             if isinstance(value, str):
-                signals.input_token_estimate += len(value) // 4
+                signals.input_token_estimate += self._estimate_tokens(value)
             elif isinstance(value, list):
                 signals.item_count += len(value)
                 for item in value:
                     if isinstance(item, str):
-                        signals.input_token_estimate += len(item) // 4
+                        signals.input_token_estimate += self._estimate_tokens(item)
 
         return signals
 

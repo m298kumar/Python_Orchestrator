@@ -1,18 +1,7 @@
-import { useEffect, useState } from "react";
-import {
-  Code,
-  Download,
-  FileCode,
-  Loader2,
-  Package,
-  X,
-} from "lucide-react";
-import {
-  listFeatures,
-  getFeature,
-  downloadBddProject,
-  type FeatureFile,
-} from "../api/client";
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Code, Download, FileCode, Loader2, Package, X } from 'lucide-react';
+import { listFeatures, getFeature, downloadBddProject, type FeatureFile } from '../api/client';
 
 // ---------------------------------------------------------------------------
 // Feature List Item
@@ -29,22 +18,18 @@ function FeatureListItem({ feature, selected, onClick }: ListItemProps) {
     <button
       onClick={onClick}
       className={[
-        "w-full text-left px-4 py-3 border-b border-gray-100 transition-colors",
-        selected
-          ? "bg-indigo-50 border-l-[3px] border-l-indigo-500"
-          : "hover:bg-gray-50",
-      ].join(" ")}
+        'w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-700 transition-colors',
+        selected ? 'bg-indigo-50 dark:bg-indigo-900/30 border-l-[3px] border-l-indigo-500' : 'hover:bg-gray-50 dark:hover:bg-gray-700',
+      ].join(' ')}
     >
       <div className="flex items-center gap-2">
-        <FileCode className="h-4 w-4 text-gray-400 flex-shrink-0" />
-        <span className="text-sm font-medium text-gray-900 truncate">
-          {feature.filename}
-        </span>
+        <FileCode className="h-4 w-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+        <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{feature.filename}</span>
       </div>
-      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
         <span>Req: {feature.req_id}</span>
         <span>
-          {feature.scenario_count} scenario{feature.scenario_count !== 1 ? "s" : ""}
+          {feature.scenario_count} scenario{feature.scenario_count !== 1 ? 's' : ''}
         </span>
       </div>
     </button>
@@ -56,40 +41,34 @@ function FeatureListItem({ feature, selected, onClick }: ListItemProps) {
 // ---------------------------------------------------------------------------
 
 function GherkinViewer({ content }: { content: string }) {
-  const lines = content.split("\n");
+  const lines = content.split('\n');
 
   return (
     <pre className="text-sm leading-relaxed font-mono overflow-auto">
       {lines.map((line, i) => {
         const trimmed = line.trimStart();
-        let className = "text-gray-700";
+        let className = 'text-gray-700 dark:text-gray-300';
 
-        if (trimmed.startsWith("Feature:"))
-          className = "text-indigo-700 font-bold";
+        if (trimmed.startsWith('Feature:')) className = 'text-indigo-700 dark:text-indigo-400 font-bold';
+        else if (trimmed.startsWith('Scenario:') || trimmed.startsWith('Scenario Outline:'))
+          className = 'text-blue-700 dark:text-blue-400 font-semibold';
+        else if (trimmed.startsWith('Background:')) className = 'text-blue-700 dark:text-blue-400 font-semibold';
         else if (
-          trimmed.startsWith("Scenario:") ||
-          trimmed.startsWith("Scenario Outline:")
+          trimmed.startsWith('Given ') ||
+          trimmed.startsWith('When ') ||
+          trimmed.startsWith('Then ') ||
+          trimmed.startsWith('And ') ||
+          trimmed.startsWith('But ')
         )
-          className = "text-blue-700 font-semibold";
-        else if (trimmed.startsWith("Background:"))
-          className = "text-blue-700 font-semibold";
-        else if (
-          trimmed.startsWith("Given ") ||
-          trimmed.startsWith("When ") ||
-          trimmed.startsWith("Then ") ||
-          trimmed.startsWith("And ") ||
-          trimmed.startsWith("But ")
-        )
-          className = "text-green-700";
-        else if (trimmed.startsWith("@")) className = "text-purple-600";
-        else if (trimmed.startsWith("#")) className = "text-gray-400 italic";
-        else if (trimmed.startsWith("Examples:"))
-          className = "text-amber-700 font-semibold";
-        else if (trimmed.startsWith("|")) className = "text-gray-600";
+          className = 'text-green-700 dark:text-green-400';
+        else if (trimmed.startsWith('@')) className = 'text-purple-600 dark:text-purple-400';
+        else if (trimmed.startsWith('#')) className = 'text-gray-400 dark:text-gray-500 italic';
+        else if (trimmed.startsWith('Examples:')) className = 'text-amber-700 dark:text-amber-400 font-semibold';
+        else if (trimmed.startsWith('|')) className = 'text-gray-600 dark:text-gray-400';
 
         return (
           <div key={i} className="flex">
-            <span className="inline-block w-10 text-right pr-3 text-gray-300 select-none">
+            <span className="inline-block w-10 text-right pr-3 text-gray-300 dark:text-gray-600 select-none">
               {i + 1}
             </span>
             <span className={className}>{line}</span>
@@ -105,6 +84,9 @@ function GherkinViewer({ content }: { content: string }) {
 // ---------------------------------------------------------------------------
 
 export default function BddCode() {
+  const [searchParams] = useSearchParams();
+  const runId = searchParams.get('run_id');
+
   const [features, setFeatures] = useState<FeatureFile[]>([]);
   const [selectedFilename, setSelectedFilename] = useState<string | null>(null);
   const [selectedContent, setSelectedContent] = useState<string | null>(null);
@@ -117,9 +99,9 @@ export default function BddCode() {
     setContentLoading(true);
     try {
       const res = await getFeature(filename);
-      setSelectedContent(res.data.content ?? "");
+      setSelectedContent(res.data.content ?? '');
     } catch (err: any) {
-      setError(err.message ?? "Failed to load feature content");
+      setError(err.message ?? 'Failed to load feature content');
       setSelectedContent(null);
     } finally {
       setContentLoading(false);
@@ -128,26 +110,27 @@ export default function BddCode() {
 
   useEffect(() => {
     (async () => {
+      setLoading(true);
       try {
-        const res = await listFeatures();
+        const res = await listFeatures(runId ?? undefined);
         setFeatures(res.data);
         if (res.data.length > 0) {
           selectFeature(res.data[0].filename);
         }
+        setError(null);
       } catch (err: any) {
-        setError(err.message ?? "Failed to load features");
+        setError(err.message ?? 'Failed to load features');
       } finally {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [runId]);
 
   const handleDownloadFile = () => {
     if (!selectedContent || !selectedFilename) return;
-    const blob = new Blob([selectedContent], { type: "text/plain" });
+    const blob = new Blob([selectedContent], { type: 'text/plain' });
     const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    const link = document.createElement('a');
     link.href = url;
     link.download = selectedFilename;
     link.click();
@@ -158,13 +141,13 @@ export default function BddCode() {
     try {
       const res = await downloadBddProject();
       const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement("a");
+      const link = document.createElement('a');
       link.href = url;
-      link.download = "bdd_project.zip";
+      link.download = 'bdd_project.zip';
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      setError(err.message ?? "Failed to download BDD project");
+      setError(err.message ?? 'Failed to download BDD project');
     }
   };
 
@@ -181,15 +164,13 @@ export default function BddCode() {
     return (
       <div className="p-6 max-w-7xl mx-auto">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">BDD Code</h1>
-          <p className="text-gray-500 mt-1">View and download generated feature files</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">BDD Code</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">View and download generated feature files</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-12 text-center mt-8">
-          <Code className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 text-lg font-medium">
-            No BDD features generated yet
-          </p>
-          <p className="text-gray-400 text-sm mt-1">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center mt-8">
+          <Code className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">No BDD features generated yet</p>
+          <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">
             Run the BDD pipeline stage to generate feature files.
           </p>
         </div>
@@ -200,7 +181,7 @@ export default function BddCode() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between">
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center justify-between">
           <span className="text-sm">{error}</span>
           <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
             <X className="h-4 w-4" />
@@ -211,9 +192,9 @@ export default function BddCode() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">BDD Code</h1>
-          <p className="text-gray-500 mt-1">
-            {features.length} feature file{features.length !== 1 ? "s" : ""} generated
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">BDD Code</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            {features.length} feature file{features.length !== 1 ? 's' : ''} generated
           </p>
         </div>
         <button
@@ -227,9 +208,9 @@ export default function BddCode() {
       {/* Two-panel layout */}
       <div className="flex gap-6 min-h-[500px]">
         {/* Left panel: feature list */}
-        <div className="w-1/3 bg-white rounded-lg shadow overflow-hidden flex flex-col">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700">Feature Files</h3>
+        <div className="w-1/3 bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden flex flex-col">
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Feature Files</h3>
           </div>
           <div className="flex-1 overflow-y-auto">
             {features.map((f) => (
@@ -244,19 +225,17 @@ export default function BddCode() {
         </div>
 
         {/* Right panel: code viewer */}
-        <div className="w-2/3 bg-white rounded-lg shadow overflow-hidden flex flex-col">
+        <div className="w-2/3 bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden flex flex-col">
           {selectedFilename ? (
             <>
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <FileCode className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700">
-                    {selectedFilename}
-                  </span>
+                  <FileCode className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{selectedFilename}</span>
                 </div>
                 <button
                   onClick={handleDownloadFile}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
                 >
                   <Download className="h-3.5 w-3.5" /> Download
                 </button>
@@ -269,12 +248,12 @@ export default function BddCode() {
                 ) : selectedContent != null ? (
                   <GherkinViewer content={selectedContent} />
                 ) : (
-                  <p className="text-gray-500 text-sm">Failed to load content</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">Failed to load content</p>
                 )}
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+            <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
               Select a feature file to view its content
             </div>
           )}

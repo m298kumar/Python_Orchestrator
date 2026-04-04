@@ -53,21 +53,30 @@ export interface Requirement {
   tags: string[];
 }
 
+export interface TestStep {
+  action: string;
+  expected_result: string;
+}
+
 export interface TestCase {
   tc_id: string;
   req_id: string;
   title: string;
   description: string;
+  preconditions: string;
   test_type: string;
   priority: string;
   category: string;
   component: string;
+  steps: TestStep[];
   given: string;
   when: string;
   then: string;
   expected_outcome: string;
   tags: string[];
   status: string;
+  test_level: string;
+  quality_score: number;
 }
 
 export interface FeatureFile {
@@ -91,6 +100,16 @@ export interface FeedbackRequest {
   message: string;
 }
 
+export interface AuthStatus {
+  auth_enabled: boolean;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
 // ---------------------------------------------------------------------------
 // Axios instance
 // ---------------------------------------------------------------------------
@@ -100,6 +119,15 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Attach Bearer token to requests when available
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('stlc_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 // Response interceptor — normalise errors into a predictable shape
@@ -133,8 +161,7 @@ api.interceptors.response.use(
 export const triggerPipelineRun = (req: PipelineRunRequest) =>
   api.post<PipelineRunStatus>('/pipeline/run', req);
 
-export const listPipelineRuns = () =>
-  api.get<PipelineRunSummary[]>('/pipeline/runs');
+export const listPipelineRuns = () => api.get<PipelineRunSummary[]>('/pipeline/runs');
 
 export const getPipelineRun = (runId: string) =>
   api.get<PipelineRunStatus>('/pipeline/runs/' + runId);
@@ -143,11 +170,9 @@ export const getPipelineRun = (runId: string) =>
 // Agents
 // ---------------------------------------------------------------------------
 
-export const listAgents = () =>
-  api.get<AgentInfo[]>('/agents/');
+export const listAgents = () => api.get<AgentInfo[]>('/agents/');
 
-export const getAgent = (agentId: string) =>
-  api.get<AgentInfo>('/agents/' + agentId);
+export const getAgent = (agentId: string) => api.get<AgentInfo>('/agents/' + agentId);
 
 // ---------------------------------------------------------------------------
 // Requirements
@@ -161,11 +186,9 @@ export const uploadRequirements = (file: File) => {
   });
 };
 
-export const listRequirements = () =>
-  api.get<Requirement[]>('/requirements/');
+export const listRequirements = () => api.get<Requirement[]>('/requirements/');
 
-export const getRequirement = (reqId: string) =>
-  api.get<Requirement>('/requirements/' + reqId);
+export const getRequirement = (reqId: string) => api.get<Requirement>('/requirements/' + reqId);
 
 export const updateRequirement = (reqId: string, data: Partial<Requirement>) =>
   api.put('/requirements/' + reqId, data);
@@ -177,44 +200,62 @@ export const updateRequirement = (reqId: string, data: Partial<Requirement>) =>
 export const listTestCases = (params?: Record<string, string>) =>
   api.get<TestCase[]>('/test-cases/', { params });
 
-export const getTestCase = (tcId: string) =>
-  api.get<TestCase>('/test-cases/' + tcId);
+/** List test cases for a specific pipeline run. */
+export const listTestCasesByRun = (runId: string) =>
+  api.get<TestCase[]>('/test-cases/', { params: { run_id: runId } });
+
+export const getTestCase = (tcId: string) => api.get<TestCase>('/test-cases/' + tcId);
 
 export const updateTestCase = (tcId: string, data: Partial<TestCase>) =>
   api.put('/test-cases/' + tcId, data);
 
-export const approveTestCase = (tcId: string) =>
-  api.post('/test-cases/' + tcId + '/approve');
+export const approveTestCase = (tcId: string) => api.post('/test-cases/' + tcId + '/approve');
 
-export const rejectTestCase = (tcId: string) =>
-  api.post('/test-cases/' + tcId + '/reject');
+export const rejectTestCase = (tcId: string) => api.post('/test-cases/' + tcId + '/reject');
+
+export const bulkApproveTestCases = (tcIds: string[], reason?: string) =>
+  api.post<{ updated: string[]; not_found: string[] }>('/test-cases/bulk/approve', {
+    tc_ids: tcIds,
+    reason,
+  });
+
+export const bulkRejectTestCases = (tcIds: string[], reason?: string) =>
+  api.post<{ updated: string[]; not_found: string[] }>('/test-cases/bulk/reject', {
+    tc_ids: tcIds,
+    reason,
+  });
 
 // ---------------------------------------------------------------------------
 // BDD
 // ---------------------------------------------------------------------------
 
-export const listFeatures = () =>
-  api.get<FeatureFile[]>('/bdd/features');
+export const listFeatures = (runId?: string) =>
+  api.get<FeatureFile[]>('/bdd/features', { params: runId ? { run_id: runId } : {} });
 
-export const getFeature = (filename: string) =>
-  api.get<FeatureFile>('/bdd/features/' + filename);
+export const getFeature = (filename: string) => api.get<FeatureFile>('/bdd/features/' + filename);
 
-export const downloadBddProject = () =>
-  api.get('/bdd/project/download', { responseType: 'blob' });
+export const downloadBddProject = () => api.get('/bdd/project/download', { responseType: 'blob' });
 
 // ---------------------------------------------------------------------------
 // Health
 // ---------------------------------------------------------------------------
 
-export const getHealth = () =>
-  api.get<HealthResponse>('/health');
+export const getHealth = () => api.get<HealthResponse>('/health');
 
 // ---------------------------------------------------------------------------
 // Feedback
 // ---------------------------------------------------------------------------
 
-export const submitFeedback = (data: FeedbackRequest) =>
-  api.post('/feedback/', data);
+export const submitFeedback = (data: FeedbackRequest) => api.post('/feedback/', data);
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export const getAuthStatus = () => api.get<AuthStatus>('/auth/status');
+
+export const login = (username: string, password: string) =>
+  api.post<LoginResponse>('/auth/login', { username, password });
 
 export const listFeedback = (agentId?: string) =>
   api.get('/feedback/', { params: agentId ? { agent_id: agentId } : {} });
@@ -240,11 +281,9 @@ export interface PageSummary {
   link_count: number;
 }
 
-export const getSiteModel = () =>
-  api.get<SiteModelResponse>('/crawler/site-model');
+export const getSiteModel = () => api.get<SiteModelResponse>('/crawler/site-model');
 
-export const listCrawlerPages = () =>
-  api.get<PageSummary[]>('/crawler/pages');
+export const listCrawlerPages = () => api.get<PageSummary[]>('/crawler/pages');
 
 // ---------------------------------------------------------------------------
 // API Tests
@@ -260,8 +299,7 @@ export interface ApiTestFile {
   content?: string;
 }
 
-export const listApiTests = () =>
-  api.get<ApiTestFile[]>('/api-tests/');
+export const listApiTests = () => api.get<ApiTestFile[]>('/api-tests/');
 
 export const getApiTest = (filename: string) =>
   api.get<ApiTestFile>('/api-tests/' + encodeURIComponent(filename));
@@ -289,13 +327,54 @@ export interface LLMTestResponse {
   models: string[];
 }
 
-export const getConfig = () =>
-  api.get<ConfigResponse>('/config/');
+export const getConfig = () => api.get<ConfigResponse>('/config/');
 
 export const updateConfig = (data: Partial<ConfigResponse>) =>
   api.put<ConfigResponse>('/config/', data);
 
 export const testLlmConnection = (data: LLMTestRequest) =>
   api.post<LLMTestResponse>('/config/test-llm', data);
+
+// ---------------------------------------------------------------------------
+// Metrics
+// ---------------------------------------------------------------------------
+
+export interface MetricsRun {
+  run_id: string;
+  timestamp: string;
+  pipeline_name: string;
+  total_test_cases: number;
+  avg_quality_score: number;
+  quality_distribution: Record<string, number>;
+  tokens_used: number;
+  estimated_cost_usd: number;
+  cache_hit_rate: number;
+  generation_time_seconds: number;
+  per_stage_durations: Record<string, number>;
+  per_ac_type_scores: Record<string, number>;
+  coverage_pct: number;
+  stages_completed: number;
+  stages_failed: number;
+  stages_skipped: number;
+}
+
+export interface MetricsTrend {
+  run_count: number;
+  avg_quality_score: number;
+  avg_generation_time: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  quality_trend: { run_id: string; score: number }[];
+  degradation_warning?: string;
+}
+
+export const listMetrics = (lastN?: number) =>
+  api.get<MetricsRun[]>('/metrics', { params: lastN ? { last_n: lastN } : {} });
+
+export const getMetricsTrends = (lastN?: number) =>
+  api.get<MetricsTrend>('/metrics/trends', { params: lastN ? { last_n: lastN } : {} });
+
+export const getRunMetrics = (runId: string) =>
+  api.get<MetricsRun>('/metrics/' + runId);
 
 export default api;

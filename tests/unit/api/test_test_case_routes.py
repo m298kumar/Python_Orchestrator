@@ -1,27 +1,31 @@
 """
 Tests for /api/test-cases/* endpoints.
 
-The test-cases route uses a module-level dict ``_test_cases`` for storage.
-We clear it between tests to ensure isolation.
+Uses the shared TestCaseStore via deps; we inject a fresh store per test.
 """
 
 import pytest
-
 from fastapi.testclient import TestClient
+from stlc_platform.api.deps import TestCaseStore
 from stlc_platform.api.main import app
-from stlc_platform.api.routes import test_cases as tc_module
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
-def _clear_test_cases():
-    """Clear the in-memory test-case store between tests."""
-    tc_module._test_cases.clear()
-    yield
-    tc_module._test_cases.clear()
+def _isolated_store(tmp_path, monkeypatch):
+    """Inject a fresh TestCaseStore and redirect output_dir per test."""
+    store = TestCaseStore()
+    monkeypatch.setattr(
+        "stlc_platform.api.routes.test_cases.get_output_dir", lambda: tmp_path
+    )
+    monkeypatch.setattr(
+        "stlc_platform.api.routes.test_cases.get_tc_store", lambda: store
+    )
+    # Also patch the deps-level singleton so endpoints pick it up
+    monkeypatch.setattr("stlc_platform.api.deps._tc_store", store)
+    yield store
 
 
 @pytest.fixture()
@@ -29,8 +33,8 @@ def client():
     return TestClient(app)
 
 
-def _seed_test_case(tc_id="TC-001", **overrides):
-    """Insert a test case directly into the in-memory store."""
+def _seed_test_case(store_fixture, tc_id="TC-001", **overrides):
+    """Insert a test case into the injected store."""
     data = {
         "tc_id": tc_id,
         "req_id": "REQ-001",
@@ -48,7 +52,7 @@ def _seed_test_case(tc_id="TC-001", **overrides):
         "status": "generated",
     }
     data.update(overrides)
-    tc_module._test_cases[tc_id] = data
+    store_fixture.populate([data])
     return data
 
 
@@ -68,16 +72,20 @@ class TestListTestCases:
         assert isinstance(data, list)
         assert len(data) == 0
 
-    def test_returns_seeded_test_cases(self, client: TestClient):
-        _seed_test_case("TC-001")
-        _seed_test_case("TC-002", title="Verify logout")
+    def test_returns_seeded_test_cases(
+        self, client: TestClient, _isolated_store
+    ):
+        _seed_test_case(_isolated_store, "TC-001")
+        _seed_test_case(_isolated_store, "TC-002", title="Verify logout")
         data = client.get("/api/test-cases/").json()
         assert len(data) == 2
 
-    def test_filter_by_priority(self, client: TestClient):
-        _seed_test_case("TC-001", priority="High")
-        _seed_test_case("TC-002", priority="Low")
-        data = client.get("/api/test-cases/", params={"priority": "High"}).json()
+    def test_filter_by_priority(self, client: TestClient, _isolated_store):
+        _seed_test_case(_isolated_store, "TC-001", priority="High")
+        _seed_test_case(_isolated_store, "TC-002", priority="Low")
+        data = client.get(
+            "/api/test-cases/", params={"priority": "High"}
+        ).json()
         assert len(data) == 1
         assert data[0]["tc_id"] == "TC-001"
 
@@ -97,8 +105,8 @@ class TestGetTestCase:
         data = client.get("/api/test-cases/nonexistent").json()
         assert "detail" in data
 
-    def test_known_returns_200(self, client: TestClient):
-        _seed_test_case("TC-010")
+    def test_known_returns_200(self, client: TestClient, _isolated_store):
+        _seed_test_case(_isolated_store, "TC-010")
         resp = client.get("/api/test-cases/TC-010")
         assert resp.status_code == 200
         assert resp.json()["tc_id"] == "TC-010"
@@ -112,12 +120,16 @@ class TestUpdateTestCase:
     """PUT /api/test-cases/{tc_id} edits a test case."""
 
     def test_nonexistent_returns_404(self, client: TestClient):
-        resp = client.put("/api/test-cases/nonexistent", json={"title": "New"})
+        resp = client.put(
+            "/api/test-cases/nonexistent", json={"title": "New"}
+        )
         assert resp.status_code == 404
 
-    def test_update_title(self, client: TestClient):
-        _seed_test_case("TC-020")
-        resp = client.put("/api/test-cases/TC-020", json={"title": "Updated title"})
+    def test_update_title(self, client: TestClient, _isolated_store):
+        _seed_test_case(_isolated_store, "TC-020")
+        resp = client.put(
+            "/api/test-cases/TC-020", json={"title": "Updated title"}
+        )
         assert resp.status_code == 200
         assert resp.json()["title"] == "Updated title"
 
@@ -133,8 +145,8 @@ class TestApproveTestCase:
         resp = client.post("/api/test-cases/nonexistent/approve")
         assert resp.status_code == 404
 
-    def test_approve_sets_status(self, client: TestClient):
-        _seed_test_case("TC-030")
+    def test_approve_sets_status(self, client: TestClient, _isolated_store):
+        _seed_test_case(_isolated_store, "TC-030")
         resp = client.post("/api/test-cases/TC-030/approve")
         assert resp.status_code == 200
         assert resp.json()["status"] == "approved"
@@ -151,8 +163,8 @@ class TestRejectTestCase:
         resp = client.post("/api/test-cases/nonexistent/reject")
         assert resp.status_code == 404
 
-    def test_reject_sets_status(self, client: TestClient):
-        _seed_test_case("TC-040")
+    def test_reject_sets_status(self, client: TestClient, _isolated_store):
+        _seed_test_case(_isolated_store, "TC-040")
         resp = client.post("/api/test-cases/TC-040/reject")
         assert resp.status_code == 200
         assert resp.json()["status"] == "rejected"

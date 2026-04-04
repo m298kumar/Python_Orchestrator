@@ -52,6 +52,7 @@ def load_pipeline_from_dict(data: Dict[str, Any]) -> PipelineDAG:
                 config_overrides=raw.get("config", {}),
                 retry_count=raw.get("retry_count", 0),
                 optional=raw.get("optional", False),
+                timeout_seconds=float(raw.get("timeout_seconds", 0.0)),
             )
         )
 

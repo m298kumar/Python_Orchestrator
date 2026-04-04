@@ -5,7 +5,6 @@ Unit tests for PageParser.
 from __future__ import annotations
 
 import pytest
-
 from stlc_platform.agents.crawler_agent.page_parser import PageParser
 
 
@@ -34,21 +33,6 @@ SELECTOR_ID_HTML = '<button id="save-btn">Save</button>'
 SELECTOR_TESTID_HTML = '<button data-testid="cancel-btn">Cancel</button>'
 SELECTOR_NAME_HTML = '<input name="search_query">'
 SELECTOR_CLASS_HTML = '<div class="action-btn clickable">Click</div>'
-
-JS_LINKS_HTML = """
-<a href="javascript:void(0)">JS Link</a>
-<a href="mailto:user@example.com">Email</a>
-<a href="/real-page">Real Link</a>
-<a href="#">Anchor</a>
-<a href="tel:+1234567890">Call</a>
-"""
-
-RELATIVE_LINKS_HTML = """
-<a href="/about">About</a>
-<a href="products/123">Product</a>
-<a href="../help">Help</a>
-"""
-
 
 class TestParseTitle:
     def test_extracts_title(self, parser: PageParser):
@@ -125,27 +109,6 @@ class TestFormExtraction:
         assert "user" in field_names
         assert "pass" in field_names
         assert "csrf" not in field_names  # hidden excluded
-
-
-class TestLinkFiltering:
-    def test_filters_javascript_and_mailto_links(self, parser: PageParser):
-        """_extract_links filters out javascript:, mailto:, tel:, # links."""
-        from bs4 import BeautifulSoup
-
-        soup = BeautifulSoup(JS_LINKS_HTML, "html.parser")
-        links = parser._extract_links(soup, "http://example.com")
-        # Only /real-page should survive filtering
-        assert len(links) == 1
-        assert links[0] == "http://example.com/real-page"
-
-    def test_relative_url_normalization(self, parser: PageParser):
-        """Relative URLs are resolved against the base URL."""
-        from bs4 import BeautifulSoup
-
-        soup = BeautifulSoup(RELATIVE_LINKS_HTML, "html.parser")
-        links = parser._extract_links(soup, "http://example.com/pages/current")
-        assert len(links) == 3
-        assert "http://example.com/about" in links
 
 
 class TestFullPageParsing:

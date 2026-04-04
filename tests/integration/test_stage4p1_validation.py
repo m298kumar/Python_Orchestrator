@@ -10,16 +10,12 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Any, Dict
 
-import pytest
 from click.testing import CliRunner
-
 from stlc_platform.core.base_agent import AgentResult, BaseAgent, ValidationResult
 from stlc_platform.pipeline.agent_registry import AgentRegistry
 from stlc_platform.pipeline.dag import PipelineDAG, StageNode
 from stlc_platform.pipeline.orchestrator import PipelineOrchestrator
-
 
 # ── Mock Agents ──────────────────────────────────────────────────────────────
 
@@ -181,7 +177,7 @@ class TestCLI:
         assert result.exit_code == 0
         assert "bdd_generation" in result.output
         assert "api_test_generation" in result.output
-        assert "4 agents registered" in result.output
+        assert "5 agents registered" in result.output
 
     def test_run_requires_pipeline_or_agent(self):
         from stlc_platform.cli import main

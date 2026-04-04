@@ -10,9 +10,9 @@ project:
   platform: mobile
 llm:
   provider: ollama
-  model: phi4-mini:3.8b
-  base_url: http://localhost:11434
-  temperature: 0.6
+  model: qwen2.5:32b-instruct-q4_K_M
+  base_url: http://10.0.0.211:11434
+  temperature: 0.4
   num_ctx: 8192
   timeout: 450
   num_predict: 3200
@@ -228,15 +228,25 @@ export:
     default_labels: automated,generated
 quality_gate:
   accept_threshold: 0.65
-  regenerate_threshold: 0.40
+  regenerate_threshold: 0.4
   max_regeneration_attempts: 2
-  auto_example_threshold: 0.80
+  auto_example_threshold: 0.8
   weights:
     coverage: 0.25
-    clarity: 0.20
-    executability: 0.20
+    clarity: 0.2
+    executability: 0.2
     uniqueness: 0.15
-    structural: 0.20
+    structural: 0.2
+coverage:
+  auto_fill_gaps: false
+  weak_quality_threshold: 0.5
+  min_coverage_types: 1
+circuit_breaker:
+  threshold: 3
+  reset_timeout: 60.0
+metrics:
+  dir: output/metrics
+  degradation_threshold_pct: 15.0
 output:
   output_dir: ./output
   csv_filename: test_cases.csv

@@ -36,15 +36,41 @@ jobs:
 
       - name: Run linting
         run: |
-          python -m ruff check stlc_platform/ --select=E,F --ignore=E501,E402
+          python -m ruff check stlc_platform/ --select=E,F,C901 --ignore=E501,E402
+
+      - name: Run MyPy type checking
+        run: |
+          python -m mypy stlc_platform/ --ignore-missing-imports --no-error-summary
+
+      - name: Security scan with Bandit
+        run: |
+          pip install bandit
+          python -m bandit -r stlc_platform/ -ll -q
+
+      - name: Dependency vulnerability check
+        run: |
+          pip install pip-audit
+          python -m pip_audit --strict 2>/dev/null || echo "::warning::pip-audit found vulnerabilities"
 
       - name: Run Stage 0-3 unit tests
         run: |
-          python -m pytest tests/unit/ -q --tb=short
+          python -m pytest tests/unit/ --cov=stlc_platform --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=75 -v --tb=short
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+        if: always()
 
       - name: Run integration tests
         run: |
           python -m pytest tests/integration/ -q --tb=short
+
+      - name: Scan Docker image for vulnerabilities
+        run: |
+          docker build -t stlc-platform:scan .
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 1 --severity HIGH,CRITICAL --no-progress stlc-platform:scan
 
       - name: Run validation gate (Stage 4)
         run: |
@@ -70,6 +96,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --no-audit
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check Prettier formatting
+        run: npm run format:check
 
       - name: Run tests
         run: npm run test -- --run

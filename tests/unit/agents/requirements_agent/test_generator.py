@@ -3,16 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
-from unittest.mock import MagicMock
+from typing import List
 
 import pytest
-
-from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 from stlc_platform.agents.requirements_agent.generator import TestCaseGenerator
-from stlc_platform.agents.requirements_agent.classifier import ACClassifier
-from stlc_platform.agents.requirements_agent.sanitiser import TestCaseSanitiser
-from stlc_platform.agents.requirements_agent.prompts import PromptRenderer
+from stlc_platform.core.contracts import TestCaseArtifact
 
 
 @dataclass
@@ -29,16 +24,11 @@ class MockRequirement:
 
 
 class MockLLMClient:
-    """Mock LLM client that returns canned responses."""
+    """Mock LLM client that returns distinct canned responses to survive dedup."""
 
-    def __init__(self, response=None):
-        self._response = response
-
-    def generate_test_case(self, prompt, system_prompt=None):
-        if self._response is not None:
-            return self._response
-        return {
-            "title": "Test Title",
+    _SCENARIOS = [
+        {
+            "title": "Verify successful login with valid credentials",
             "description": "Test that login works correctly with valid credentials",
             "preconditions": "User has a valid account",
             "steps": [
@@ -54,8 +44,105 @@ class MockLLMClient:
             "then": "The user is redirected to the dashboard",
             "priority": "High",
             "tags": ["authentication", "positive", "req-001"],
-            "estimated_duration": "5",
-        }
+        },
+        {
+            "title": "Verify error banner for wrong password",
+            "description": "System rejects incorrect password with clear alert",
+            "preconditions": "User account exists but wrong password used",
+            "steps": [
+                {"action": "Open authentication page", "expected_result": "Form renders"},
+                {"action": "Type wrong password", "expected_result": "Password field filled"},
+                {"action": "Click sign-in button", "expected_result": "Error banner appears"},
+            ],
+            "expected_outcome": "Red error banner shows invalid password message",
+            "component": "Error Handler",
+            "given": "A registered user with incorrect password",
+            "when": "User attempts authentication with bad credentials",
+            "then": "Error notification displayed and login blocked",
+            "priority": "High",
+            "tags": ["auth", "negative"],
+        },
+        {
+            "title": "Verify password recovery email delivery",
+            "description": "Forgotten password triggers recovery email to user",
+            "preconditions": "Email server configured and user registered",
+            "steps": [
+                {"action": "Click forgot password link", "expected_result": "Recovery form shown"},
+                {"action": "Enter registered email", "expected_result": "Email field validated"},
+                {"action": "Submit recovery request", "expected_result": "Confirmation displayed"},
+            ],
+            "expected_outcome": "Recovery email sent within 30 seconds",
+            "component": "Password Recovery",
+            "given": "A registered user who forgot their password",
+            "when": "User requests password recovery via email",
+            "then": "Reset link delivered to registered email address",
+            "priority": "Medium",
+            "tags": ["recovery", "positive"],
+        },
+        {
+            "title": "Verify account lockout after failed attempts",
+            "description": "Multiple failed logins trigger temporary account freeze",
+            "preconditions": "Security policy requires lockout after 5 failures",
+            "steps": [
+                {"action": "Attempt login with wrong password 5 times", "expected_result": "Counter increments"},
+                {"action": "Try sixth login attempt", "expected_result": "Account locked message"},
+                {"action": "Wait 15 minutes and retry", "expected_result": "Login succeeds"},
+            ],
+            "expected_outcome": "Account temporarily frozen then auto-unlocked",
+            "component": "Security Module",
+            "given": "A user who has exhausted login attempts",
+            "when": "Sixth consecutive failed authentication occurs",
+            "then": "Account locked for 15 minutes with notification",
+            "priority": "High",
+            "tags": ["security", "edge_case"],
+        },
+        {
+            "title": "Verify session timeout after inactivity",
+            "description": "Idle session expires after configured period",
+            "preconditions": "Session timeout set to 30 minutes",
+            "steps": [
+                {"action": "Login and remain idle 31 minutes", "expected_result": "Timer expires"},
+                {"action": "Navigate to protected page", "expected_result": "Redirect to login"},
+                {"action": "Check session cookie", "expected_result": "Cookie invalidated"},
+            ],
+            "expected_outcome": "Session destroyed and user redirected to login",
+            "component": "Session Manager",
+            "given": "An authenticated user with expired session",
+            "when": "User acts after 30 minute inactivity",
+            "then": "Session terminated and login page shown",
+            "priority": "Medium",
+            "tags": ["session", "timeout"],
+        },
+        {
+            "title": "Verify TOTP multi-factor authentication",
+            "description": "Second factor requested after primary credential check",
+            "preconditions": "MFA enabled with TOTP configured for user",
+            "steps": [
+                {"action": "Complete primary login", "expected_result": "MFA challenge shown"},
+                {"action": "Enter TOTP code", "expected_result": "Code verified successfully"},
+                {"action": "Confirm MFA approval", "expected_result": "Full access granted"},
+            ],
+            "expected_outcome": "Two-factor verification completed",
+            "component": "MFA Gateway",
+            "given": "A user with TOTP multi-factor enabled",
+            "when": "User enters primary credentials and TOTP code",
+            "then": "Full application access after MFA verification",
+            "priority": "High",
+            "tags": ["mfa", "security"],
+        },
+    ]
+
+    def __init__(self, response=None):
+        self._response = response
+        self._call_count = 0
+
+    def generate_test_case(self, prompt, system_prompt=None, **kwargs):
+        if self._response is not None:
+            return self._response
+        scenario = self._SCENARIOS[self._call_count % len(self._SCENARIOS)].copy()
+        self._call_count += 1
+        scenario.setdefault("estimated_duration", "5")
+        return scenario
 
 
 class TestSlotPlan:
@@ -222,7 +309,7 @@ class TestGenerateForRequirement:
     def test_llm_failure_falls_back_to_synthesis(self):
         """When LLM returns None, generator falls back to synthesis."""
         class FailingLLM:
-            def generate_test_case(self, prompt, system_prompt=None):
+            def generate_test_case(self, prompt, system_prompt=None, **kwargs):
                 return None
         llm = FailingLLM()
         gen = TestCaseGenerator(llm_client=llm)

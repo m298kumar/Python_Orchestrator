@@ -7,6 +7,7 @@ Download pipeline run artifacts as ZIP archives.
 from __future__ import annotations
 
 import io
+import re
 import zipfile
 
 from fastapi import APIRouter, HTTPException
@@ -16,10 +17,15 @@ from stlc_platform.api.deps import get_output_dir, get_run_manager
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
 
+_RUN_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
 
 @router.get("/{run_id}/download")
 def download_artifacts(run_id: str) -> StreamingResponse:
     """Download all artifacts for a pipeline run as a ZIP file."""
+    if not _RUN_ID_PATTERN.match(run_id):
+        raise HTTPException(status_code=400, detail="Invalid run_id format")
+
     mgr = get_run_manager()
     run = mgr.get_run(run_id)
     if run is None:

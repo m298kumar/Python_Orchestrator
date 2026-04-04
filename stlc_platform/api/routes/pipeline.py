@@ -5,16 +5,35 @@ Run, list, and manage STLC pipeline executions.
 """
 
 import asyncio
+import re
+from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from stlc_platform.api.deps import get_run_manager
+
+# Allowed directory for pipeline definitions
+_PIPELINES_DIR = Path("config/pipelines").resolve()
+
+
+def _validate_pipeline_path(pipeline_path: str) -> Path:
+    """Validate that pipeline_path is confined to config/pipelines/."""
+    resolved = (_PIPELINES_DIR / Path(pipeline_path).name).resolve()
+    if not str(resolved).startswith(str(_PIPELINES_DIR)):
+        raise HTTPException(status_code=400, detail="Invalid pipeline path")
+    if not resolved.exists():
+        raise HTTPException(status_code=400, detail=f"Pipeline file not found: {resolved.name}")
+    return resolved
+
+
+# Run ID validation pattern (alphanumeric, hyphens, underscores, max 64 chars)
+_RUN_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 from stlc_platform.api.schemas import (
     PipelineRunRequest,
     PipelineRunStatus,
     PipelineRunSummary,
 )
-from stlc_platform.api.tasks import submit_pipeline_run
+from stlc_platform.api.tasks import cancel_pipeline_run, submit_pipeline_run
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
@@ -22,13 +41,14 @@ router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 @router.post("/run", response_model=PipelineRunStatus, status_code=201)
 async def create_run(req: PipelineRunRequest) -> PipelineRunStatus:
     """Create and trigger a new pipeline run."""
+    validated_path = _validate_pipeline_path(req.pipeline_path)
     mgr = get_run_manager()
-    run_id = mgr.create_run(pipeline_name=req.pipeline_path)
+    run_id = mgr.create_run(pipeline_name=validated_path.name)
 
     loop = asyncio.get_running_loop()
     submit_pipeline_run(
         run_id=run_id,
-        pipeline_path=req.pipeline_path,
+        pipeline_path=str(validated_path),
         config=req.config,
         resume_from=req.resume_from,
         max_workers=req.max_workers,
@@ -55,8 +75,11 @@ async def create_run(req: PipelineRunRequest) -> PipelineRunStatus:
 
 
 @router.get("/runs", response_model=list[PipelineRunSummary])
-def list_runs() -> list[PipelineRunSummary]:
-    """List all pipeline runs (most recent first)."""
+def list_runs(
+    limit: int = Query(default=50, ge=1, le=500, description="Max items to return"),
+    offset: int = Query(default=0, ge=0, description="Number of items to skip"),
+) -> list[PipelineRunSummary]:
+    """List all pipeline runs (most recent first) with pagination."""
     mgr = get_run_manager()
     result = []
     for r in mgr.list_runs():
@@ -70,7 +93,7 @@ def list_runs() -> list[PipelineRunSummary]:
                 total_duration_seconds=r["total_duration_seconds"],
             )
         )
-    return result
+    return result[offset : offset + limit]
 
 
 @router.get("/runs/{run_id}", response_model=PipelineRunStatus)
@@ -92,6 +115,39 @@ def get_run(run_id: str) -> PipelineRunStatus:
         current_stage=r["current_stage"],
         total_duration_seconds=r["total_duration_seconds"],
         error_message=r["error_message"],
+    )
+
+
+@router.post("/runs/{run_id}/cancel", response_model=PipelineRunStatus, status_code=200)
+def cancel_run(run_id: str) -> PipelineRunStatus:
+    """Cancel a running pipeline. The pipeline will stop after the current stage completes."""
+    mgr = get_run_manager()
+    r = mgr.get_run(run_id)
+    if r is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    if r["status"] not in ("pending", "running"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Run '{run_id}' is {r['status']}, cannot cancel",
+        )
+
+    cancel_pipeline_run(run_id)
+    mgr.set_cancelled(run_id)
+    updated = mgr.get_run(run_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    return PipelineRunStatus(
+        run_id=updated["run_id"],
+        pipeline_name=updated["pipeline_name"],
+        status=updated["status"],
+        started_at=updated["started_at"],
+        completed_at=updated["completed_at"],
+        stages_completed=updated["stages_completed"],
+        stages_failed=updated["stages_failed"],
+        stages_skipped=updated["stages_skipped"],
+        current_stage=updated["current_stage"],
+        total_duration_seconds=updated["total_duration_seconds"],
+        error_message=updated["error_message"],
     )
 
 
