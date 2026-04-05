@@ -195,9 +195,7 @@ class FeedbackStore:
         """Write a pre-serialized snapshot to disk (call outside lock)."""
         self._persist_path.mkdir(parents=True, exist_ok=True)
         feedback_file = self._persist_path / "feedback.json"
-        feedback_file.write_text(
-            json.dumps(snapshot, indent=2, default=str), encoding="utf-8"
-        )
+        feedback_file.write_text(json.dumps(snapshot, indent=2, default=str), encoding="utf-8")
 
     def _load_from_disk(self) -> None:
         """Load feedback from JSON file on disk."""
@@ -271,9 +269,7 @@ class FeedbackStore:
         try:
             idx = self._feedback_index(feedback)
             fid = doc_id or f"fb_{feedback.agent_id}_{idx}"
-            document = (
-                f"{feedback.feedback_type}: {feedback.message}"
-            )
+            document = f"{feedback.feedback_type}: {feedback.message}"
             metadata = {
                 "agent_id": feedback.agent_id,
                 "feedback_type": feedback.feedback_type,
@@ -287,6 +283,52 @@ class FeedbackStore:
             )
         except Exception as e:
             logger.warning("Failed to index feedback in ChromaDB: %s", e)
+
+    def _build_query_text(self, context: Dict[str, Any]) -> str:
+        """Build a search query string from context dictionary."""
+        query_parts: List[str] = []
+        if "query" in context:
+            query_parts.append(str(context["query"]))
+        if "ac_text" in context:
+            query_parts.append(str(context["ac_text"])[:200])
+        if "requirement" in context:
+            req = context["requirement"]
+            if hasattr(req, "title"):
+                query_parts.append(getattr(req, "title", ""))
+            if hasattr(req, "description"):
+                query_parts.append(getattr(req, "description", "")[:200])
+        return " ".join(p for p in query_parts if p).strip()
+
+    def _process_chroma_results(
+        self,
+        results: Dict[str, Any],
+        agent_id: str,
+        limit: int,
+    ) -> List[AgentFeedbackArtifact]:
+        """Parse ChromaDB query results into feedback artifacts."""
+        if not results["metadatas"] or not results["metadatas"][0]:
+            return []
+
+        matched: List[AgentFeedbackArtifact] = []
+        seen_indices: set = set()
+        for meta, dist in zip(results["metadatas"][0], results["distances"][0]):
+            similarity = 1 - dist
+            if similarity < 0.3:
+                continue
+            fb_index = meta.get("fb_index")
+            if fb_index is None or not isinstance(fb_index, int):
+                continue
+            if not (0 <= fb_index < len(self._feedback)):
+                continue
+            if fb_index in seen_indices:
+                continue
+            fb = self._feedback[fb_index]
+            if fb.agent_id != agent_id:
+                continue
+            matched.append(fb)
+            seen_indices.add(fb_index)
+
+        return matched[:limit]
 
     def _semantic_retrieve(
         self,
@@ -303,20 +345,7 @@ class FeedbackStore:
         if self._chroma_collection is None:
             return []
 
-        # Build query text from context
-        query_parts: List[str] = []
-        if "query" in context:
-            query_parts.append(str(context["query"]))
-        if "ac_text" in context:
-            query_parts.append(str(context["ac_text"])[:200])
-        if "requirement" in context:
-            req = context["requirement"]
-            if hasattr(req, "title"):
-                query_parts.append(getattr(req, "title", ""))
-            if hasattr(req, "description"):
-                query_parts.append(getattr(req, "description", "")[:200])
-
-        query_text = " ".join(p for p in query_parts if p).strip()
+        query_text = self._build_query_text(context)
         if not query_text:
             logger.debug("Semantic retrieve skipped: empty query text")
             return []
@@ -328,30 +357,12 @@ class FeedbackStore:
 
             results = self._chroma_collection.query(
                 query_texts=[query_text],
-                n_results=min(limit * 2, count),  # over-fetch, then filter by agent
+                n_results=min(limit * 2, count),
                 where={"agent_id": agent_id},
                 include=["metadatas", "distances"],
             )
 
-            if not results["metadatas"] or not results["metadatas"][0]:
-                return []
-
-            # Map ChromaDB results back to in-memory feedback using stable index
-            matched: List[AgentFeedbackArtifact] = []
-            seen_indices: set = set()
-            for meta, dist in zip(results["metadatas"][0], results["distances"][0]):
-                similarity = 1 - dist
-                if similarity < 0.3:  # minimum relevance threshold
-                    continue
-                fb_index = meta.get("fb_index")
-                if fb_index is not None and isinstance(fb_index, int):
-                    if 0 <= fb_index < len(self._feedback) and fb_index not in seen_indices:
-                        fb = self._feedback[fb_index]
-                        if fb.agent_id == agent_id:
-                            matched.append(fb)
-                            seen_indices.add(fb_index)
-
-            return matched[:limit]
+            return self._process_chroma_results(results, agent_id, limit)
 
         except Exception as e:
             logger.debug("Semantic feedback retrieval failed: %s", e)
