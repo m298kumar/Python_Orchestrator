@@ -68,32 +68,32 @@ class CrawlerEmbeddingStore:
         if self._ready:
             return
 
-        from stlc_platform.core.storage.chroma_store import (
-            _best_embedding_fn,
-            _make_client,
-        )
+        from stlc_platform.core.storage.chroma_store import _make_client
 
         cfg = self._get_config()
         self._client = _make_client(cfg.persist_directory)
-        embed_fn = _best_embedding_fn(cfg)
 
+        # Do NOT inject a custom embedding function for the crawled_pages collection.
+        # Using ChromaDB's stable built-in default means the collection opens cleanly
+        # on every restart regardless of whether Ollama or sentence_transformers is
+        # available — eliminating the embedding-function conflict that occurred when
+        # the runtime environment changed between sessions.
         kw: Dict[str, Any] = {
             "name": self._collection_name,
             "metadata": {"hnsw:space": "cosine"},
         }
-        if embed_fn:
-            kw["embedding_function"] = embed_fn
         try:
             self._collection = self._client.get_or_create_collection(**kw)
         except Exception as exc:
             err = str(exc).lower()
             if "embedding function" in err or "conflict" in err:
-                # Persisted collection has a different embedding function.
-                # Delete the stale collection and recreate with the current
-                # embedding function so embeddings are consistent.
-                logger.warning(
-                    "Embedding function conflict on collection '%s' — "
-                    "deleting stale collection and recreating with current embedding function.",
+                # One-time cleanup: collection was created with a custom embedding
+                # function in a previous session. Delete it so it is recreated with
+                # the default function going forward. Crawled-page data is ephemeral
+                # and will be repopulated on the next crawl run.
+                logger.info(
+                    "Recreating collection '%s' with default embedding function "
+                    "(stale custom-function configuration detected).",
                     self._collection_name,
                 )
                 try:
@@ -105,8 +105,7 @@ class CrawlerEmbeddingStore:
                     )
                 self._collection = self._client.get_or_create_collection(**kw)
             else:
-                kw.pop("metadata", None)
-                self._collection = self._client.get_or_create_collection(**kw)
+                raise
 
         self._ready = True
         logger.info(
