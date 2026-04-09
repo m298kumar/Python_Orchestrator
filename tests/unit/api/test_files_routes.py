@@ -7,15 +7,14 @@ We reset the module-level state and use a temp output dir between tests.
 
 import pytest
 from fastapi.testclient import TestClient
-
-from stlc_platform.api.main import app
 from stlc_platform.api import deps as deps_module
+from stlc_platform.api.main import app
 from stlc_platform.api.routes import files as files_module
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _reset_state(tmp_path):
@@ -36,6 +35,7 @@ def client():
 # ---------------------------------------------------------------------------
 # POST /api/files/upload — valid file
 # ---------------------------------------------------------------------------
+
 
 class TestUploadFile:
     """POST /api/files/upload accepts files with allowed extensions."""
@@ -78,6 +78,7 @@ class TestUploadFile:
 # POST /api/files/upload — no file / bad input
 # ---------------------------------------------------------------------------
 
+
 class TestUploadFileErrors:
     """POST /api/files/upload rejects missing or disallowed files."""
 
@@ -114,6 +115,7 @@ class TestUploadFileErrors:
 # GET /api/files/download/{filename} — not found
 # ---------------------------------------------------------------------------
 
+
 class TestDownloadFileNotFound:
     """GET /api/files/download/{filename} returns 404 for missing files."""
 
@@ -130,6 +132,7 @@ class TestDownloadFileNotFound:
 # ---------------------------------------------------------------------------
 # GET /api/files/download/{filename} — valid file
 # ---------------------------------------------------------------------------
+
 
 class TestDownloadFileValid:
     """GET /api/files/download/{filename} returns uploaded files."""

@@ -50,7 +50,9 @@ class AnthropicClient(BaseLLMClient):
         from stlc_platform.core.config_loader import config
 
         super().__init__()
-        _api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "") or os.getenv("STLC_LLM__API_KEY", "")
+        _api_key = (
+            api_key or os.getenv("ANTHROPIC_API_KEY", "") or os.getenv("STLC_LLM__API_KEY", "")
+        )
         if not _api_key:
             raise ValueError(
                 "Anthropic API key is required. Set it via:\n"

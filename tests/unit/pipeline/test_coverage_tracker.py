@@ -14,10 +14,12 @@ class _Req:
     title: str = "Feature"
     description: str = "A feature"
     category: str = "General"
-    acceptance_criteria: List[str] = field(default_factory=lambda: [
-        "User can login with valid credentials",
-        "System displays error for invalid password",
-    ])
+    acceptance_criteria: List[str] = field(
+        default_factory=lambda: [
+            "User can login with valid credentials",
+            "System displays error for invalid password",
+        ]
+    )
 
 
 @dataclass
@@ -42,7 +44,6 @@ class _TC:
 
 
 class TestCoverageTracker:
-
     def test_empty_requirements_returns_empty_report(self):
         tracker = CoverageTracker()
         report = tracker.analyze([], [])
@@ -63,11 +64,13 @@ class TestCoverageTracker:
         reqs = [_Req()]
         tcs = [
             _TC(
-                tc_id="TC-001", description="login with valid credentials works",
+                tc_id="TC-001",
+                description="login with valid credentials works",
                 steps=[_Step(action="Enter valid credentials and login")],
             ),
             _TC(
-                tc_id="TC-002", description="system displays error for invalid password attempt",
+                tc_id="TC-002",
+                description="system displays error for invalid password attempt",
                 test_type="negative",
                 steps=[_Step(action="Enter invalid password and observe error")],
             ),
@@ -82,7 +85,8 @@ class TestCoverageTracker:
         # Only covers first AC
         tcs = [
             _TC(
-                tc_id="TC-001", description="login with valid credentials",
+                tc_id="TC-001",
+                description="login with valid credentials",
                 steps=[_Step(action="Enter valid credentials and login")],
             ),
         ]
@@ -95,12 +99,14 @@ class TestCoverageTracker:
         reqs = [_Req()]
         tcs = [
             _TC(
-                tc_id="TC-001", description="login with valid credentials",
+                tc_id="TC-001",
+                description="login with valid credentials",
                 quality_score=0.3,
                 steps=[_Step(action="Enter valid credentials")],
             ),
             _TC(
-                tc_id="TC-002", description="system displays error for invalid password",
+                tc_id="TC-002",
+                description="system displays error for invalid password",
                 quality_score=0.3,
                 steps=[_Step(action="Enter invalid password and see error")],
             ),
@@ -113,7 +119,8 @@ class TestCoverageTracker:
         reqs = [_Req(acceptance_criteria=["User can login with valid credentials"])]
         tcs = [
             _TC(
-                tc_id="TC-001", description="login with valid credentials",
+                tc_id="TC-001",
+                description="login with valid credentials",
                 quality_score=0.9,
                 steps=[_Step(action="Enter valid credentials and login")],
             ),
@@ -126,8 +133,11 @@ class TestCoverageTracker:
         tracker = CoverageTracker()
         reqs = [_Req(acceptance_criteria=["AC one about login", "AC two about payment"])]
         tcs = [
-            _TC(tc_id="TC-001", description="test login flow",
-                steps=[_Step(action="login to application")]),
+            _TC(
+                tc_id="TC-001",
+                description="test login flow",
+                steps=[_Step(action="login to application")],
+            ),
         ]
         report = tracker.analyze(reqs, tcs)
         # 1 of 2 covered = 50%
@@ -135,9 +145,9 @@ class TestCoverageTracker:
 
     def test_keyword_matching_finds_relevant_tc(self):
         tracker = CoverageTracker(match_threshold=0.3)
-        reqs = [_Req(acceptance_criteria=[
-            "System validates email address format before submission"
-        ])]
+        reqs = [
+            _Req(acceptance_criteria=["System validates email address format before submission"])
+        ]
         tcs = [
             _TC(
                 tc_id="TC-001",
@@ -150,9 +160,9 @@ class TestCoverageTracker:
 
     def test_keyword_matching_rejects_unrelated_tc(self):
         tracker = CoverageTracker(match_threshold=0.3)
-        reqs = [_Req(acceptance_criteria=[
-            "System validates email address format before submission"
-        ])]
+        reqs = [
+            _Req(acceptance_criteria=["System validates email address format before submission"])
+        ]
         tcs = [
             _TC(
                 tc_id="TC-001",
@@ -170,8 +180,12 @@ class TestCoverageTracker:
             _Req(req_id="REQ-002", acceptance_criteria=["Admin can delete user accounts"]),
         ]
         tcs = [
-            _TC(tc_id="TC-001", req_id="REQ-001", description="login with valid credentials",
-                steps=[_Step(action="Enter valid credentials and login")]),
+            _TC(
+                tc_id="TC-001",
+                req_id="REQ-001",
+                description="login with valid credentials",
+                steps=[_Step(action="Enter valid credentials and login")],
+            ),
             # No TC for REQ-002
         ]
         report = tracker.analyze(reqs, tcs)

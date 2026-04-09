@@ -96,9 +96,7 @@ class TestCaseDeduplicator:
 
     # ── TF-IDF ────────────────────────────────────────────────────────────────
 
-    def _build_tfidf_vectors(
-        self, documents: List[str]
-    ) -> List[Dict[str, float]]:
+    def _build_tfidf_vectors(self, documents: List[str]) -> List[Dict[str, float]]:
         """Build TF-IDF vectors from document texts.
 
         Returns a list of sparse vectors (one dict per document).

@@ -3,11 +3,8 @@ Tests for the requirements reader.
 """
 
 import json
-import os
-import tempfile
 
 import pytest
-
 from stlc_platform.agents.requirements_agent.reader import (
     Requirement,
     RequirementsReader,

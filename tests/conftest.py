@@ -3,9 +3,9 @@ Shared test fixtures for the STLC Platform test suite.
 """
 
 import os
+import shutil
 import sys
 import tempfile
-import shutil
 
 import pytest
 
@@ -33,6 +33,7 @@ def temp_chroma_dir():
 def sample_requirement():
     """Return a sample Requirement dataclass instance."""
     from stlc_platform.agents.requirements_agent.reader import Requirement
+
     return Requirement(
         req_id="REQ-001",
         title="User Login Authentication",
@@ -52,6 +53,7 @@ def sample_requirement():
 def sample_test_case():
     """Return a sample TestCase-like object for export tests."""
     from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
+
     return TestCaseArtifact(
         tc_id="TC-0001",
         req_id="REQ-001",

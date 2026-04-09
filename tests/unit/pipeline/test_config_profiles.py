@@ -3,8 +3,6 @@ Tests for config profile merging — deep_merge and load_config_yaml.
 """
 
 import pytest
-from pathlib import Path
-
 from stlc_platform.core.config_loader import deep_merge, load_config_yaml
 
 

@@ -101,11 +101,19 @@ def _mock_registry(*agent_pairs):
 
 class TestFullPipelineWithMockAgents:
     def test_wave_ordering_and_artifact_flow(self):
-        dag = PipelineDAG([
-            StageNode(stage_id="s1", agent_id="pass_a", input_map={}, output_keys=["output"]),
-            StageNode(stage_id="s2", agent_id="pass_b", depends_on=["s1"],
-                      input_map={"data": "$s1.output"}, output_keys=["output"]),
-        ], pipeline_name="test")
+        dag = PipelineDAG(
+            [
+                StageNode(stage_id="s1", agent_id="pass_a", input_map={}, output_keys=["output"]),
+                StageNode(
+                    stage_id="s2",
+                    agent_id="pass_b",
+                    depends_on=["s1"],
+                    input_map={"data": "$s1.output"},
+                    output_keys=["output"],
+                ),
+            ],
+            pipeline_name="test",
+        )
 
         registry = _mock_registry(("pass_a", MockPassAgent), ("pass_b", MockPassAgent))
         orch = PipelineOrchestrator(dag=dag, registry=registry)
@@ -117,10 +125,13 @@ class TestFullPipelineWithMockAgents:
         assert result.total_duration_seconds >= 0
 
     def test_parallel_execution_actually_concurrent(self):
-        dag = PipelineDAG([
-            StageNode(stage_id="slow_a", agent_id="slow", input_map={}),
-            StageNode(stage_id="slow_b", agent_id="slow", input_map={}),
-        ], pipeline_name="parallel_test")
+        dag = PipelineDAG(
+            [
+                StageNode(stage_id="slow_a", agent_id="slow", input_map={}),
+                StageNode(stage_id="slow_b", agent_id="slow", input_map={}),
+            ],
+            pipeline_name="parallel_test",
+        )
 
         registry = _mock_registry(("slow", MockSlowAgent))
         orch = PipelineOrchestrator(dag=dag, registry=registry, max_workers=2)
@@ -140,13 +151,26 @@ class TestFullPipelineWithMockAgents:
 
 class TestResumeFromMidStage:
     def test_resume_skips_completed_stages(self, tmp_path: Path):
-        dag = PipelineDAG([
-            StageNode(stage_id="s1", agent_id="pass", input_map={}, output_keys=["output"]),
-            StageNode(stage_id="s2", agent_id="pass", depends_on=["s1"],
-                      input_map={"data": "$s1.output"}, output_keys=["output"]),
-            StageNode(stage_id="s3", agent_id="pass", depends_on=["s2"],
-                      input_map={"data": "$s2.output"}, output_keys=["output"]),
-        ], pipeline_name="resume_test")
+        dag = PipelineDAG(
+            [
+                StageNode(stage_id="s1", agent_id="pass", input_map={}, output_keys=["output"]),
+                StageNode(
+                    stage_id="s2",
+                    agent_id="pass",
+                    depends_on=["s1"],
+                    input_map={"data": "$s1.output"},
+                    output_keys=["output"],
+                ),
+                StageNode(
+                    stage_id="s3",
+                    agent_id="pass",
+                    depends_on=["s2"],
+                    input_map={"data": "$s2.output"},
+                    output_keys=["output"],
+                ),
+            ],
+            pipeline_name="resume_test",
+        )
 
         registry = _mock_registry(("pass", MockPassAgent))
         run_dir = tmp_path / "run"
@@ -193,11 +217,18 @@ class TestCLI:
 
 class TestFailureHandling:
     def test_failed_stage_skips_downstream(self):
-        dag = PipelineDAG([
-            StageNode(stage_id="s1", agent_id="fail", input_map={}),
-            StageNode(stage_id="s2", agent_id="pass", depends_on=["s1"],
-                      input_map={"data": "$s1.output"}),
-        ], pipeline_name="fail_test")
+        dag = PipelineDAG(
+            [
+                StageNode(stage_id="s1", agent_id="fail", input_map={}),
+                StageNode(
+                    stage_id="s2",
+                    agent_id="pass",
+                    depends_on=["s1"],
+                    input_map={"data": "$s1.output"},
+                ),
+            ],
+            pipeline_name="fail_test",
+        )
 
         registry = _mock_registry(("fail", MockFailAgent), ("pass", MockPassAgent))
         orch = PipelineOrchestrator(dag=dag, registry=registry)
@@ -208,10 +239,13 @@ class TestFailureHandling:
         assert "s2" in result.stages_skipped
 
     def test_optional_failure_does_not_skip_independent(self):
-        dag = PipelineDAG([
-            StageNode(stage_id="opt", agent_id="fail", input_map={}, optional=True),
-            StageNode(stage_id="ind", agent_id="pass", input_map={}),
-        ], pipeline_name="opt_test")
+        dag = PipelineDAG(
+            [
+                StageNode(stage_id="opt", agent_id="fail", input_map={}, optional=True),
+                StageNode(stage_id="ind", agent_id="pass", input_map={}),
+            ],
+            pipeline_name="opt_test",
+        )
 
         registry = _mock_registry(("fail", MockFailAgent), ("pass", MockPassAgent))
         orch = PipelineOrchestrator(dag=dag, registry=registry)
@@ -229,9 +263,12 @@ class TestRetryPolicy:
         global _fail_count
         _fail_count = 0
 
-        dag = PipelineDAG([
-            StageNode(stage_id="r1", agent_id="retry", input_map={}, retry_count=1),
-        ], pipeline_name="retry_test")
+        dag = PipelineDAG(
+            [
+                StageNode(stage_id="r1", agent_id="retry", input_map={}, retry_count=1),
+            ],
+            pipeline_name="retry_test",
+        )
 
         registry = _mock_registry(("retry", MockRetryAgent))
         orch = PipelineOrchestrator(dag=dag, registry=registry)
@@ -247,9 +284,12 @@ class TestRetryPolicy:
 class TestCIMode:
     def test_dag_validation_returns_json_compatible_result(self):
         """Verify PipelineRunArtifact is JSON-serializable (CI output)."""
-        dag = PipelineDAG([
-            StageNode(stage_id="s1", agent_id="pass", input_map={}),
-        ], pipeline_name="ci_test")
+        dag = PipelineDAG(
+            [
+                StageNode(stage_id="s1", agent_id="pass", input_map={}),
+            ],
+            pipeline_name="ci_test",
+        )
 
         registry = _mock_registry(("pass", MockPassAgent))
         orch = PipelineOrchestrator(dag=dag, registry=registry)

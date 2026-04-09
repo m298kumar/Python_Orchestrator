@@ -41,10 +41,10 @@ def get_gwt_hint(test_type: str, ac_type: str, ac: str, feature: str) -> str:
         )
     elif test_type == "negative":
         neg_when = {
-            'ui_behaviour': f"The condition for {ac[:60]} is not met and the user attempts the action",
-            'timing': f"The timed event exceeds the limit described in: {ac[:60]}",
-            'data_valid': f"The user enters a value that violates the rule in: {ac[:60]}",
-            'security': f"The user attempts to bypass the security control in: {ac[:60]}",
+            "ui_behaviour": f"The condition for {ac[:60]} is not met and the user attempts the action",
+            "timing": f"The timed event exceeds the limit described in: {ac[:60]}",
+            "data_valid": f"The user enters a value that violates the rule in: {ac[:60]}",
+            "security": f"The user attempts to bypass the security control in: {ac[:60]}",
         }.get(ac_type, f"An ineligible user attempts the action blocked by: {ac[:60]}")
         return (
             f'given: "A test account is configured for the unhappy path of: {feature}"\n'
@@ -53,10 +53,10 @@ def get_gwt_hint(test_type: str, ac_type: str, ac: str, feature: str) -> str:
         )
     else:
         edge_when = {
-            'data_valid': f"The user enters the exact boundary value into the field described by: {ac[:60]}, then enters one unit beyond",
-            'timing': f"The timed event reaches exactly the limit described in: {ac[:60]}",
-            'eligibility': f"The user with an account exactly at the eligibility threshold attempts: {ac[:60]}",
-            'ui_behaviour': f"The user triggers the UI behaviour at the exact threshold described in: {ac[:60]}",
+            "data_valid": f"The user enters the exact boundary value into the field described by: {ac[:60]}, then enters one unit beyond",
+            "timing": f"The timed event reaches exactly the limit described in: {ac[:60]}",
+            "eligibility": f"The user with an account exactly at the eligibility threshold attempts: {ac[:60]}",
+            "ui_behaviour": f"The user triggers the UI behaviour at the exact threshold described in: {ac[:60]}",
         }.get(ac_type, f"The user performs the action that tests the exact threshold in: {ac[:60]}")
         return (
             f'given: "Test data is configured at the exact threshold defined by: {ac[:70]}"\n'
@@ -67,8 +67,9 @@ def get_gwt_hint(test_type: str, ac_type: str, ac: str, feature: str) -> str:
 
 # -- Positive hints ------------------------------------------------------------
 
+
 def _hints_positive(ac: str, ac_type: str, feature: str, nav_target: str) -> Dict[str, str]:
-    if ac_type == 'ui_behaviour':
+    if ac_type == "ui_behaviour":
         return dict(
             desc=f"Verifies that the UI behaviour is displayed correctly for an eligible user: {ac[:90]}.",
             pre=f"Test account meets all eligibility criteria for {feature}; application installed on device; tester has valid credentials.",
@@ -81,7 +82,7 @@ def _hints_positive(ac: str, ac_type: str, feature: str, nav_target: str) -> Dic
             ),
             outcome=f"The specific UI element or message described in the acceptance criterion is visible and correct: {ac[:100]}.",
         )
-    elif ac_type == 'timing':
+    elif ac_type == "timing":
         return dict(
             desc=f"Verifies that the timing constraint is met under normal conditions: {ac[:90]}.",
             pre=f"Test account meets all eligibility criteria for {feature}; application installed; device clock synchronised; stopwatch or timer ready.",
@@ -94,7 +95,7 @@ def _hints_positive(ac: str, ac_type: str, feature: str, nav_target: str) -> Dic
             ),
             outcome=f"The timed event occurs within the limit specified: {ac[:100]}. Elapsed time is recorded in the test evidence.",
         )
-    elif ac_type == 'data_valid':
+    elif ac_type == "data_valid":
         return dict(
             desc=f"Verifies that the data validation rule accepts a valid value and correctly enforces the constraint: {ac[:90]}.",
             pre=f"Test account meets all eligibility criteria for {feature}; application installed; test data prepared with valid and invalid boundary values.",
@@ -107,7 +108,7 @@ def _hints_positive(ac: str, ac_type: str, feature: str, nav_target: str) -> Dic
             ),
             outcome=f"The system accepts the valid boundary value and correctly rejects the invalid value with an appropriate error message, per: {ac[:100]}.",
         )
-    elif ac_type == 'security':
+    elif ac_type == "security":
         return dict(
             desc=f"Verifies that the security control is active and enforced under normal operating conditions: {ac[:90]}.",
             pre=f"Test account meets all eligibility criteria for {feature}; application installed; security test environment configured.",
@@ -120,7 +121,7 @@ def _hints_positive(ac: str, ac_type: str, feature: str, nav_target: str) -> Dic
             ),
             outcome=f"The security control is active and correctly enforced as described: {ac[:100]}.",
         )
-    elif ac_type == 'eligibility':
+    elif ac_type == "eligibility":
         return dict(
             desc=f"Verifies that an eligible user can successfully access and use the feature as described: {ac[:90]}.",
             pre=f"Test account meets all eligibility criteria for {feature}; application installed; tester has valid credentials.",
@@ -150,8 +151,9 @@ def _hints_positive(ac: str, ac_type: str, feature: str, nav_target: str) -> Dic
 
 # -- Negative hints ------------------------------------------------------------
 
+
 def _hints_negative(ac: str, ac_type: str, feature: str, nav_target: str) -> Dict[str, str]:
-    if ac_type == 'ui_behaviour':
+    if ac_type == "ui_behaviour":
         return dict(
             desc=f"Verifies the system handles the unhappy path correctly when the condition required for this UI behaviour is NOT met: {ac[:90]}.",
             pre="Test account configured so the condition described in the AC is deliberately not satisfied; application installed; tester logged in.",
@@ -164,7 +166,7 @@ def _hints_negative(ac: str, ac_type: str, feature: str, nav_target: str) -> Dic
             ),
             outcome=f"When the required condition is not met, the UI does not incorrectly display the element described in: {ac[:100]}. Fallback state is correct.",
         )
-    elif ac_type == 'timing':
+    elif ac_type == "timing":
         return dict(
             desc=f"Verifies the system handles the scenario where the time limit is exceeded: {ac[:90]}.",
             pre=f"Test environment configured to simulate a delay exceeding the limit in: {ac[:60]}; application installed; tester logged in.",
@@ -177,7 +179,7 @@ def _hints_negative(ac: str, ac_type: str, feature: str, nav_target: str) -> Dic
             ),
             outcome=f"When the time limit is exceeded, the system correctly detects the timeout and displays an appropriate error or fallback state, per: {ac[:100]}.",
         )
-    elif ac_type == 'data_valid':
+    elif ac_type == "data_valid":
         return dict(
             desc=f"Verifies the system correctly rejects a value that violates the validation rule: {ac[:90]}.",
             pre=f"Test account active; test data prepared with an invalid value that violates the constraint in: {ac[:60]}; application installed.",
@@ -190,7 +192,7 @@ def _hints_negative(ac: str, ac_type: str, feature: str, nav_target: str) -> Dic
             ),
             outcome=f"The system correctly rejects the invalid input and displays an accurate validation error message, per: {ac[:100]}.",
         )
-    elif ac_type == 'security':
+    elif ac_type == "security":
         return dict(
             desc=f"Verifies the security control correctly blocks an attempt to bypass it: {ac[:90]}.",
             pre="Test environment configured for bypass attempt; application installed; tester logged in with a non-privileged account.",
@@ -220,8 +222,9 @@ def _hints_negative(ac: str, ac_type: str, feature: str, nav_target: str) -> Dic
 
 # -- Edge case hints -----------------------------------------------------------
 
+
 def _hints_edge(ac: str, ac_type: str, feature: str, nav_target: str) -> Dict[str, str]:
-    if ac_type == 'data_valid':
+    if ac_type == "data_valid":
         return dict(
             desc=f"Verifies the system enforces the exact boundary defined by the validation rule: {ac[:90]}.",
             pre=f"Test data prepared at exactly the boundary value defined in: {ac[:60]}; and at one unit beyond the boundary; application installed; tester logged in.",
@@ -234,7 +237,7 @@ def _hints_edge(ac: str, ac_type: str, feature: str, nav_target: str) -> Dict[st
             ),
             outcome=f"System accepts the exact boundary value and rejects the value one unit beyond it with an accurate error message, per: {ac[:100]}.",
         )
-    elif ac_type == 'timing':
+    elif ac_type == "timing":
         return dict(
             desc=f"Verifies the system behaviour exactly at the time boundary described: {ac[:90]}.",
             pre=f"Test environment configured to trigger events at exactly the time boundary in: {ac[:60]}; application installed; tester logged in; timer ready.",
@@ -247,7 +250,7 @@ def _hints_edge(ac: str, ac_type: str, feature: str, nav_target: str) -> Dict[st
             ),
             outcome=f"System behaves correctly at exactly the time boundary and transitions to the timeout state when exceeded, per: {ac[:100]}.",
         )
-    elif ac_type == 'eligibility':
+    elif ac_type == "eligibility":
         return dict(
             desc=f"Verifies the system enforces the eligibility boundary exactly as defined: {ac[:90]}.",
             pre=f"Two test accounts prepared: one that EXACTLY meets the eligibility threshold in '{ac[:60]}', and one that is ONE UNIT below/beyond; application installed.",

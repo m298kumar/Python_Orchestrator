@@ -34,13 +34,9 @@ def load_pipeline_from_dict(data: Dict[str, Any]) -> PipelineDAG:
     stages: List[StageNode] = []
     for raw in raw_stages:
         if "id" not in raw:
-            raise ValueError(
-                f"Stage missing required 'id' field: {raw}"
-            )
+            raise ValueError(f"Stage missing required 'id' field: {raw}")
         if "agent" not in raw:
-            raise ValueError(
-                f"Stage '{raw['id']}' missing required 'agent' field."
-            )
+            raise ValueError(f"Stage '{raw['id']}' missing required 'agent' field.")
 
         stages.append(
             StageNode(

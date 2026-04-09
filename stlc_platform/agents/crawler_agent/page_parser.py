@@ -35,7 +35,6 @@ _EXTRA_SELECTORS = [
 # Link schemes to exclude
 
 
-
 class PageParser:
     """Parse raw HTML into structured page artifacts."""
 
@@ -104,9 +103,7 @@ class PageParser:
 
         return elements
 
-    def _tag_to_element(
-        self, tag: Tag, element_type: str
-    ) -> Optional[PageElementArtifact]:
+    def _tag_to_element(self, tag: Tag, element_type: str) -> Optional[PageElementArtifact]:
         """Convert a BS4 Tag to a PageElementArtifact."""
         if not isinstance(tag, Tag):
             return None
@@ -117,9 +114,19 @@ class PageParser:
 
         # Collect interesting attributes
         attrs: Dict[str, str] = {}
-        for attr_name in ("type", "placeholder", "value", "href", "src",
-                          "action", "method", "role", "aria-label",
-                          "data-testid", "required"):
+        for attr_name in (
+            "type",
+            "placeholder",
+            "value",
+            "href",
+            "src",
+            "action",
+            "method",
+            "role",
+            "aria-label",
+            "data-testid",
+            "required",
+        ):
             val = tag.get(attr_name)
             if val:
                 attrs[attr_name] = str(val) if not isinstance(val, list) else " ".join(val)
@@ -196,17 +203,21 @@ class PageParser:
                 if field_type in ("hidden", "submit"):
                     continue
 
-                fields.append({
-                    "name": field_name,
-                    "type": field_type,
-                    "required": str(required).lower(),
-                })
+                fields.append(
+                    {
+                        "name": field_name,
+                        "type": field_type,
+                        "required": str(required).lower(),
+                    }
+                )
 
-            forms.append({
-                "action": str(action),
-                "method": method,
-                "fields": fields,
-            })
+            forms.append(
+                {
+                    "action": str(action),
+                    "method": method,
+                    "fields": fields,
+                }
+            )
 
         return forms
 

@@ -17,10 +17,12 @@ class MockRequirement:
     description: str = "User should be able to log in with valid credentials"
     category: str = "Authentication"
     priority: str = "High"
-    acceptance_criteria: List[str] = field(default_factory=lambda: [
-        "User can login with valid credentials",
-        "System displays error for invalid password",
-    ])
+    acceptance_criteria: List[str] = field(
+        default_factory=lambda: [
+            "User can login with valid credentials",
+            "System displays error for invalid password",
+        ]
+    )
 
 
 class MockLLMClient:
@@ -84,7 +86,10 @@ class MockLLMClient:
             "description": "Multiple failed logins trigger temporary account freeze",
             "preconditions": "Security policy requires lockout after 5 failures",
             "steps": [
-                {"action": "Attempt login with wrong password 5 times", "expected_result": "Counter increments"},
+                {
+                    "action": "Attempt login with wrong password 5 times",
+                    "expected_result": "Counter increments",
+                },
                 {"action": "Try sixth login attempt", "expected_result": "Account locked message"},
                 {"action": "Wait 15 minutes and retry", "expected_result": "Login succeeds"},
             ],
@@ -166,7 +171,9 @@ class TestSlotPlan:
 
     def test_pattern_positive_only(self, generator):
         req = MockRequirement()
-        slots = generator._build_slot_plan(req, max_tc=3, include_negative=False, include_edge=False)
+        slots = generator._build_slot_plan(
+            req, max_tc=3, include_negative=False, include_edge=False
+        )
         assert all(s["test_type"] == "positive" for s in slots)
 
     def test_pattern_positive_negative(self, generator):
@@ -177,7 +184,9 @@ class TestSlotPlan:
 
     def test_slot_has_all_keys(self, generator):
         req = MockRequirement()
-        slots = generator._build_slot_plan(req, max_tc=1, include_negative=False, include_edge=False)
+        slots = generator._build_slot_plan(
+            req, max_tc=1, include_negative=False, include_edge=False
+        )
         slot = slots[0]
         assert "test_type" in slot
         assert "target_ac" in slot
@@ -207,7 +216,12 @@ class TestParse:
 
     def test_parse_valid_response(self, generator):
         req = MockRequirement()
-        slot = {"test_type": "positive", "target_ac": "Login works", "title": "Test", "ac_type": "general"}
+        slot = {
+            "test_type": "positive",
+            "target_ac": "Login works",
+            "title": "Test",
+            "ac_type": "general",
+        }
         raw = {
             "title": "Test",
             "description": "Verify login works",
@@ -241,14 +255,16 @@ class TestParse:
         req = MockRequirement()
         slot = {"test_type": "positive", "target_ac": "AC", "title": "T", "ac_type": "general"}
         raw = {
-            "test_cases": [{
-                "title": "T",
-                "description": "D",
-                "steps": [
-                    {"action": "A1", "expected_result": "R1"},
-                    {"action": "A2", "expected_result": "R2"},
-                ],
-            }]
+            "test_cases": [
+                {
+                    "title": "T",
+                    "description": "D",
+                    "steps": [
+                        {"action": "A1", "expected_result": "R1"},
+                        {"action": "A2", "expected_result": "R2"},
+                    ],
+                }
+            ]
         }
         tc = generator._parse(raw, req, slot)
         assert tc is not None
@@ -256,10 +272,14 @@ class TestParse:
     def test_parse_increments_counter(self, generator):
         req = MockRequirement()
         slot = {"test_type": "positive", "target_ac": "AC", "title": "T", "ac_type": "general"}
-        raw = {"title": "T", "description": "D", "steps": [
-            {"action": "A1", "expected_result": "R1"},
-            {"action": "A2", "expected_result": "R2"},
-        ]}
+        raw = {
+            "title": "T",
+            "description": "D",
+            "steps": [
+                {"action": "A1", "expected_result": "R1"},
+                {"action": "A2", "expected_result": "R2"},
+            ],
+        }
         tc1 = generator._parse(raw, req, slot)
         tc2 = generator._parse(raw, req, slot)
         assert tc1.tc_id != tc2.tc_id
@@ -274,7 +294,12 @@ class TestSynthesise:
 
     def test_synthesise_returns_artifact(self, generator):
         req = MockRequirement()
-        slot = {"test_type": "positive", "target_ac": "User can login", "title": "Test", "ac_type": "general"}
+        slot = {
+            "test_type": "positive",
+            "target_ac": "User can login",
+            "title": "Test",
+            "ac_type": "general",
+        }
         tc = generator._synthesise_tc(req, slot)
         assert isinstance(tc, TestCaseArtifact)
         assert tc.req_id == "REQ-001"
@@ -282,7 +307,12 @@ class TestSynthesise:
 
     def test_synthesise_has_gwt(self, generator):
         req = MockRequirement()
-        slot = {"test_type": "positive", "target_ac": "User can login", "title": "Test", "ac_type": "general"}
+        slot = {
+            "test_type": "positive",
+            "target_ac": "User can login",
+            "title": "Test",
+            "ac_type": "general",
+        }
         tc = generator._synthesise_tc(req, slot)
         assert tc.given != ""
         assert tc.when != ""
@@ -290,7 +320,12 @@ class TestSynthesise:
 
     def test_synthesise_tags_include_synthesised(self, generator):
         req = MockRequirement()
-        slot = {"test_type": "negative", "target_ac": "Error on invalid", "title": "Test", "ac_type": "general"}
+        slot = {
+            "test_type": "negative",
+            "target_ac": "Error on invalid",
+            "title": "Test",
+            "ac_type": "general",
+        }
         tc = generator._synthesise_tc(req, slot)
         assert "synthesised" in tc.tags
 
@@ -302,19 +337,25 @@ class TestGenerateForRequirement:
         llm = MockLLMClient()
         gen = TestCaseGenerator(llm_client=llm)
         req = MockRequirement()
-        results = gen.generate_for_requirement(req, max_tests=2, include_negative=False, include_edge=False)
+        results = gen.generate_for_requirement(
+            req, max_tests=2, include_negative=False, include_edge=False
+        )
         assert len(results) == 2
         assert all(isinstance(tc, TestCaseArtifact) for tc in results)
 
     def test_llm_failure_falls_back_to_synthesis(self):
         """When LLM returns None, generator falls back to synthesis."""
+
         class FailingLLM:
             def generate_test_case(self, prompt, system_prompt=None, **kwargs):
                 return None
+
         llm = FailingLLM()
         gen = TestCaseGenerator(llm_client=llm)
         req = MockRequirement()
-        results = gen.generate_for_requirement(req, max_tests=1, include_negative=False, include_edge=False)
+        results = gen.generate_for_requirement(
+            req, max_tests=1, include_negative=False, include_edge=False
+        )
         assert len(results) == 1
         assert "synthesised" in results[0].tags
 
@@ -323,7 +364,10 @@ class TestGenerateForRequirement:
         gen = TestCaseGenerator(llm_client=llm)
         req = MockRequirement()
         results = gen.generate_for_requirement(
-            req, max_tests=3, include_negative=True, include_edge=True,
+            req,
+            max_tests=3,
+            include_negative=True,
+            include_edge=True,
         )
         types = {tc.test_type for tc in results}
         assert "positive" in types
@@ -341,7 +385,9 @@ class TestGenerateForAll:
             MockRequirement(req_id="REQ-001", category="Patient Registration"),
             MockRequirement(req_id="REQ-002", category="Clinical Records"),
         ]
-        results = gen.generate_for_all(reqs, max_tests=1, include_negative=False, include_edge=False)
+        results = gen.generate_for_all(
+            reqs, max_tests=1, include_negative=False, include_edge=False
+        )
         assert gen._domain == "healthcare"
         # AC-aware: each MockRequirement has 2 ACs, effective_max = max(1, 2) = 2 per req
         assert len(results) == 4

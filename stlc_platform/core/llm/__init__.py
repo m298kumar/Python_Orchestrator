@@ -32,6 +32,7 @@ def create_llm_client(provider: str | None = None, **kwargs) -> BaseLLMClient:
     """
     if provider is None:
         from stlc_platform.core.config_loader import config
+
         provider = getattr(config, "llm_provider", "ollama") or "ollama"
 
     provider = provider.lower().strip()
@@ -56,8 +57,7 @@ def create_llm_client(provider: str | None = None, **kwargs) -> BaseLLMClient:
         return AnthropicClient(**kwargs)
 
     raise ValueError(
-        f"Unknown LLM provider: '{provider}'. "
-        "Supported providers: ollama, openai, anthropic"
+        f"Unknown LLM provider: '{provider}'. Supported providers: ollama, openai, anthropic"
     )
 
 

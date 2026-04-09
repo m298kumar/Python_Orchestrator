@@ -30,8 +30,7 @@ class AgentRegistry:
         """Instantiate and return an agent by ID."""
         if agent_id not in self._agents:
             raise KeyError(
-                f"Agent '{agent_id}' not registered. "
-                f"Available: {list(self._agents.keys())}"
+                f"Agent '{agent_id}' not registered. Available: {list(self._agents.keys())}"
             )
         return self._agents[agent_id]()
 
@@ -62,15 +61,23 @@ class AgentRegistry:
 
             eps = entry_points()
             # Python 3.12+ returns a SelectableGroups; 3.9+ supports .select()
-            group = eps.select(group="stlc_platform.agents") if hasattr(eps, "select") else eps.get("stlc_platform.agents", [])
+            group = (
+                eps.select(group="stlc_platform.agents")
+                if hasattr(eps, "select")
+                else eps.get("stlc_platform.agents", [])
+            )
             for ep in group:
                 try:
                     agent_class = ep.load()
                     if isinstance(agent_class, type) and issubclass(agent_class, BaseAgent):
                         self.register(ep.name, agent_class)
-                        logger.info("Discovered plugin agent: %s -> %s", ep.name, agent_class.__name__)
+                        logger.info(
+                            "Discovered plugin agent: %s -> %s", ep.name, agent_class.__name__
+                        )
                     else:
-                        logger.warning("Plugin entry point '%s' is not a BaseAgent subclass", ep.name)
+                        logger.warning(
+                            "Plugin entry point '%s' is not a BaseAgent subclass", ep.name
+                        )
                 except Exception as exc:
                     logger.warning("Failed to load plugin agent '%s': %s", ep.name, exc)
         except Exception as exc:

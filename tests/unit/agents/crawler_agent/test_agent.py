@@ -5,7 +5,6 @@ Unit tests for CrawlerAgent.
 from __future__ import annotations
 
 import pytest
-
 from stlc_platform.agents.crawler_agent.agent import CrawlerAgent
 from stlc_platform.core.contracts import (
     CrawledPageArtifact,
@@ -51,9 +50,7 @@ LOGIN_HTML = """
 
 class TestValidateInput:
     def test_valid_html_pages_input(self, agent: CrawlerAgent):
-        result = agent.validate_input({
-            "html_pages": {"http://localhost/": SIMPLE_HTML}
-        })
+        result = agent.validate_input({"html_pages": {"http://localhost/": SIMPLE_HTML}})
         assert result.valid is True
 
     def test_valid_site_model_input(self, agent: CrawlerAgent):
@@ -75,9 +72,7 @@ class TestValidateInput:
         assert result.valid is False
 
     def test_single_page_warning(self, agent: CrawlerAgent):
-        result = agent.validate_input({
-            "html_pages": {"http://localhost/": SIMPLE_HTML}
-        })
+        result = agent.validate_input({"html_pages": {"http://localhost/": SIMPLE_HTML}})
         assert result.valid is True
         assert len(result.warnings) >= 1  # "minimal coverage" warning
 

@@ -28,7 +28,6 @@ from stlc_platform.core.contracts import (
     APITestArtifact,
 )
 
-
 _BUILTIN_TEMPLATES = Path(__file__).resolve().parent / "templates"
 _DEFAULT_OVERRIDES = Path(__file__).resolve().parent / "template_overrides"
 
@@ -190,9 +189,7 @@ class APITestGenerator:
             path_params=endpoint.path_params,
             query_params=endpoint.query_params,
             query_params_dict=query_params_dict,
-            has_schema_validation=any(
-                t["test_type"] == "schema_validation" for t in test_cases
-            ),
+            has_schema_validation=any(t["test_type"] == "schema_validation" for t in test_cases),
             tests=test_cases,
         )
 
@@ -233,35 +230,26 @@ class APITestGenerator:
             cases.extend(self._auth_tests(endpoint))
 
         # Validation tests — only if request body with required fields
-        if (
-            endpoint.request_body_schema
-            and self._should_include("validation", test_types_filter)
-        ):
+        if endpoint.request_body_schema and self._should_include("validation", test_types_filter):
             required = endpoint.request_body_schema.get("required", [])
             if required:
                 cases.append(self._validation_missing_fields_test(endpoint))
 
         # Boundary tests — only if request body with typed fields
-        if (
-            endpoint.request_body_schema
-            and self._should_include("boundary", test_types_filter)
-        ):
+        if endpoint.request_body_schema and self._should_include("boundary", test_types_filter):
             boundary = self._boundary_test(endpoint)
             if boundary:
                 cases.append(boundary)
 
         # Schema validation — only if response schema present
-        if (
-            endpoint.response_schema
-            and self._should_include("schema_validation", test_types_filter)
+        if endpoint.response_schema and self._should_include(
+            "schema_validation", test_types_filter
         ):
             cases.append(self._schema_validation_test(endpoint))
 
         return cases
 
-    def _should_include(
-        self, test_type: str, filter_list: Optional[List[str]]
-    ) -> bool:
+    def _should_include(self, test_type: str, filter_list: Optional[List[str]]) -> bool:
         """Check if a test type should be included."""
         if filter_list is None:
             return True
@@ -269,11 +257,7 @@ class APITestGenerator:
 
     def _happy_path_test(self, endpoint: APIEndpointArtifact) -> Dict[str, Any]:
         """Generate happy path test case."""
-        payload = (
-            self._make_example_payload(endpoint)
-            if endpoint.request_body_schema
-            else "{}"
-        )
+        payload = self._make_example_payload(endpoint) if endpoint.request_body_schema else "{}"
         return {
             "func_name": f"happy_path_{endpoint.method.lower()}",
             "description": f"Happy path: {endpoint.method} {endpoint.path} returns success",
@@ -298,8 +282,7 @@ class APITestGenerator:
             {
                 "func_name": f"auth_invalid_{endpoint.method.lower()}",
                 "description": (
-                    f"Auth: {endpoint.method} {endpoint.path} "
-                    "with invalid token returns 401/403"
+                    f"Auth: {endpoint.method} {endpoint.path} with invalid token returns 401/403"
                 ),
                 "test_type": "auth_invalid",
                 "test_level": self._classifier.classify_test_level("auth"),
@@ -307,24 +290,19 @@ class APITestGenerator:
             },
         ]
 
-    def _validation_missing_fields_test(
-        self, endpoint: APIEndpointArtifact
-    ) -> Dict[str, Any]:
+    def _validation_missing_fields_test(self, endpoint: APIEndpointArtifact) -> Dict[str, Any]:
         """Generate validation test for missing required fields."""
         return {
             "func_name": f"validation_missing_fields_{endpoint.method.lower()}",
             "description": (
-                f"Validation: {endpoint.method} {endpoint.path} "
-                "with empty payload returns 400/422"
+                f"Validation: {endpoint.method} {endpoint.path} with empty payload returns 400/422"
             ),
             "test_type": "validation_missing_fields",
             "test_level": self._classifier.classify_test_level("validation"),
             "failure_type": self._classifier.classify_failure_type("validation"),
         }
 
-    def _boundary_test(
-        self, endpoint: APIEndpointArtifact
-    ) -> Optional[Dict[str, Any]]:
+    def _boundary_test(self, endpoint: APIEndpointArtifact) -> Optional[Dict[str, Any]]:
         """Generate boundary test for string/integer fields."""
         schema = endpoint.request_body_schema
         if not schema:
@@ -352,8 +330,7 @@ class APITestGenerator:
         return {
             "func_name": f"boundary_{endpoint.method.lower()}",
             "description": (
-                f"Boundary: {endpoint.method} {endpoint.path} "
-                "with boundary values returns 400/422"
+                f"Boundary: {endpoint.method} {endpoint.path} with boundary values returns 400/422"
             ),
             "test_type": "boundary",
             "test_level": self._classifier.classify_test_level("boundary"),
@@ -361,20 +338,14 @@ class APITestGenerator:
             "payload": repr(boundary_payload),
         }
 
-    def _schema_validation_test(
-        self, endpoint: APIEndpointArtifact
-    ) -> Dict[str, Any]:
+    def _schema_validation_test(self, endpoint: APIEndpointArtifact) -> Dict[str, Any]:
         """Generate response schema validation test."""
         return {
             "func_name": f"schema_validation_{endpoint.method.lower()}",
-            "description": (
-                f"Schema: {endpoint.method} {endpoint.path} response matches schema"
-            ),
+            "description": (f"Schema: {endpoint.method} {endpoint.path} response matches schema"),
             "test_type": "schema_validation",
             "test_level": self._classifier.classify_test_level("schema_validation"),
-            "failure_type": self._classifier.classify_failure_type(
-                "schema_validation"
-            ),
+            "failure_type": self._classifier.classify_failure_type("schema_validation"),
             "schema": repr(endpoint.response_schema),
         }
 
@@ -459,120 +430,97 @@ class APITestGenerator:
         payload: Dict[str, Any] = {}
         for field_name, field_schema in props.items():
             field_type = field_schema.get("type", "string")
-            payload[field_name] = self._smart_field_value(
-                field_name, field_type, field_schema
-            )
+            payload[field_name] = self._smart_field_value(field_name, field_type, field_schema)
 
         return repr(payload)
 
-    @staticmethod
+    _STRING_FIELD_MAP = {
+        frozenset(("email", "email_address", "emailaddress")): "test_user@example.com",
+        frozenset(("name", "full_name", "fullname", "display_name", "displayname")): "John Doe",
+        frozenset(("first_name", "firstname", "given_name", "givenname")): "Jane",
+        frozenset(("last_name", "lastname", "family_name", "familyname", "surname")): "Smith",
+        frozenset(("address", "street", "street_address", "streetaddress")): "123 Test Street",
+        frozenset(("city", "town")): "Test City",
+        frozenset(("state", "province", "region")): "CA",
+        frozenset(("country",)): "US",
+        frozenset(("zip", "zip_code", "zipcode", "postal", "postal_code", "postalcode")): "12345",
+        frozenset(("url", "website", "homepage", "link", "uri")): "https://example.com",
+        frozenset(("description", "desc", "bio", "about", "summary")): None,  # uses field_name
+        frozenset(("age",)): None,  # wrong type, handled by integer
+        frozenset(("status",)): "active",
+    }
+    _STRING_CONTAINS_MAP = [
+        ({"phone", "mobile", "tel"}, "+1-555-0100"),
+        ({"password", "secret"}, "TestPass123!"),
+    ]
+    _DATE_KEYWORDS = frozenset(
+        (
+            "date",
+            "created_at",
+            "updated_at",
+            "timestamp",
+            "datetime",
+            "createdat",
+            "updatedat",
+        )
+    )
+    _INTEGER_EXACT_MAP = {
+        "age": 25,
+        "quantity": 5,
+        "qty": 5,
+        "count": 5,
+        "year": 2024,
+        "id": 1,
+    }
+    _NUMBER_EXACT_MAP = {
+        "price": 19.99,
+        "amount": 19.99,
+        "cost": 19.99,
+        "total": 19.99,
+        "latitude": 37.7749,
+        "lat": 37.7749,
+        "longitude": -122.4194,
+        "lng": -122.4194,
+        "lon": -122.4194,
+    }
+
+    @classmethod
     def _smart_field_value(
-        field_name: str, field_type: str, field_schema: Dict[str, Any]
+        cls, field_name: str, field_type: str, field_schema: Dict[str, Any]
     ) -> Any:
-        """Return a realistic test value based on field name and type heuristics."""
         name_lower = field_name.lower()
 
         if field_type == "string":
-            # Email patterns
-            if name_lower in (
-                "email", "email_address", "emailaddress",
-            ):
-                return "test_user@example.com"
-            # Name patterns
-            if name_lower in (
-                "name", "full_name", "fullname", "display_name", "displayname",
-            ):
-                return "John Doe"
-            if name_lower in (
-                "first_name", "firstname", "given_name", "givenname",
-            ):
-                return "Jane"
-            if name_lower in (
-                "last_name", "lastname", "family_name", "familyname", "surname",
-            ):
-                return "Smith"
-            # Phone patterns
-            if "phone" in name_lower or "mobile" in name_lower or "tel" in name_lower:
-                return "+1-555-0100"
-            # Address patterns
-            if name_lower in (
-                "address", "street", "street_address", "streetaddress",
-            ):
-                return "123 Test Street"
-            if name_lower in ("city", "town"):
-                return "Test City"
-            if name_lower in ("state", "province", "region"):
-                return "CA"
-            if name_lower in ("country",):
-                return "US"
-            if name_lower in (
-                "zip", "zip_code", "zipcode", "postal", "postal_code", "postalcode",
-            ):
-                return "12345"
-            # URL patterns
-            if name_lower in ("url", "website", "homepage", "link", "uri"):
-                return "https://example.com"
-            # Description / text
-            if name_lower in ("description", "desc", "bio", "about", "summary"):
-                return f"Test description for {field_name}"
-            # Date/time patterns
-            if any(
-                kw in name_lower
-                for kw in (
-                    "date", "created_at", "updated_at", "timestamp",
-                    "datetime", "createdat", "updatedat",
-                )
-            ):
-                return "2024-01-15T10:30:00Z"
-            # Password
-            if "password" in name_lower or "secret" in name_lower:
-                return "TestPass123!"
-            # Status
-            if name_lower == "status":
-                return "active"
-            # Default string
-            return f"test_{field_name}"
-
-        elif field_type == "integer":
-            if name_lower in ("age",):
-                return 25
-            if name_lower in ("quantity", "qty", "count"):
-                return 5
-            if name_lower in ("price", "amount", "cost", "total"):
-                return 1999
-            if (
-                name_lower in ("id",)
-                or name_lower.endswith("_id")
-                or name_lower.endswith("id")
-            ):
-                return 1
-            if name_lower in ("year",):
-                return 2024
-            return 42
-
-        elif field_type == "number":
-            if name_lower in ("price", "amount", "cost", "total"):
-                return 19.99
-            if name_lower in ("latitude", "lat"):
-                return 37.7749
-            if name_lower in ("longitude", "lng", "lon"):
-                return -122.4194
-            return 1.0
-
-        elif field_type == "boolean":
+            return cls._smart_string_value(name_lower, field_name)
+        if field_type == "integer":
+            return cls._INTEGER_EXACT_MAP.get(
+                name_lower, 1 if name_lower.endswith("_id") or name_lower == "id" else 42
+            )
+        if field_type == "number":
+            return cls._NUMBER_EXACT_MAP.get(name_lower, 1.0)
+        if field_type == "boolean":
             return True
-        elif field_type == "array":
+        if field_type == "array":
             return []
-        else:
-            return f"test_{field_name}"
+        return f"test_{field_name}"
+
+    @classmethod
+    def _smart_string_value(cls, name_lower: str, field_name: str) -> str:
+        for names, value in cls._STRING_FIELD_MAP.items():
+            if name_lower in names:
+                return value if value is not None else f"Test description for {field_name}"
+        for keywords, value in cls._STRING_CONTAINS_MAP:
+            if any(kw in name_lower for kw in keywords):
+                return value
+        if name_lower in cls._DATE_KEYWORDS or any(kw in name_lower for kw in cls._DATE_KEYWORDS):
+            return "2024-01-15T10:30:00Z"
+        return f"test_{field_name}"
 
     # ------------------------------------------------------------------
     # CRUD sequence detection and generation
     # ------------------------------------------------------------------
 
-    def _detect_crud_groups(
-        self, api_model: APIModelArtifact
-    ) -> List[Dict[str, Any]]:
+    def _detect_crud_groups(self, api_model: APIModelArtifact) -> List[Dict[str, Any]]:
         """Identify resource groups that have POST + GET + PUT/PATCH + DELETE.
 
         Groups endpoints by base path (stripping path parameters) and checks
@@ -648,14 +596,11 @@ class APITestGenerator:
             {
                 "func_name": f"crud_sequence_{resource}",
                 "description": (
-                    f"CRUD sequence: Create, Read, Update, Delete {resource} "
-                    f"via {base_path}"
+                    f"CRUD sequence: Create, Read, Update, Delete {resource} via {base_path}"
                 ),
                 "test_type": "crud_sequence",
                 "test_level": self._classifier.classify_test_level("crud_sequence"),
-                "failure_type": self._classifier.classify_failure_type(
-                    "crud_sequence"
-                ),
+                "failure_type": self._classifier.classify_failure_type("crud_sequence"),
                 "create_payload": create_payload,
                 "update_payload": update_payload,
                 "base_path": base_path,
@@ -666,9 +611,7 @@ class APITestGenerator:
                 "delete_path": delete_ep.path if delete_ep else base_path,
                 "update_method": update_method.lower(),
                 "auth_required": any(
-                    ep.auth_required
-                    for ep in [post_ep, get_ep, put_ep, delete_ep]
-                    if ep
+                    ep.auth_required for ep in [post_ep, get_ep, put_ep, delete_ep] if ep
                 ),
             }
         ]

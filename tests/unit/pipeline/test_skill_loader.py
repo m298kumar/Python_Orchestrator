@@ -2,12 +2,10 @@
 Tests for SkillLoader — domain knowledge skill file discovery and loading.
 """
 
-import pytest
 from pathlib import Path
 
-from stlc_platform.pipeline.skill_loader import SkillLoader, _deep_merge
 from stlc_platform.core.base_agent import AgentCapabilities
-
+from stlc_platform.pipeline.skill_loader import SkillLoader, _deep_merge
 
 # ── deep_merge tests ──────────────────────────────────────────────────────────
 
@@ -98,9 +96,7 @@ class TestSkillLoaderLoad:
     def test_load_category_domain_overlays_common(self, tmp_path):
         common = tmp_path / "common"
         common.mkdir()
-        (common / "data_catalog.yaml").write_text(
-            "entities:\n  user:\n    fields: [email, name]\n"
-        )
+        (common / "data_catalog.yaml").write_text("entities:\n  user:\n    fields: [email, name]\n")
 
         domain = tmp_path / "ecommerce"
         domain.mkdir()

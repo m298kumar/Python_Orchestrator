@@ -2,8 +2,8 @@
 
 from stlc_platform.exporters.exporters import (
     CSVExporter,
-    ZephyrScaleExporter,
     JSONReportExporter,
+    ZephyrScaleExporter,
 )
 
 __all__ = ["CSVExporter", "ZephyrScaleExporter", "JSONReportExporter"]

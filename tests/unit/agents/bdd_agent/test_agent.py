@@ -1,8 +1,8 @@
 """Tests for BDDAgent."""
 
 import pytest
-from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 from stlc_platform.agents.bdd_agent.agent import BDDAgent
+from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 
 
 @pytest.fixture

@@ -17,6 +17,16 @@ import {
   WifiOff,
   Check,
   X,
+  Globe,
+  Code,
+  TestTube,
+  FileText,
+  ShieldCheck,
+  BarChart3,
+  Database,
+  Zap,
+  Activity,
+  Download,
 } from 'lucide-react';
 import { getConfig, updateConfig, testLlmConnection } from '../api/client';
 import type { ConfigResponse, LLMTestResponse } from '../api/client';
@@ -318,6 +328,86 @@ export default function Config() {
     });
   }
 
+  function updateCrawler(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({
+      ...editedConfig,
+      crawler: { ...editedConfig.crawler, [key]: value },
+    });
+  }
+
+  function updateApiTesting(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({
+      ...editedConfig,
+      api_testing: { ...editedConfig.api_testing, [key]: value },
+    });
+  }
+
+  function updateTestGeneration(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({
+      ...editedConfig,
+      test_generation: { ...editedConfig.test_generation, [key]: value },
+    });
+  }
+
+  function updateBdd(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({
+      ...editedConfig,
+      bdd: { ...editedConfig.bdd, [key]: value },
+    });
+  }
+
+  function updateQualityGate(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({
+      ...editedConfig,
+      quality_gate: { ...editedConfig.quality_gate, [key]: value },
+    });
+  }
+
+  function updateCoverage(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({
+      ...editedConfig,
+      coverage: { ...editedConfig.coverage, [key]: value },
+    });
+  }
+
+  function updateChromadb(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({
+      ...editedConfig,
+      chromadb: { ...editedConfig.chromadb, [key]: value },
+    });
+  }
+
+  function updateExport(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({
+      ...editedConfig,
+      export: { ...editedConfig.export, [key]: value },
+    });
+  }
+
+  function updateCircuitBreaker(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({
+      ...editedConfig,
+      circuit_breaker: { ...editedConfig.circuit_breaker, [key]: value },
+    });
+  }
+
+  function updateMetrics(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({
+      ...editedConfig,
+      metrics: { ...editedConfig.metrics, [key]: value },
+    });
+  }
+
   function selectProvider(providerId: string) {
     if (!editedConfig) return;
     const newLlm: Record<string, any> = {
@@ -540,6 +630,46 @@ export default function Config() {
             </div>
           </div>
         )}
+
+        {/* Ollama-specific: Context window + Max predict tokens */}
+        {provider === 'ollama' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Context Window (num_ctx)
+              </label>
+              <input
+                type="number"
+                min={512}
+                max={131072}
+                step={512}
+                value={llm.num_ctx ?? 8192}
+                onChange={(e) => updateLlm('num_ctx', parseInt(e.target.value, 10) || 8192)}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                Number of context tokens the model can process. Larger values use more VRAM.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Max Predict Tokens (num_predict)
+              </label>
+              <input
+                type="number"
+                min={128}
+                max={32768}
+                step={128}
+                value={llm.num_predict ?? 3200}
+                onChange={(e) => updateLlm('num_predict', parseInt(e.target.value, 10) || 3200)}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                Maximum tokens in generated output. Too low = truncated test cases.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -726,7 +856,7 @@ export default function Config() {
       </div>
 
       {/* ================================================================= */}
-      {/* 2. Project Config Section (collapsible)                            */}
+      {/* 3. Project Config Section (collapsible)                            */}
       {/* ================================================================= */}
       <CollapsibleSection
         title="Project Config"
@@ -833,7 +963,773 @@ export default function Config() {
       </CollapsibleSection>
 
       {/* ================================================================= */}
-      {/* 3. Output Config Section (collapsible)                             */}
+      {/* 4. Crawler / Application Under Test Section (collapsible)          */}
+      {/* ================================================================= */}
+      <CollapsibleSection
+        title="Application Under Test"
+        icon={<Globe className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Base URL <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={editedConfig.crawler?.base_url ?? ''}
+              onChange={(e) => updateCrawler('base_url', e.target.value)}
+              placeholder="https://demo.opencart.com"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              The URL of the web application the crawler will explore.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Depth</label>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={editedConfig.crawler?.max_depth ?? 3}
+              onChange={(e) => updateCrawler('max_depth', parseInt(e.target.value, 10) || 3)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              How many link levels deep the crawler should navigate.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Pages</label>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={editedConfig.crawler?.max_pages ?? 100}
+              onChange={(e) => updateCrawler('max_pages', parseInt(e.target.value, 10) || 100)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Maximum number of pages to crawl in a single run.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rate Limit (ms)</label>
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              step={100}
+              value={editedConfig.crawler?.rate_limit_ms ?? 1000}
+              onChange={(e) => updateCrawler('rate_limit_ms', parseInt(e.target.value, 10) || 1000)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Delay between requests in milliseconds. Helps avoid being blocked by the target site.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Wait for Network Idle</label>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Wait until no network activity before parsing each page (recommended for SPAs).</p>
+            </div>
+            <button
+              onClick={() => updateCrawler('wait_for_network_idle', !(editedConfig.crawler?.wait_for_network_idle ?? true))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                editedConfig.crawler?.wait_for_network_idle !== false ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  editedConfig.crawler?.wait_for_network_idle !== false ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Respect robots.txt</label>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Honor the site's robots.txt crawl restrictions.</p>
+            </div>
+            <button
+              onClick={() => updateCrawler('respect_robots_txt', !(editedConfig.crawler?.respect_robots_txt ?? true))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                editedConfig.crawler?.respect_robots_txt !== false ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  editedConfig.crawler?.respect_robots_txt !== false ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ================================================================= */}
+      {/* 5. API Testing Section (collapsible)                               */}
+      {/* ================================================================= */}
+      <CollapsibleSection
+        title="API Testing"
+        icon={<Code className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Framework</label>
+            <input
+              type="text"
+              value={editedConfig.api_testing?.framework ?? 'pytest_requests'}
+              onChange={(e) => updateApiTesting('framework', e.target.value)}
+              placeholder="pytest_requests"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Test framework for generated API tests.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Base URL</label>
+            <input
+              type="text"
+              value={editedConfig.api_testing?.base_url ?? ''}
+              onChange={(e) => updateApiTesting('base_url', e.target.value)}
+              placeholder="https://api.example.com"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Base URL for API test execution. Leave empty to auto-detect from requirements.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">OpenAPI Spec Path / URL</label>
+            <input
+              type="text"
+              value={editedConfig.api_testing?.openapi_spec ?? ''}
+              onChange={(e) => updateApiTesting('openapi_spec', e.target.value)}
+              placeholder="./specs/openapi.json or https://api.example.com/openapi.json"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Local file path (./specs/openapi.json) or HTTP URL to an OpenAPI 3.x / Swagger 2.0 spec (JSON or YAML).
+              Leave empty to skip API test generation — the discover_apis stage will be cleanly bypassed.
+            </p>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ================================================================= */}
+      {/* 6. Crawler Auth Section (collapsible)                              */}
+      {/* ================================================================= */}
+      <CollapsibleSection
+        title="Crawler Authentication"
+        icon={<ShieldCheck className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Auth Type</label>
+            <input
+              type="text"
+              value={editedConfig.crawler?.auth?.type ?? ''}
+              onChange={(e) => updateCrawler('auth', { ...editedConfig.crawler?.auth, type: e.target.value })}
+              placeholder="basic, form, cookie"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Authentication method for crawling protected pages.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Login URL</label>
+            <input
+              type="text"
+              value={editedConfig.crawler?.auth?.login_url ?? ''}
+              onChange={(e) => updateCrawler('auth', { ...editedConfig.crawler?.auth, login_url: e.target.value })}
+              placeholder="https://demo.opencart.com/admin"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
+            <input
+              type="text"
+              value={editedConfig.crawler?.auth?.username ?? ''}
+              onChange={(e) => updateCrawler('auth', { ...editedConfig.crawler?.auth, username: e.target.value })}
+              placeholder="admin"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+          </div>
+
+          <PasswordField
+            label="Password"
+            value={editedConfig.crawler?.auth?.password ?? ''}
+            onChange={(val) => updateCrawler('auth', { ...editedConfig.crawler?.auth, password: val })}
+            placeholder="Crawler password"
+            helperText="Used to authenticate when crawling protected pages."
+          />
+        </div>
+      </CollapsibleSection>
+
+      {/* ================================================================= */}
+      {/* 7. Test Generation Section (collapsible)                           */}
+      {/* ================================================================= */}
+      <CollapsibleSection
+        title="Test Generation"
+        icon={<TestTube className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Tests Per Requirement</label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={editedConfig.test_generation?.max_per_requirement ?? 6}
+              onChange={(e) => updateTestGeneration('max_per_requirement', parseInt(e.target.value, 10) || 6)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Maximum number of test cases generated per requirement.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Include Negative Tests</label>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Generate tests for invalid inputs and error paths.</p>
+            </div>
+            <button
+              onClick={() => updateTestGeneration('include_negative', !(editedConfig.test_generation?.include_negative ?? true))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                editedConfig.test_generation?.include_negative !== false ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  editedConfig.test_generation?.include_negative !== false ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Include Edge Cases</label>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Generate boundary and corner-case tests.</p>
+            </div>
+            <button
+              onClick={() => updateTestGeneration('include_edge_cases', !(editedConfig.test_generation?.include_edge_cases ?? true))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                editedConfig.test_generation?.include_edge_cases !== false ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  editedConfig.test_generation?.include_edge_cases !== false ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Format</label>
+            <input
+              type="text"
+              value={editedConfig.test_generation?.format ?? 'gherkin'}
+              onChange={(e) => updateTestGeneration('format', e.target.value)}
+              placeholder="gherkin"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ================================================================= */}
+      {/* 8. BDD Settings Section (collapsible)                              */}
+      {/* ================================================================= */}
+      <CollapsibleSection
+        title="BDD Settings"
+        icon={<FileText className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Language</label>
+            <input
+              type="text"
+              value={editedConfig.bdd?.language ?? 'python'}
+              onChange={(e) => updateBdd('language', e.target.value)}
+              placeholder="python"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Framework</label>
+            <input
+              type="text"
+              value={editedConfig.bdd?.framework ?? 'behave'}
+              onChange={(e) => updateBdd('framework', e.target.value)}
+              placeholder="behave"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Automation Library</label>
+            <input
+              type="text"
+              value={editedConfig.bdd?.automation_lib ?? 'playwright'}
+              onChange={(e) => updateBdd('automation_lib', e.target.value)}
+              placeholder="playwright"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ================================================================= */}
+      {/* 9. Quality Gate Section (collapsible)                              */}
+      {/* ================================================================= */}
+      <CollapsibleSection
+        title="Quality Gate"
+        icon={<ShieldCheck className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Accept Threshold</label>
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={editedConfig.quality_gate?.accept_threshold ?? 0.65}
+              onChange={(e) => updateQualityGate('accept_threshold', parseFloat(e.target.value) || 0.65)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Minimum quality score to auto-approve tests (0-1).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Regenerate Threshold</label>
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={editedConfig.quality_gate?.regenerate_threshold ?? 0.4}
+              onChange={(e) => updateQualityGate('regenerate_threshold', parseFloat(e.target.value) || 0.4)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Score below which tests are regenerated (0-1).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Regeneration Attempts</label>
+            <input
+              type="number"
+              min={1}
+              max={5}
+              value={editedConfig.quality_gate?.max_regeneration_attempts ?? 2}
+              onChange={(e) => updateQualityGate('max_regeneration_attempts', parseInt(e.target.value, 10) || 2)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Auto Example Threshold</label>
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={editedConfig.quality_gate?.auto_example_threshold ?? 0.8}
+              onChange={(e) => updateQualityGate('auto_example_threshold', parseFloat(e.target.value) || 0.8)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Score above which generated tests are auto-stored as good examples for future runs (0-1).
+            </p>
+          </div>
+
+          {/* Quality Gate Weights */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Scoring Weights</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {['coverage', 'clarity', 'executability', 'uniqueness', 'structural'].map((w) => (
+                <div key={w}>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    {w.charAt(0).toUpperCase() + w.slice(1)}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={editedConfig.quality_gate?.weights?.[w] ?? 0.2}
+                    onChange={(e) =>
+                      updateQualityGate('weights', {
+                        ...editedConfig.quality_gate?.weights,
+                        [w]: parseFloat(e.target.value) || 0.2,
+                      })
+                    }
+                    className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+              Weights for quality scoring dimensions. Should sum to 1.0.
+            </p>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ================================================================= */}
+      {/* 10. Coverage Section (collapsible)                                 */}
+      {/* ================================================================= */}
+      <CollapsibleSection
+        title="Coverage"
+        icon={<BarChart3 className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Auto-Fill Gaps</label>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Automatically generate tests for uncovered requirements.</p>
+            </div>
+            <button
+              onClick={() => updateCoverage('auto_fill_gaps', !editedConfig.coverage?.auto_fill_gaps)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                editedConfig.coverage?.auto_fill_gaps ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  editedConfig.coverage?.auto_fill_gaps ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Weak Quality Threshold</label>
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={editedConfig.coverage?.weak_quality_threshold ?? 0.5}
+              onChange={(e) => updateCoverage('weak_quality_threshold', parseFloat(e.target.value) || 0.5)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Score below which tests are flagged as weak (0-1).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Min Coverage Types</label>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={editedConfig.coverage?.min_coverage_types ?? 1}
+              onChange={(e) => updateCoverage('min_coverage_types', parseInt(e.target.value, 10) || 1)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Minimum number of test types (positive, negative, edge) required per requirement.
+            </p>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ================================================================= */}
+      {/* 11. ChromaDB / Embeddings Section (collapsible)                     */}
+      {/* ================================================================= */}
+      <CollapsibleSection
+        title="ChromaDB / Embeddings"
+        icon={<Database className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Persist Directory</label>
+            <input
+              type="text"
+              value={editedConfig.chromadb?.persist_directory ?? './chroma_db'}
+              onChange={(e) => updateChromadb('persist_directory', e.target.value)}
+              placeholder="./chroma_db"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Collection Name</label>
+            <input
+              type="text"
+              value={editedConfig.chromadb?.collection_name ?? 'requirements'}
+              onChange={(e) => updateChromadb('collection_name', e.target.value)}
+              placeholder="requirements"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Embedding Backend</label>
+            <select
+              value={editedConfig.chromadb?.embedding_backend ?? 'ollama'}
+              onChange={(e) => updateChromadb('embedding_backend', e.target.value)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            >
+              <option value="ollama">Ollama</option>
+              <option value="sentence_transformer">Sentence Transformer</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Backend for generating text embeddings used in semantic search.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ollama Embedding Model</label>
+            <input
+              type="text"
+              value={editedConfig.chromadb?.ollama_embedding_model ?? 'qwen3-embedding:0.6b'}
+              onChange={(e) => updateChromadb('ollama_embedding_model', e.target.value)}
+              placeholder="qwen3-embedding:0.6b"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ollama Embedding URL</label>
+            <input
+              type="text"
+              value={editedConfig.chromadb?.ollama_embedding_url ?? 'http://localhost:11434/api/embeddings'}
+              onChange={(e) => updateChromadb('ollama_embedding_url', e.target.value)}
+              placeholder="http://localhost:11434/api/embeddings"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sentence Transformer Model</label>
+            <input
+              type="text"
+              value={editedConfig.chromadb?.sentence_transformer_model ?? 'all-MiniLM-L6-v2'}
+              onChange={(e) => updateChromadb('sentence_transformer_model', e.target.value)}
+              placeholder="all-MiniLM-L6-v2"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Used when embedding backend is set to sentence_transformer.
+            </p>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ================================================================= */}
+      {/* 12. Export Section (collapsible)                                    */}
+      {/* ================================================================= */}
+      <CollapsibleSection
+        title="Export Settings"
+        icon={<Download className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Output Directory</label>
+            <input
+              type="text"
+              value={editedConfig.export?.output_dir ?? './output'}
+              onChange={(e) => updateExport('output_dir', e.target.value)}
+              placeholder="./output"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Export Formats</label>
+            <div className="flex flex-wrap gap-3">
+              {['csv', 'json', 'zephyr'].map((fmt) => {
+                const formats: string[] = editedConfig.export?.formats ?? ['csv', 'zephyr', 'json'];
+                const isChecked = formats.includes(fmt);
+                return (
+                  <label key={fmt} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {
+                        const updated = isChecked ? formats.filter((f: string) => f !== fmt) : [...formats, fmt];
+                        updateExport('formats', updated);
+                      }}
+                      className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    />
+                    {fmt.toUpperCase()}
+                  </label>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Select which export formats to generate after a pipeline run.
+            </p>
+          </div>
+
+          <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Zephyr Integration</h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Project Key</label>
+                <input
+                  type="text"
+                  value={editedConfig.export?.zephyr?.project_key ?? 'PROJ'}
+                  onChange={(e) => updateExport('zephyr', { ...editedConfig.export?.zephyr, project_key: e.target.value })}
+                  placeholder="PROJ"
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Folder Prefix</label>
+                <input
+                  type="text"
+                  value={editedConfig.export?.zephyr?.folder_prefix ?? 'Generated Tests'}
+                  onChange={(e) => updateExport('zephyr', { ...editedConfig.export?.zephyr, folder_prefix: e.target.value })}
+                  placeholder="Generated Tests"
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Default Status</label>
+                <select
+                  value={editedConfig.export?.zephyr?.default_status ?? 'Draft'}
+                  onChange={(e) => updateExport('zephyr', { ...editedConfig.export?.zephyr, default_status: e.target.value })}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                  <option value="Draft">Draft</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Deprecated">Deprecated</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Default Labels</label>
+                <input
+                  type="text"
+                  value={editedConfig.export?.zephyr?.default_labels ?? 'automated,generated'}
+                  onChange={(e) => updateExport('zephyr', { ...editedConfig.export?.zephyr, default_labels: e.target.value })}
+                  placeholder="automated,generated"
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+                />
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Comma-separated labels applied to exported tests.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ================================================================= */}
+      {/* 13. Circuit Breaker Section (collapsible)                           */}
+      {/* ================================================================= */}
+      <CollapsibleSection
+        title="Circuit Breaker"
+        icon={<Zap className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Failure Threshold</label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={editedConfig.circuit_breaker?.threshold ?? 3}
+              onChange={(e) => updateCircuitBreaker('threshold', parseInt(e.target.value, 10) || 3)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Number of consecutive failures before the circuit breaker opens and stops retrying.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reset Timeout (seconds)</label>
+            <input
+              type="number"
+              min={5}
+              max={600}
+              value={editedConfig.circuit_breaker?.reset_timeout ?? 60}
+              onChange={(e) => updateCircuitBreaker('reset_timeout', parseFloat(e.target.value) || 60)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Time in seconds before a tripped circuit breaker allows retry attempts.
+            </p>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ================================================================= */}
+      {/* 14. Metrics Section (collapsible)                                   */}
+      {/* ================================================================= */}
+      <CollapsibleSection
+        title="Metrics"
+        icon={<Activity className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Metrics Directory</label>
+            <input
+              type="text"
+              value={editedConfig.metrics?.dir ?? 'output/metrics'}
+              onChange={(e) => updateMetrics('dir', e.target.value)}
+              placeholder="output/metrics"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Directory where pipeline run metrics are stored.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Degradation Threshold (%)</label>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              step={0.5}
+              value={editedConfig.metrics?.degradation_threshold_pct ?? 15}
+              onChange={(e) => updateMetrics('degradation_threshold_pct', parseFloat(e.target.value) || 15)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Percentage drop in quality score that triggers a degradation warning.
+            </p>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ================================================================= */}
+      {/* 15. Output Config Section (collapsible)                             */}
       {/* ================================================================= */}
       <CollapsibleSection
         title="Output Config"

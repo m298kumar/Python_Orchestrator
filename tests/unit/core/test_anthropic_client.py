@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -14,6 +14,7 @@ class TestAnthropicClient:
         """Create an AnthropicClient with mocked SDK and config."""
         from stlc_platform.core.llm.anthropic_client import AnthropicClient
         from stlc_platform.core.llm.base_client import TokenUsage
+
         client = AnthropicClient.__new__(AnthropicClient)
         # Base class attributes (normally set by BaseLLMClient.__init__)
         client._last_token_usage = TokenUsage()
@@ -129,4 +130,5 @@ class TestAnthropicClient:
         """Test AnthropicClient inherits from BaseLLMClient."""
         from stlc_platform.core.llm.anthropic_client import AnthropicClient
         from stlc_platform.core.llm.base_client import BaseLLMClient
+
         assert issubclass(AnthropicClient, BaseLLMClient)

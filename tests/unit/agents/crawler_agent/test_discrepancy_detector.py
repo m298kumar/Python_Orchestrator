@@ -5,7 +5,6 @@ Unit tests for DiscrepancyDetector.
 from __future__ import annotations
 
 import pytest
-
 from stlc_platform.agents.crawler_agent.discrepancy_detector import DiscrepancyDetector
 from stlc_platform.core.contracts import (
     CrawledPageArtifact,
@@ -95,9 +94,9 @@ class TestNoDiscrepancies:
         # "Submit button" -- regex captures "Submit" as name, which exists
         # in our site model elements. So no missing_element discrepancy.
         missing_submit = [
-            i for i in report.items
-            if i.discrepancy_type == "missing_element"
-            and "submit" in i.expected.lower()
+            i
+            for i in report.items
+            if i.discrepancy_type == "missing_element" and "submit" in i.expected.lower()
         ]
         assert len(missing_submit) == 0
 
@@ -105,9 +104,7 @@ class TestNoDiscrepancies:
 class TestMissingElements:
     def test_detects_missing_button(self, detector: DiscrepancyDetector):
         """AC says 'Submit button' but no submit button in model."""
-        site = _make_site_model(
-            pages=[_make_page_with_elements(elements=[])]
-        )
+        site = _make_site_model(pages=[_make_page_with_elements(elements=[])])
         reqs = [
             _make_requirement(
                 acceptance_criteria=["User clicks the Checkout button"],
@@ -115,16 +112,15 @@ class TestMissingElements:
         ]
         report = detector.detect(site, reqs)
         checkout_items = [
-            i for i in report.items
+            i
+            for i in report.items
             if "checkout" in i.expected.lower() and i.discrepancy_type == "missing_element"
         ]
         assert len(checkout_items) >= 1
 
     def test_detects_missing_link(self, detector: DiscrepancyDetector):
         """AC says 'forgot password link' but no such link exists."""
-        site = _make_site_model(
-            pages=[_make_page_with_elements(elements=[])]
-        )
+        site = _make_site_model(pages=[_make_page_with_elements(elements=[])])
         reqs = [
             _make_requirement(
                 acceptance_criteria=["User sees forgot password link"],
@@ -132,8 +128,7 @@ class TestMissingElements:
         ]
         report = detector.detect(site, reqs)
         link_items = [
-            i for i in report.items
-            if "link" in i.discrepancy_type or "link" in i.expected.lower()
+            i for i in report.items if "link" in i.discrepancy_type or "link" in i.expected.lower()
         ]
         assert len(link_items) >= 1
 
@@ -163,7 +158,8 @@ class TestMissingFormFields:
         ]
         report = detector.detect(site, reqs)
         email_items = [
-            i for i in report.items
+            i
+            for i in report.items
             if "email" in i.expected.lower() and i.discrepancy_type == "missing_form_field"
         ]
         assert len(email_items) >= 1

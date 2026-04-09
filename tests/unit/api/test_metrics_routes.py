@@ -17,6 +17,7 @@ from stlc_platform.pipeline.metrics_collector import MetricsCollector, RunMetric
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_run_metrics(run_id: str = "abc123", **overrides) -> RunMetrics:
     defaults = {
         "run_id": run_id,
@@ -44,6 +45,7 @@ def _make_run_metrics(run_id: str = "abc123", **overrides) -> RunMetrics:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def mock_collector():
     """Create a mock MetricsCollector."""
@@ -61,6 +63,7 @@ def client(mock_collector):
 # ---------------------------------------------------------------------------
 # GET /api/metrics
 # ---------------------------------------------------------------------------
+
 
 class TestListMetrics:
     def test_list_returns_metrics(self, client, mock_collector):
@@ -112,13 +115,24 @@ class TestListMetrics:
 # GET /api/metrics/trends
 # ---------------------------------------------------------------------------
 
+
 class TestGetTrends:
     def test_trends_with_data(self, client, mock_collector):
         runs = [
-            _make_run_metrics("r1", avg_quality_score=0.80, tokens_used=1000,
-                              generation_time_seconds=10.0, estimated_cost_usd=0.01),
-            _make_run_metrics("r2", avg_quality_score=0.90, tokens_used=2000,
-                              generation_time_seconds=20.0, estimated_cost_usd=0.02),
+            _make_run_metrics(
+                "r1",
+                avg_quality_score=0.80,
+                tokens_used=1000,
+                generation_time_seconds=10.0,
+                estimated_cost_usd=0.01,
+            ),
+            _make_run_metrics(
+                "r2",
+                avg_quality_score=0.90,
+                tokens_used=2000,
+                generation_time_seconds=20.0,
+                estimated_cost_usd=0.02,
+            ),
         ]
         mock_collector.get_trends.return_value = runs
         mock_collector.detect_degradation.return_value = None
@@ -166,6 +180,7 @@ class TestGetTrends:
 # ---------------------------------------------------------------------------
 # GET /api/metrics/{run_id}
 # ---------------------------------------------------------------------------
+
 
 class TestGetRunMetrics:
     def test_get_existing_run(self, client, mock_collector):

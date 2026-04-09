@@ -55,9 +55,12 @@ class CrawlerEmbeddingStore:
     # ------------------------------------------------------------------
 
     def _get_config(self) -> Any:
-        if self._config is not None:
+        # If config is a raw dict it cannot be used directly (attribute access will fail).
+        # Fall back to the global config_loader which always returns a proper config object.
+        if self._config is not None and not isinstance(self._config, dict):
             return self._config
         from stlc_platform.core.config_loader import config
+
         return config.chromadb
 
     def initialize(self) -> None:
@@ -66,8 +69,8 @@ class CrawlerEmbeddingStore:
             return
 
         from stlc_platform.core.storage.chroma_store import (
-            _make_client,
             _best_embedding_fn,
+            _make_client,
         )
 
         cfg = self._get_config()
@@ -82,9 +85,28 @@ class CrawlerEmbeddingStore:
             kw["embedding_function"] = embed_fn
         try:
             self._collection = self._client.get_or_create_collection(**kw)
-        except Exception:
-            kw.pop("metadata", None)
-            self._collection = self._client.get_or_create_collection(**kw)
+        except Exception as exc:
+            err = str(exc).lower()
+            if "embedding function" in err or "conflict" in err:
+                # Persisted collection has a different embedding function.
+                # Delete the stale collection and recreate with the current
+                # embedding function so embeddings are consistent.
+                logger.warning(
+                    "Embedding function conflict on collection '%s' — "
+                    "deleting stale collection and recreating with current embedding function.",
+                    self._collection_name,
+                )
+                try:
+                    self._client.delete_collection(self._collection_name)
+                except Exception as del_exc:
+                    logger.debug(
+                        "Could not delete stale collection '%s': %s",
+                        self._collection_name, del_exc,
+                    )
+                self._collection = self._client.get_or_create_collection(**kw)
+            else:
+                kw.pop("metadata", None)
+                self._collection = self._client.get_or_create_collection(**kw)
 
         self._ready = True
         logger.info(
@@ -118,24 +140,16 @@ class CrawlerEmbeddingStore:
             if page.elements:
                 element_types: Dict[str, int] = {}
                 for el in page.elements:
-                    element_types[el.element_type] = (
-                        element_types.get(el.element_type, 0) + 1
-                    )
-                el_summary = ", ".join(
-                    f"{k}: {v}" for k, v in sorted(element_types.items())
-                )
+                    element_types[el.element_type] = element_types.get(el.element_type, 0) + 1
+                el_summary = ", ".join(f"{k}: {v}" for k, v in sorted(element_types.items()))
                 doc_parts.append(f"Elements ({element_count}): {el_summary}")
 
                 # Include element names/text for richer embeddings
-                element_names = [
-                    el.name or el.text
-                    for el in page.elements
-                    if el.name or el.text
-                ][:20]  # Cap at 20 to keep document size reasonable
+                element_names = [el.name or el.text for el in page.elements if el.name or el.text][
+                    :20
+                ]  # Cap at 20 to keep document size reasonable
                 if element_names:
-                    doc_parts.append(
-                        "Element details: " + "; ".join(element_names)
-                    )
+                    doc_parts.append("Element details: " + "; ".join(element_names))
 
             # Forms summary
             form_count = len(page.forms)
@@ -145,16 +159,11 @@ class CrawlerEmbeddingStore:
                     action = form.get("action", "")
                     method = form.get("method", "")
                     fields = form.get("fields", [])
-                    field_names = [
-                        f.get("name", "") for f in fields if isinstance(f, dict)
-                    ]
+                    field_names = [f.get("name", "") for f in fields if isinstance(f, dict)]
                     form_summaries.append(
-                        f"{method.upper()} {action} "
-                        f"(fields: {', '.join(field_names[:10])})"
+                        f"{method.upper()} {action} (fields: {', '.join(field_names[:10])})"
                     )
-                doc_parts.append(
-                    f"Forms ({form_count}): " + "; ".join(form_summaries)
-                )
+                doc_parts.append(f"Forms ({form_count}): " + "; ".join(form_summaries))
 
             document = "\n".join(doc_parts)
             doc_id = f"page_{uuid.uuid4().hex[:12]}"
@@ -171,16 +180,12 @@ class CrawlerEmbeddingStore:
             ids.append(doc_id)
 
         if documents:
-            self._collection.add(
-                documents=documents, metadatas=metadatas, ids=ids
-            )
+            self._collection.add(documents=documents, metadatas=metadatas, ids=ids)
             logger.info("Embedded %d page(s) into '%s'", len(documents), self._collection_name)
 
         return len(documents)
 
-    def retrieve_context(
-        self, query: str, n: int = 3
-    ) -> List[Dict[str, Any]]:
+    def retrieve_context(self, query: str, n: int = 3) -> List[Dict[str, Any]]:
         """Query the collection for relevant page context.
 
         Returns a list of dicts with keys: ``document``, ``metadata``,

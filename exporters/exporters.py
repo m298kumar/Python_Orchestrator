@@ -4,11 +4,11 @@ Exporters - CSV and Zephyr Scale format output
 import csv
 import json
 import os
-from typing import List
 from datetime import datetime
-from rich.console import Console
+from typing import List
 
 from config import config
+from rich.console import Console
 from test_generator import TestCase
 
 console = Console()

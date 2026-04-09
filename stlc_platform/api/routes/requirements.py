@@ -62,13 +62,12 @@ async def upload_requirements(file: UploadFile = File(...)) -> list[RequirementR
     suffix = "." + ext
     tmp_path: str | None = None
     try:
-        with tempfile.NamedTemporaryFile(
-            delete=False, suffix=suffix, mode="wb"
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, mode="wb") as tmp:
             tmp.write(content)
             tmp_path = tmp.name
 
         from stlc_platform.agents.requirements_agent.reader import RequirementsReader
+
         reader = RequirementsReader()
         parsed = reader.read(tmp_path)
     except ImportError as e:

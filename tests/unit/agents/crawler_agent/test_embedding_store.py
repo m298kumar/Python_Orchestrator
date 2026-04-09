@@ -5,16 +5,15 @@ Validates the ChromaDB-backed embedding store for crawled page data.
 All ChromaDB interactions are mocked to avoid external dependencies.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 from stlc_platform.agents.crawler_agent.embedding_store import CrawlerEmbeddingStore
 from stlc_platform.core.contracts import (
     CrawledPageArtifact,
     PageElementArtifact,
     SiteModelArtifact,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -38,9 +37,7 @@ def _sample_site_model() -> SiteModelArtifact:
                     PageElementArtifact(
                         element_type="input", name="password", selector="#password"
                     ),
-                    PageElementArtifact(
-                        element_type="button", name="submit", text="Sign In"
-                    ),
+                    PageElementArtifact(element_type="button", name="submit", text="Sign In"),
                 ],
                 forms=[
                     {
@@ -57,12 +54,8 @@ def _sample_site_model() -> SiteModelArtifact:
                 url="https://example.com/dashboard",
                 title="Dashboard",
                 elements=[
-                    PageElementArtifact(
-                        element_type="link", name="profile", text="My Profile"
-                    ),
-                    PageElementArtifact(
-                        element_type="link", name="settings", text="Settings"
-                    ),
+                    PageElementArtifact(element_type="link", name="profile", text="My Profile"),
+                    PageElementArtifact(element_type="link", name="settings", text="Settings"),
                 ],
                 forms=[],
             ),
@@ -72,9 +65,7 @@ def _sample_site_model() -> SiteModelArtifact:
 
 def _make_mock_store() -> CrawlerEmbeddingStore:
     """Create a CrawlerEmbeddingStore with mock internals pre-initialised."""
-    store = CrawlerEmbeddingStore(
-        chromadb_config=MagicMock(persist_directory="/tmp/test_chroma")
-    )
+    store = CrawlerEmbeddingStore(chromadb_config=MagicMock(persist_directory="/tmp/test_chroma"))
     mock_collection = MagicMock()
     mock_collection.count.return_value = 0
     store._collection = mock_collection

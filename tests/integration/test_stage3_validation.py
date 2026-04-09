@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Dict
 
 import pytest
-
 from stlc_platform.agents.crawler_agent import (
     CrawlerAgent,
     DiscrepancyDetector,
@@ -21,13 +20,10 @@ from stlc_platform.agents.crawler_agent import (
     SiteModelBuilder,
 )
 from stlc_platform.core.contracts import (
-    CrawledPageArtifact,
     DiscrepancyReportArtifact,
-    PageElementArtifact,
     RequirementArtifact,
     SiteModelArtifact,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -121,6 +117,7 @@ def ecommerce_requirements() -> list:
 # Page Parsing Tests
 # ---------------------------------------------------------------------------
 
+
 class TestPageParsing:
     def test_all_fixtures_parse_successfully(self, html_pages: Dict[str, str]):
         """All 4 HTML fixture files parse without errors."""
@@ -151,8 +148,7 @@ class TestPageParsing:
         """Product list page should have Add to Cart buttons."""
         products = next(p for p in parsed_pages if "products" in p.url)
         cart_buttons = [
-            e for e in products.elements
-            if e.element_type == "button" and "cart" in e.text.lower()
+            e for e in products.elements if e.element_type == "button" and "cart" in e.text.lower()
         ]
         assert len(cart_buttons) >= 2  # Two products in fixture
 
@@ -160,6 +156,7 @@ class TestPageParsing:
 # ---------------------------------------------------------------------------
 # Site Model Building Tests
 # ---------------------------------------------------------------------------
+
 
 class TestSiteModelBuilding:
     def test_site_model_has_all_pages(self, site_model: SiteModelArtifact):
@@ -186,6 +183,7 @@ class TestSiteModelBuilding:
 # Discrepancy Detection Tests
 # ---------------------------------------------------------------------------
 
+
 class TestDiscrepancyDetection:
     def test_detects_discrepancies_for_missing_features(
         self,
@@ -197,10 +195,7 @@ class TestDiscrepancyDetection:
         report = detector.detect(site_model, ecommerce_requirements)
         assert isinstance(report, DiscrepancyReportArtifact)
         # REQ-004 mentions wishlist buttons which don't exist
-        wishlist_items = [
-            i for i in report.items
-            if i.requirement_id == "REQ-004"
-        ]
+        wishlist_items = [i for i in report.items if i.requirement_id == "REQ-004"]
         assert len(wishlist_items) >= 1
 
     def test_gate_decision_reflects_severity(
@@ -229,6 +224,7 @@ class TestDiscrepancyDetection:
 # ---------------------------------------------------------------------------
 # CrawlerAgent End-to-End Tests
 # ---------------------------------------------------------------------------
+
 
 class TestCrawlerAgentEndToEnd:
     def test_full_pipeline_html_to_site_model(self, html_pages: Dict[str, str]):

@@ -5,7 +5,6 @@ Validates that _smart_field_value() and _make_example_payload() produce
 realistic test data based on field name patterns.
 """
 
-
 from stlc_platform.agents.api_test_agent.test_generator import APITestGenerator
 from stlc_platform.core.contracts import APIEndpointArtifact
 

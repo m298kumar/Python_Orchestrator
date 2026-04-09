@@ -16,10 +16,8 @@ Versioning rules (from SPEC_WORKFLOW.md):
 
 import argparse
 import json
-import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
+from typing import Dict, List, Optional
 
 # ── Migration Registry ───────────────────────────────────────────────────────
 # Each migration is a function that transforms an artifact dict from one version
@@ -47,17 +45,18 @@ MIGRATIONS: Dict[str, Dict[str, callable]] = {
 
 # ── Engine ───────────────────────────────────────────────────────────────────
 
+
 def get_current_versions() -> Dict[str, str]:
     """Return the current schema_version for each artifact type."""
     from stlc_platform.core.contracts import (
-        RequirementArtifact,
-        TestCaseArtifact,
-        FeatureFileArtifact,
-        StepDefinitionArtifact,
-        SiteModelArtifact,
         APIModelArtifact,
         APITestArtifact,
+        FeatureFileArtifact,
         PipelineRunArtifact,
+        RequirementArtifact,
+        SiteModelArtifact,
+        StepDefinitionArtifact,
+        TestCaseArtifact,
     )
 
     artifacts = [
@@ -129,8 +128,9 @@ def _detect_type(data: dict) -> Optional[str]:
     return None
 
 
-def migrate_artifact(artifact: dict, artifact_type: str,
-                     from_version: str, to_version: str) -> dict:
+def migrate_artifact(
+    artifact: dict, artifact_type: str, from_version: str, to_version: str
+) -> dict:
     """Apply a single migration to an artifact."""
     key = f"{from_version} -> {to_version}"
     type_migrations = MIGRATIONS.get(artifact_type, {})
@@ -146,24 +146,28 @@ def migrate_artifact(artifact: dict, artifact_type: str,
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="STLC Platform Artifact Migration Tool"
-    )
+    parser = argparse.ArgumentParser(description="STLC Platform Artifact Migration Tool")
     parser.add_argument(
-        "--check", action="store_true",
+        "--check",
+        action="store_true",
         help="Check if any migrations are needed (no changes made)",
     )
     parser.add_argument(
-        "--migrate", action="store_true",
+        "--migrate",
+        action="store_true",
         help="Run all pending migrations",
     )
     parser.add_argument(
-        "--artifact-dir", type=str, default="./output",
+        "--artifact-dir",
+        type=str,
+        default="./output",
         help="Directory containing artifact JSON files (default: ./output)",
     )
     parser.add_argument(
-        "--versions", action="store_true",
+        "--versions",
+        action="store_true",
         help="Print current artifact contract versions",
     )
     args = parser.parse_args()

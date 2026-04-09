@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
-
 from stlc_platform.core.llm.ollama_client import OllamaClient
 
 
@@ -78,7 +77,8 @@ class TestListModels:
     @patch("stlc_platform.core.llm.ollama_client.requests.get")
     def test_list_models_empty(self, mock_get, client):
         mock_get.return_value = MagicMock(
-            status_code=200, json=lambda: {"models": []},
+            status_code=200,
+            json=lambda: {"models": []},
         )
         assert client.list_models() == []
 

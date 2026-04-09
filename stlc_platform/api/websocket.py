@@ -30,8 +30,9 @@ class ConnectionManager:
         if run_id not in self._connections:
             self._connections[run_id] = set()
         self._connections[run_id].add(websocket)
-        logger.info("WebSocket connected for run %s (total: %d)",
-                     run_id, len(self._connections[run_id]))
+        logger.info(
+            "WebSocket connected for run %s (total: %d)", run_id, len(self._connections[run_id])
+        )
 
     def disconnect(self, websocket: WebSocket, run_id: str) -> None:
         """Remove a WebSocket connection."""
@@ -43,12 +44,14 @@ class ConnectionManager:
 
     async def broadcast(self, run_id: str, event: str, data: Dict[str, Any]) -> None:
         """Broadcast a message to all connections for a run_id."""
-        message = json.dumps({
-            "event": event,
-            "run_id": run_id,
-            "data": data,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        message = json.dumps(
+            {
+                "event": event,
+                "run_id": run_id,
+                "data": data,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         if run_id not in self._connections:
             return
 
@@ -71,20 +74,26 @@ class ConnectionManager:
         self, run_id: str, stage_id: str, success: bool, duration: float
     ) -> None:
         """Notify that a stage has completed."""
-        await self.broadcast(run_id, "stage_complete", {
-            "stage_id": stage_id,
-            "success": success,
-            "duration_seconds": round(duration, 3),
-        })
+        await self.broadcast(
+            run_id,
+            "stage_complete",
+            {
+                "stage_id": stage_id,
+                "success": success,
+                "duration_seconds": round(duration, 3),
+            },
+        )
 
-    async def broadcast_pipeline_complete(
-        self, run_id: str, status: str, duration: float
-    ) -> None:
+    async def broadcast_pipeline_complete(self, run_id: str, status: str, duration: float) -> None:
         """Notify that the entire pipeline has finished."""
-        await self.broadcast(run_id, "pipeline_complete", {
-            "status": status,
-            "total_duration_seconds": round(duration, 3),
-        })
+        await self.broadcast(
+            run_id,
+            "pipeline_complete",
+            {
+                "status": status,
+                "total_duration_seconds": round(duration, 3),
+            },
+        )
 
     @property
     def active_connections(self) -> int:

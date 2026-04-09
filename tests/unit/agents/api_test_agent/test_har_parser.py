@@ -1,9 +1,9 @@
 """Tests for HAR file parser."""
 
 import json
-import pytest
 from pathlib import Path
 
+import pytest
 from stlc_platform.agents.api_test_agent.har_parser import HARParser
 from stlc_platform.core.contracts import APIModelArtifact
 
@@ -81,18 +81,14 @@ class TestHARParsing:
 
     def test_extracts_query_params(self, har_parser, sample_har):
         result = har_parser.parse(sample_har)
-        products_ep = next(
-            (ep for ep in result.endpoints if "products" in ep.path), None
-        )
+        products_ep = next((ep for ep in result.endpoints if "products" in ep.path), None)
         assert products_ep is not None
         param_names = [p["name"] for p in products_ep.query_params]
         assert "category" in param_names
 
     def test_extracts_request_body(self, har_parser, sample_har):
         result = har_parser.parse(sample_har)
-        post_ep = next(
-            (ep for ep in result.endpoints if ep.method == "POST"), None
-        )
+        post_ep = next((ep for ep in result.endpoints if ep.method == "POST"), None)
         assert post_ep is not None
         assert post_ep.request_body_schema is not None
 
@@ -123,9 +119,7 @@ class TestHAREdgeCases:
         assert len(result.endpoints) == 0
 
     def test_base_url_filter(self, har_parser, sample_har):
-        result = har_parser.parse(
-            sample_har, base_url_filter="https://api.example.com"
-        )
+        result = har_parser.parse(sample_har, base_url_filter="https://api.example.com")
         assert len(result.endpoints) >= 3
 
     def test_minimal_har(self, har_parser, minimal_har):
@@ -157,9 +151,7 @@ class TestHAREdgeCases:
     def test_preserves_example_request(self, har_parser, sample_har):
         """Bug fix: example_request was silently dropped before contract v1.2."""
         result = har_parser.parse(sample_har)
-        post_ep = next(
-            (ep for ep in result.endpoints if ep.method == "POST"), None
-        )
+        post_ep = next((ep for ep in result.endpoints if ep.method == "POST"), None)
         assert post_ep is not None
         assert post_ep.example_request is not None
         assert "name" in post_ep.example_request

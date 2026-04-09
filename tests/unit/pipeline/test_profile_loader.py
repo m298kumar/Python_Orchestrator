@@ -2,15 +2,14 @@
 Tests for ProfileLoader — execution profile loading and artifact filtering.
 """
 
-import pytest
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 
+import pytest
 from stlc_platform.pipeline.profile_loader import (
-    ProfileLoader,
     ExecutionProfile,
+    ProfileLoader,
 )
-
 
 # ── Profile Loading Tests ─────────────────────────────────────────────────────
 
@@ -101,10 +100,7 @@ class TestProfileFiltering:
         }
         filtered = loader.apply_filter(profile, artifacts)
         assert len(filtered["requirements"]) == 2
-        assert all(
-            r.priority.lower() in ("high", "critical")
-            for r in filtered["requirements"]
-        )
+        assert all(r.priority.lower() in ("high", "critical") for r in filtered["requirements"])
 
     def test_requirement_id_filter(self):
         loader = ProfileLoader()
@@ -147,10 +143,7 @@ class TestProfileFiltering:
             max_tests=2,
         )
         artifacts = {
-            "test_cases": [
-                MockTestCase(tc_id=f"T{i}", priority="High")
-                for i in range(10)
-            ]
+            "test_cases": [MockTestCase(tc_id=f"T{i}", priority="High") for i in range(10)]
         }
         filtered = loader.apply_filter(profile, artifacts)
         assert len(filtered["test_cases"]) == 2

@@ -6,13 +6,13 @@ from dataclasses import dataclass
 from typing import Optional
 
 import pytest
-
 from stlc_platform.agents.requirements_agent.domain_detector import DomainDetector
 
 
 @dataclass
 class MockReq:
     """Lightweight requirement stand-in for tests."""
+
     category: Optional[str] = None
     title: Optional[str] = None
 
@@ -89,9 +89,9 @@ class TestDetect:
     def test_mixed_signals_highest_score_wins(self, detector):
         """When requirements span domains, the one with the most keyword hits wins."""
         reqs = [
-            MockReq(category="Patient Registration"),     # healthcare: 1
-            MockReq(category="Clinical Appointment"),      # healthcare: 2
-            MockReq(category="Product Display"),           # e-commerce: 1
+            MockReq(category="Patient Registration"),  # healthcare: 1
+            MockReq(category="Clinical Appointment"),  # healthcare: 2
+            MockReq(category="Product Display"),  # e-commerce: 1
         ]
         assert detector.detect(reqs) == "healthcare"
 
@@ -120,9 +120,11 @@ class TestCustomDomains:
     """Test adding custom domain keyword maps."""
 
     def test_custom_domain_via_constructor(self):
-        detector = DomainDetector(domain_keywords={
-            "logistics": ["shipment", "warehouse", "freight", "tracking"],
-        })
+        detector = DomainDetector(
+            domain_keywords={
+                "logistics": ["shipment", "warehouse", "freight", "tracking"],
+            }
+        )
         reqs = [MockReq(category="Shipment Tracking"), MockReq(category="Warehouse Management")]
         assert detector.detect(reqs) == "logistics"
 
@@ -145,9 +147,11 @@ class TestCustomDomains:
         assert "retail e-commerce" in detector.domain_keywords
 
     def test_from_config_custom_replaces_defaults(self):
-        detector = DomainDetector.from_config({
-            "gaming": ["multiplayer", "inventory", "quest"],
-        })
+        detector = DomainDetector.from_config(
+            {
+                "gaming": ["multiplayer", "inventory", "quest"],
+            }
+        )
         assert "gaming" in detector.domain_keywords
         assert "healthcare" not in detector.domain_keywords
 
@@ -166,10 +170,12 @@ class TestNoDomainHardcoding:
 
     def test_swapping_keywords_changes_detection(self):
         """Prove detection is keyword-driven by swapping keywords."""
-        detector = DomainDetector(domain_keywords={
-            "healthcare": ["product", "cart"],  # intentionally swapped
-            "retail e-commerce": ["patient", "clinical"],  # swapped
-        })
+        detector = DomainDetector(
+            domain_keywords={
+                "healthcare": ["product", "cart"],  # intentionally swapped
+                "retail e-commerce": ["patient", "clinical"],  # swapped
+            }
+        )
         reqs = [MockReq(category="Patient Registration")]
         # "patient" now maps to e-commerce because keywords were swapped
         assert detector.detect(reqs) == "retail e-commerce"

@@ -49,6 +49,7 @@ def download_artifacts(run_id: str) -> StreamingResponse:
         artifacts = run.get("artifacts", {})
         if artifacts:
             import json
+
             zf.writestr(
                 "artifacts.json",
                 json.dumps(artifacts, indent=2, default=str),
@@ -59,7 +60,5 @@ def download_artifacts(run_id: str) -> StreamingResponse:
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={
-            "Content-Disposition": f"attachment; filename=run_{run_id}_artifacts.zip"
-        },
+        headers={"Content-Disposition": f"attachment; filename=run_{run_id}_artifacts.zip"},
     )

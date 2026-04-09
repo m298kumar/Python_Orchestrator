@@ -14,8 +14,8 @@ llm:
   base_url: http://10.0.0.211:11434
   temperature: 0.4
   num_ctx: 8192
-  timeout: 450
-  num_predict: 3200
+  timeout: 600
+  num_predict: 4096
   api_key: ''
 chromadb:
   persist_directory: ./chroma_db
@@ -200,7 +200,7 @@ bdd:
   framework: behave
   automation_lib: playwright
 crawler:
-  base_url: ''
+  base_url: https://demo.opencart.com/index.php
   max_depth: 3
   max_pages: 100
   wait_for_network_idle: true
@@ -214,7 +214,7 @@ crawler:
 api_testing:
   framework: pytest_requests
   openapi_spec: ''
-  base_url: ''
+  base_url: https://demo.opencart.com
 export:
   output_dir: ./output
   formats:
@@ -243,10 +243,10 @@ coverage:
   min_coverage_types: 1
 circuit_breaker:
   threshold: 3
-  reset_timeout: 60.0
+  reset_timeout: 60
 metrics:
   dir: output/metrics
-  degradation_threshold_pct: 15.0
+  degradation_threshold_pct: 15
 output:
   output_dir: ./output
   csv_filename: test_cases.csv

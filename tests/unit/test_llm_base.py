@@ -3,17 +3,13 @@ Tests for LLM abstraction layer.
 """
 
 import json
-from typing import Optional
-from unittest.mock import patch
 
 import pytest
-
 from stlc_platform.core.llm.base_client import (
-    BaseLLMClient,
-    TokenUsage,
     TESTCASE_JSON_SCHEMA,
-    repair_truncated_json,
+    BaseLLMClient,
     is_hollow,
+    repair_truncated_json,
 )
 
 
@@ -57,8 +53,14 @@ class TestIsHollow:
             "description": "This test verifies that users can log in successfully",
             "steps": [
                 {"action": "Navigate to the login page at /login", "expected_result": "Form loads"},
-                {"action": "Enter username 'admin' in the field", "expected_result": "Username shown"},
-                {"action": "Click the Sign In button to submit", "expected_result": "Dashboard loads"},
+                {
+                    "action": "Enter username 'admin' in the field",
+                    "expected_result": "Username shown",
+                },
+                {
+                    "action": "Click the Sign In button to submit",
+                    "expected_result": "Dashboard loads",
+                },
             ],
         }
         assert is_hollow(parsed) is False
@@ -70,18 +72,28 @@ class TestIsHollow:
         assert is_hollow({"title": "short", "description": "desc", "steps": []}) is True
 
     def test_empty_steps(self):
-        assert is_hollow({
-            "title": "A sufficiently long title here",
-            "description": "A good description text",
-            "steps": [],
-        }) is True
+        assert (
+            is_hollow(
+                {
+                    "title": "A sufficiently long title here",
+                    "description": "A good description text",
+                    "steps": [],
+                }
+            )
+            is True
+        )
 
     def test_trivial_step_actions(self):
-        assert is_hollow({
-            "title": "A sufficiently long title here",
-            "description": "A good description text",
-            "steps": [{"action": "do", "expected_result": "done"}],
-        }) is True
+        assert (
+            is_hollow(
+                {
+                    "title": "A sufficiently long title here",
+                    "description": "A good description text",
+                    "steps": [{"action": "do", "expected_result": "done"}],
+                }
+            )
+            is True
+        )
 
 
 class TestTestcaseJsonSchema:
@@ -166,24 +178,35 @@ class TestTokenTracking:
 # ── Classified-Retry Loop ─────────────────────────────────────────────────
 
 
-_GOOD_TC = json.dumps({
-    "title": "Verify user login with valid credentials works correctly",
-    "description": "Validates that a registered user can log in with valid email and password",
-    "preconditions": "A user account exists with email test@example.com",
-    "test_type": "positive",
-    "priority": "High",
-    "given": "A registered user exists with valid credentials",
-    "when": "The user enters valid email and password on login page",
-    "then": "The user is authenticated and sees the dashboard",
-    "steps": [
-        {"action": "Navigate to the login page at /auth/login", "expected_result": "Login form displayed with email and password fields"},
-        {"action": "Enter test@example.com in the email field", "expected_result": "Email field shows the entered value"},
-        {"action": "Enter valid password and click the Login button", "expected_result": "User is redirected to dashboard page"},
-    ],
-    "expected_outcome": "User is successfully logged in and dashboard is displayed",
-    "tags": ["auth", "positive"],
-    "component": "Login Screen",
-})
+_GOOD_TC = json.dumps(
+    {
+        "title": "Verify user login with valid credentials works correctly",
+        "description": "Validates that a registered user can log in with valid email and password",
+        "preconditions": "A user account exists with email test@example.com",
+        "test_type": "positive",
+        "priority": "High",
+        "given": "A registered user exists with valid credentials",
+        "when": "The user enters valid email and password on login page",
+        "then": "The user is authenticated and sees the dashboard",
+        "steps": [
+            {
+                "action": "Navigate to the login page at /auth/login",
+                "expected_result": "Login form displayed with email and password fields",
+            },
+            {
+                "action": "Enter test@example.com in the email field",
+                "expected_result": "Email field shows the entered value",
+            },
+            {
+                "action": "Enter valid password and click the Login button",
+                "expected_result": "User is redirected to dashboard page",
+            },
+        ],
+        "expected_outcome": "User is successfully logged in and dashboard is displayed",
+        "tags": ["auth", "positive"],
+        "component": "Login Screen",
+    }
+)
 
 _SLOT = {"test_type": "positive", "target_ac": "User can log in with valid email and password"}
 
@@ -237,12 +260,20 @@ class TestContextWindowManagement:
             acceptance_criteria = ["User can log in with valid email and password"]
             category = "Auth"
 
-        slot = {"test_type": "positive", "target_ac": "User can log in with valid email", "title": "Test Login", "ac_type": "general"}
+        slot = {
+            "test_type": "positive",
+            "target_ac": "User can log in with valid email",
+            "title": "Test Login",
+            "ac_type": "general",
+        }
         renderer = PromptRenderer()
 
         # Very small budget should trigger trimming
         small = renderer.render_user_prompt(
-            requirement=MockReq(), slot=slot, test_number=1, total=1,
+            requirement=MockReq(),
+            slot=slot,
+            test_number=1,
+            total=1,
             context="Some extra context about related features",
             examples=[{"title": "Example TC", "steps": [{"action": "a", "expected_result": "e"}]}],
             max_prompt_tokens=50,  # very tight budget
@@ -250,7 +281,10 @@ class TestContextWindowManagement:
 
         # Full budget should include everything
         full = renderer.render_user_prompt(
-            requirement=MockReq(), slot=slot, test_number=1, total=1,
+            requirement=MockReq(),
+            slot=slot,
+            test_number=1,
+            total=1,
             context="Some extra context about related features",
             examples=[{"title": "Example TC", "steps": [{"action": "a", "expected_result": "e"}]}],
             max_prompt_tokens=100000,  # plenty of room
@@ -269,16 +303,27 @@ class TestContextWindowManagement:
             acceptance_criteria = ["User can log in"]
             category = "Auth"
 
-        slot = {"test_type": "positive", "target_ac": "User can log in", "title": "Test", "ac_type": "general"}
+        slot = {
+            "test_type": "positive",
+            "target_ac": "User can log in",
+            "title": "Test",
+            "ac_type": "general",
+        }
         renderer = PromptRenderer()
 
         # Without max_prompt_tokens, no trimming
         result1 = renderer.render_user_prompt(
-            requirement=MockReq(), slot=slot, test_number=1, total=1,
+            requirement=MockReq(),
+            slot=slot,
+            test_number=1,
+            total=1,
             context="context",
         )
         result2 = renderer.render_user_prompt(
-            requirement=MockReq(), slot=slot, test_number=1, total=1,
+            requirement=MockReq(),
+            slot=slot,
+            test_number=1,
+            total=1,
             context="context",
             max_prompt_tokens=None,
         )

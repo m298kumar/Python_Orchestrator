@@ -18,11 +18,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from stlc_platform.agents.bdd_agent.pom_generator import PageObjectStub
 from stlc_platform.core.contracts import (
     FeatureFileArtifact,
     StepDefinitionArtifact,
 )
-from stlc_platform.agents.bdd_agent.pom_generator import PageObjectStub
 
 
 @dataclass
@@ -270,20 +270,14 @@ class ProjectScaffolder:
                 files[path] = pom.content
             # Add __init__.py for Python pages package
             if self._config["language"] == "python":
-                files[f"{pages_dir}/__init__.py"] = (
-                    '"""Page Object Models — auto-generated."""\n'
-                )
+                files[f"{pages_dir}/__init__.py"] = '"""Page Object Models — auto-generated."""\n'
 
         # 4. Framework-specific config & deps
-        framework_files = self._generate_framework_files(
-            project_name, base_url
-        )
+        framework_files = self._generate_framework_files(project_name, base_url)
         files.update(framework_files)
 
         # 5. README
-        files["README.md"] = self._generate_readme(
-            project_name, features, step_defs, pom_stubs
-        )
+        files["README.md"] = self._generate_readme(project_name, features, step_defs, pom_stubs)
 
         return ScaffoldedProject(
             project_name=project_name,
@@ -294,9 +288,7 @@ class ProjectScaffolder:
             file_count=len(files),
         )
 
-    def _generate_framework_files(
-        self, project_name: str, base_url: str
-    ) -> Dict[str, str]:
+    def _generate_framework_files(self, project_name: str, base_url: str) -> Dict[str, str]:
         """Generate framework-specific configuration and dependency files."""
         files: Dict[str, str] = {}
 
@@ -314,17 +306,11 @@ class ProjectScaffolder:
             files["tests/conftest.py"] = self._pytest_conftest(base_url)
 
         elif self.framework == "cucumber_java":
-            files["pom.xml"] = _CUCUMBER_JAVA_POM.format(
-                project_name=project_name
-            )
-            files["src/test/java/runners/RunCucumberTest.java"] = (
-                _CUCUMBER_JAVA_RUNNER
-            )
+            files["pom.xml"] = _CUCUMBER_JAVA_POM.format(project_name=project_name)
+            files["src/test/java/runners/RunCucumberTest.java"] = _CUCUMBER_JAVA_RUNNER
 
         elif self.framework == "cucumberjs":
-            files["package.json"] = _CUCUMBERJS_PACKAGE_JSON.format(
-                project_name=project_name
-            )
+            files["package.json"] = _CUCUMBERJS_PACKAGE_JSON.format(project_name=project_name)
             files["cucumber.js"] = _CUCUMBERJS_CONFIG
 
         return files
@@ -425,44 +411,54 @@ def browser_page():
         lines.extend(["", "## Setup & Run", ""])
 
         if self.framework == "behave":
-            lines.extend([
-                "```bash",
-                "pip install -r requirements.txt",
-                "behave",
-                "```",
-            ])
+            lines.extend(
+                [
+                    "```bash",
+                    "pip install -r requirements.txt",
+                    "behave",
+                    "```",
+                ]
+            )
         elif self.framework == "pytest_bdd":
-            lines.extend([
-                "```bash",
-                "pip install -r requirements.txt",
-                "pytest tests/",
-                "```",
-            ])
+            lines.extend(
+                [
+                    "```bash",
+                    "pip install -r requirements.txt",
+                    "pytest tests/",
+                    "```",
+                ]
+            )
         elif self.framework == "cucumber_java":
-            lines.extend([
-                "```bash",
-                "mvn clean test",
-                "```",
-            ])
+            lines.extend(
+                [
+                    "```bash",
+                    "mvn clean test",
+                    "```",
+                ]
+            )
         elif self.framework == "cucumberjs":
-            lines.extend([
-                "```bash",
-                "npm install",
-                "npm test",
-                "```",
-            ])
+            lines.extend(
+                [
+                    "```bash",
+                    "npm install",
+                    "npm test",
+                    "```",
+                ]
+            )
 
-        lines.extend([
-            "",
-            "## TODO",
-            "",
-            "1. Replace `TODO` selectors in page objects with real locators",
-            "2. Implement step definition bodies (currently raise NotImplementedError)",
-            "3. Configure browser/driver settings in environment setup",
-            "4. Set the correct base URL (currently placeholder)",
-            "",
-            "---",
-            "*Generated by STLC Automation Platform*",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "## TODO",
+                "",
+                "1. Replace `TODO` selectors in page objects with real locators",
+                "2. Implement step definition bodies (currently raise NotImplementedError)",
+                "3. Configure browser/driver settings in environment setup",
+                "4. Set the correct base URL (currently placeholder)",
+                "",
+                "---",
+                "*Generated by STLC Automation Platform*",
+                "",
+            ]
+        )
         return "\n".join(lines)

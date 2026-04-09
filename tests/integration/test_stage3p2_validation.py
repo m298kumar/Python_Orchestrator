@@ -12,12 +12,10 @@ import json
 from pathlib import Path
 
 import pytest
-
 from stlc_platform.agents.api_test_agent import (
     APITestAgent,
     APITestGenerator,
     OpenAPIParser,
-    TestClassifier,
 )
 from stlc_platform.core.contracts import APIModelArtifact
 
@@ -59,9 +57,7 @@ class TestOpenAPIParsingEndToEnd:
         assert len(public_endpoints) == 4
 
     def test_schema_extraction_completeness(self, petstore_model):
-        endpoints_with_response_schema = [
-            e for e in petstore_model.endpoints if e.response_schema
-        ]
+        endpoints_with_response_schema = [e for e in petstore_model.endpoints if e.response_schema]
         # Most endpoints have response schemas
         assert len(endpoints_with_response_schema) >= 6
 
@@ -140,9 +136,7 @@ class TestGeneratedCodeQuality:
             try:
                 ast.parse(test_file.content)
             except SyntaxError as e:
-                pytest.fail(
-                    f"SyntaxError in {test_file.filename}: {e}"
-                )
+                pytest.fail(f"SyntaxError in {test_file.filename}: {e}")
 
     def test_conftest_valid_python(self, petstore_v3):
         agent = APITestAgent()
@@ -152,17 +146,13 @@ class TestGeneratedCodeQuality:
     def test_pytest_marks_present(self, petstore_v3):
         agent = APITestAgent()
         result = agent.execute({"openapi_spec": petstore_v3}, {})
-        all_content = "\n".join(
-            t.content for t in result.artifacts["test_files"]
-        )
+        all_content = "\n".join(t.content for t in result.artifacts["test_files"])
         assert "@pytest.mark.api" in all_content
 
     def test_failure_type_comments_present(self, petstore_v3):
         agent = APITestAgent()
         result = agent.execute({"openapi_spec": petstore_v3}, {})
-        all_content = "\n".join(
-            t.content for t in result.artifacts["test_files"]
-        )
+        all_content = "\n".join(t.content for t in result.artifacts["test_files"])
         assert "# failure_type:" in all_content
 
 

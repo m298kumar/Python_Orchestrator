@@ -70,18 +70,18 @@ class EnrichmentAgent(BaseAgent):
 
         disc = artifacts.get("discrepancy_report")
         if disc is not None and not isinstance(disc, DiscrepancyReportArtifact):
-            warnings.append(
-                "'discrepancy_report' should be a DiscrepancyReportArtifact."
-            )
+            warnings.append("'discrepancy_report' should be a DiscrepancyReportArtifact.")
 
         return ValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)
 
     def execute(self, artifacts: Dict[str, Any], config: Dict[str, Any]) -> AgentResult:
         """Enrich *test_cases* with discrepancy-derived TCs."""
+        validation = self.validate_input(artifacts)
+        if not validation.valid:
+            return AgentResult(success=False, errors=validation.errors)
+
         test_cases: List[TestCaseArtifact] = artifacts["test_cases"]
-        discrepancy_report: DiscrepancyReportArtifact | None = artifacts.get(
-            "discrepancy_report"
-        )
+        discrepancy_report: DiscrepancyReportArtifact | None = artifacts.get("discrepancy_report")
 
         # Fast path: no discrepancies to process
         if not discrepancy_report or not discrepancy_report.items:

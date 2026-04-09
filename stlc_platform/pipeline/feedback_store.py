@@ -219,23 +219,24 @@ class FeedbackStore:
     def _init_chroma_collection(self) -> None:
         """Initialize the ChromaDB collection for feedback embeddings."""
         try:
-            if hasattr(self._chroma_store, "_client"):
-                client = self._chroma_store._client
-                self._chroma_collection = client.get_or_create_collection(
-                    name=_FEEDBACK_COLLECTION,
-                    metadata={"hnsw:space": "cosine"},
-                )
-                # Re-index existing feedback that may not be in ChromaDB yet
-                self._reindex_existing()
-            elif hasattr(self._chroma_store, "initialize"):
-                # Store with lazy init — defer collection creation
+            # Always call initialize() first if available — the store uses lazy init
+            # and _client starts as None until initialize() is called.
+            if hasattr(self._chroma_store, "initialize"):
                 self._chroma_store.initialize()
-                if hasattr(self._chroma_store, "_client"):
-                    self._chroma_collection = self._chroma_store._client.get_or_create_collection(
-                        name=_FEEDBACK_COLLECTION,
-                        metadata={"hnsw:space": "cosine"},
-                    )
-                    self._reindex_existing()
+
+            client = getattr(self._chroma_store, "_client", None)
+            if client is None:
+                logger.warning(
+                    "ChromaDB client is not initialised — feedback semantic search disabled."
+                )
+                return
+
+            self._chroma_collection = client.get_or_create_collection(
+                name=_FEEDBACK_COLLECTION,
+                metadata={"hnsw:space": "cosine"},
+            )
+            # Re-index existing feedback that may not be in ChromaDB yet
+            self._reindex_existing()
         except Exception as e:
             logger.warning("Failed to init ChromaDB feedback collection: %s", e)
             self._chroma_collection = None

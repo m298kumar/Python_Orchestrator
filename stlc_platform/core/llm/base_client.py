@@ -93,17 +93,13 @@ TESTCASE_JSON_SCHEMA: Dict[str, Any] = {
             "type": "string",
             "minLength": 15,
             "description": (
-                "BDD When clause: the specific action the user performs. "
-                "One sentence only."
+                "BDD When clause: the specific action the user performs. One sentence only."
             ),
         },
         "then": {
             "type": "string",
             "minLength": 15,
-            "description": (
-                "BDD Then clause: the specific observable outcome. "
-                "One sentence only."
-            ),
+            "description": ("BDD Then clause: the specific observable outcome. One sentence only."),
         },
         "steps": {
             "type": "array",
@@ -157,21 +153,34 @@ TESTCASE_JSON_SCHEMA: Dict[str, Any] = {
         },
     },
     "required": [
-        "title", "description", "preconditions", "test_type",
-        "priority", "given", "when", "then",
-        "steps", "expected_outcome", "tags", "component",
+        "title",
+        "description",
+        "preconditions",
+        "test_type",
+        "priority",
+        "given",
+        "when",
+        "then",
+        "steps",
+        "expected_outcome",
+        "tags",
+        "component",
     ],
 }
 
 
 # ── JSON repair utility ──────────────────────────────────────────────────────
 
-def repair_truncated_json(s: str) -> str:
-    """Best-effort repair of JSON truncated mid-stream by token limit."""
-    s = s.strip()
-    if not s:
-        return s
+_CLOSE_TO_OPEN = {"}": "{", "]": "["}
 
+
+def _scan_json_structure(s: str):
+    """Scan a JSON string tracking bracket nesting and string state.
+
+    Returns a tuple of (in_string, stack) where *in_string* indicates
+    whether the scan ended inside a quoted string and *stack* contains
+    the still-open bracket characters (``{`` or ``[``).
+    """
     in_string = False
     escape_next = False
     stack: list[str] = []
@@ -180,27 +189,36 @@ def repair_truncated_json(s: str) -> str:
         if escape_next:
             escape_next = False
             continue
-        if ch == '\\' and in_string:
-            escape_next = True
+        if in_string:
+            if ch == "\\":
+                escape_next = True
+            elif ch == '"':
+                in_string = False
             continue
         if ch == '"':
-            in_string = not in_string
-            continue
-        if not in_string:
-            if ch in ('{', '['):
-                stack.append(ch)
-            elif ch == '}':
-                if stack and stack[-1] == '{':
-                    stack.pop()
-            elif ch == ']':
-                if stack and stack[-1] == '[':
-                    stack.pop()
+            in_string = True
+        elif ch in ("{", "["):
+            stack.append(ch)
+        elif ch in _CLOSE_TO_OPEN:
+            if stack and stack[-1] == _CLOSE_TO_OPEN[ch]:
+                stack.pop()
+
+    return in_string, stack
+
+
+def repair_truncated_json(s: str) -> str:
+    """Best-effort repair of JSON truncated mid-stream by token limit."""
+    s = s.strip()
+    if not s:
+        return s
+
+    in_string, stack = _scan_json_structure(s)
 
     if in_string:
         s += '"'
-    s = re.sub(r',\s*$', '', s.rstrip())
+    s = re.sub(r",\s*$", "", s.rstrip())
     for opener in reversed(stack):
-        s += '}' if opener == '{' else ']'
+        s += "}" if opener == "{" else "]"
     return s
 
 
@@ -213,10 +231,7 @@ def is_hollow(parsed: dict) -> bool:
     if not title or len(title) < 10:
         return True
 
-    real_steps = [
-        s for s in steps
-        if isinstance(s, dict) and len(s.get("action", "").strip()) > 15
-    ]
+    real_steps = [s for s in steps if isinstance(s, dict) and len(s.get("action", "").strip()) > 15]
     if len(real_steps) < 2:
         return True
 
@@ -227,6 +242,7 @@ def is_hollow(parsed: dict) -> bool:
 
 
 # ── Base class ───────────────────────────────────────────────────────────────
+
 
 class BaseLLMClient(ABC):
     """
@@ -298,6 +314,69 @@ class BaseLLMClient(ABC):
         """Attach an LLMResponseCache instance."""
         self._cache = cache
 
+    def _check_cache(
+        self,
+        system_prompt: Optional[str],
+        prompt: str,
+        base_temp: float,
+        use_cache: bool,
+    ) -> tuple:
+        """Check the response cache. Returns (cache_key, cached_result).
+
+        *cached_result* is a parsed dict on cache hit, or ``None`` on miss.
+        *cache_key* is ``None`` when caching is disabled.
+        """
+        if not use_cache or self._cache is None:
+            return None, None
+        from stlc_platform.core.llm.cache import LLMResponseCache
+
+        cache_key = LLMResponseCache.cache_key(system_prompt or "", prompt, base_temp)
+        with self._cache_lock:
+            cached = self._cache.get(cache_key)
+        if cached is not None:
+            try:
+                parsed = json.loads(cached)
+                if not is_hollow(parsed):
+                    console.print("    [dim]  cache hit[/dim]")
+                    return cache_key, parsed
+            except json.JSONDecodeError:
+                pass  # stale cache entry — regenerate
+        return cache_key, None
+
+    @staticmethod
+    def _parse_and_repair(raw: str, attempt: int):
+        """Try to parse raw LLM output as JSON, repairing if needed.
+
+        Returns the parsed dict on success, or ``None`` on failure.
+        """
+        cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+        try:
+            return json.loads(cleaned), cleaned
+        except json.JSONDecodeError:
+            pass
+        repaired = repair_truncated_json(cleaned)
+        try:
+            parsed = json.loads(repaired)
+            console.print(f"    [dim]  repaired truncated JSON on attempt {attempt}[/dim]")
+            return parsed, cleaned
+        except json.JSONDecodeError as e:
+            console.print(
+                f"    [yellow]  attempt {attempt} parse failed: {e} | raw: {raw[:120]}[/yellow]"
+            )
+            return None, cleaned
+
+    def _cache_and_return(self, parsed: dict, cleaned: str, cache_key, attempt: int) -> dict:
+        """Cache a successful response and log summary."""
+        if cache_key and self._cache is not None:
+            with self._cache_lock:
+                self._cache.put(cache_key, cleaned)
+        title = parsed.get("title", "?")[:70]
+        steps_count = len(parsed.get("steps", []))
+        console.print(
+            f"    [dim]  parsed OK (attempt {attempt}) | steps={steps_count} | title: {title}[/dim]"
+        )
+        return parsed
+
     def generate_test_case(
         self,
         prompt: str,
@@ -327,33 +406,18 @@ class BaseLLMClient(ABC):
         base_temp = getattr(self, "temperature", 0.6)
         raw = ""
         current_prompt = prompt
-
-        # Reuse a single classifier instance for the retry loop
         classifier = FailureClassifier() if slot is not None else None
 
-        # Check cache first (thread-safe)
-        cache_key = None
-        if use_cache and self._cache is not None:
-            from stlc_platform.core.llm.cache import LLMResponseCache
-            cache_key = LLMResponseCache.cache_key(
-                system_prompt or "", prompt, base_temp
-            )
-            with self._cache_lock:
-                cached = self._cache.get(cache_key)
-            if cached is not None:
-                try:
-                    parsed = json.loads(cached)
-                    if not is_hollow(parsed):
-                        console.print("    [dim]  cache hit[/dim]")
-                        return parsed
-                except json.JSONDecodeError:
-                    pass  # stale cache entry — regenerate
+        cache_key, cached_result = self._check_cache(
+            system_prompt,
+            prompt,
+            base_temp,
+            use_cache,
+        )
+        if cached_result is not None:
+            return cached_result
 
-        def _try_classify_and_adapt(
-            raw_text: str,
-            parsed_tc: Optional[dict],
-        ) -> None:
-            """Classify failure on attempt 1 and adapt prompt for retry."""
+        def _try_classify_and_adapt(raw_text: str, parsed_tc: Optional[dict]) -> None:
             nonlocal current_prompt
             if classifier is None:
                 return
@@ -367,7 +431,6 @@ class BaseLLMClient(ABC):
 
         for attempt in range(1, 3):
             temp = base_temp if attempt == 1 else min(base_temp + 0.05, 1.0)
-
             try:
                 raw = self.generate(
                     prompt=current_prompt,
@@ -379,59 +442,37 @@ class BaseLLMClient(ABC):
                 console.print(f"    [yellow]  attempt {attempt} LLM error: {e}[/yellow]")
                 continue
 
-            # Strip <think> blocks (Qwen3 reasoning traces)
-            cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
-
-            # Parse attempt 1: direct
-            parsed: dict | None = None
-            try:
-                parsed = json.loads(cleaned)
-            except json.JSONDecodeError:
-                pass
-
-            # Parse attempt 2: repair then parse
-            if parsed is None:
-                repaired = repair_truncated_json(cleaned)
-                try:
-                    parsed = json.loads(repaired)
-                    console.print(f"    [dim]  repaired truncated JSON on attempt {attempt}[/dim]")
-                except json.JSONDecodeError as e:
-                    console.print(
-                        f"    [yellow]  attempt {attempt} parse failed: {e} "
-                        f"| raw: {raw[:120]}[/yellow]"
-                    )
-                    if attempt == 1:
-                        _try_classify_and_adapt(raw, None)
-                    continue
-
-            # Content sanity check
-            if is_hollow(parsed):
-                console.print(
-                    f"    [yellow]  attempt {attempt} hollow response "
-                    f"(schema-valid but empty fields)[/yellow]"
-                )
-                if attempt == 1:
-                    _try_classify_and_adapt(raw, parsed)
-                continue
-
-            # Success — cache the raw response (thread-safe)
-            if cache_key and self._cache is not None:
-                with self._cache_lock:
-                    self._cache.put(cache_key, cleaned)
-
-            title = parsed.get("title", "?")[:70]
-            steps_count = len(parsed.get("steps", []))
-            console.print(
-                f"    [dim]  parsed OK (attempt {attempt}) | "
-                f"steps={steps_count} | title: {title}[/dim]"
+            success = self._process_attempt(
+                raw,
+                attempt,
+                cache_key,
+                _try_classify_and_adapt,
             )
-            return parsed
+            if success is not None:
+                return success
 
-        # Both attempts failed
-        console.print(
-            "    [yellow]  both attempts failed — falling back to synthesise_tc[/yellow]"
-        )
+        console.print("    [yellow]  both attempts failed — falling back to synthesise_tc[/yellow]")
         return {"raw_response": raw}
+
+    def _process_attempt(self, raw, attempt, cache_key, classify_fn):
+        """Process a single generate attempt. Returns parsed dict on success, None to retry."""
+        result = self._parse_and_repair(raw, attempt)
+        parsed, cleaned = result
+        if parsed is None:
+            if attempt == 1:
+                classify_fn(raw, None)
+            return None
+
+        if is_hollow(parsed):
+            console.print(
+                f"    [yellow]  attempt {attempt} hollow response "
+                f"(schema-valid but empty fields)[/yellow]"
+            )
+            if attempt == 1:
+                classify_fn(raw, parsed)
+            return None
+
+        return self._cache_and_return(parsed, cleaned, cache_key, attempt)
 
     # Alias for backward compatibility
     def generate_structured(self, prompt: str, system_prompt: Optional[str] = None) -> dict:

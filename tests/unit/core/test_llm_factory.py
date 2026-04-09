@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from stlc_platform.core.llm import create_llm_client
 from stlc_platform.core.llm.base_client import BaseLLMClient
 from stlc_platform.core.llm.ollama_client import OllamaClient
@@ -27,6 +26,7 @@ class TestCreateLLMClient:
     def test_openai_provider_class_check(self):
         """Test that 'openai' returns OpenAIClient or raises ImportError."""
         from stlc_platform.core.llm import OpenAIClient
+
         if OpenAIClient is None:
             with pytest.raises(ImportError, match="openai"):
                 create_llm_client("openai", api_key="sk-test")
@@ -37,6 +37,7 @@ class TestCreateLLMClient:
     def test_anthropic_provider_class_check(self):
         """Test that 'anthropic' returns AnthropicClient or raises ImportError."""
         from stlc_platform.core.llm import AnthropicClient
+
         if AnthropicClient is None:
             with pytest.raises(ImportError, match="anthropic"):
                 create_llm_client("anthropic", api_key="sk-test")
@@ -46,6 +47,7 @@ class TestCreateLLMClient:
     def test_azure_alias(self):
         """Test that 'azure' routes to OpenAIClient."""
         from stlc_platform.core.llm import OpenAIClient
+
         if OpenAIClient is None:
             with pytest.raises(ImportError, match="openai"):
                 create_llm_client("azure", api_key="sk-test")
@@ -55,6 +57,7 @@ class TestCreateLLMClient:
     def test_claude_alias(self):
         """Test that 'claude' routes to AnthropicClient."""
         from stlc_platform.core.llm import AnthropicClient
+
         if AnthropicClient is None:
             with pytest.raises(ImportError, match="anthropic"):
                 create_llm_client("claude", api_key="sk-test")

@@ -9,17 +9,17 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from stlc_platform.agents.api_test_agent.graphql_parser import GraphQLParser
+from stlc_platform.agents.api_test_agent.har_parser import HARParser
+from stlc_platform.agents.api_test_agent.openapi_parser import OpenAPIParser
+from stlc_platform.agents.api_test_agent.test_classifier import TestClassifier
+from stlc_platform.agents.api_test_agent.test_generator import APITestGenerator
 from stlc_platform.core.base_agent import (
     AgentCapabilities,
     AgentResult,
     BaseAgent,
     ValidationResult,
 )
-from stlc_platform.agents.api_test_agent.openapi_parser import OpenAPIParser
-from stlc_platform.agents.api_test_agent.har_parser import HARParser
-from stlc_platform.agents.api_test_agent.graphql_parser import GraphQLParser
-from stlc_platform.agents.api_test_agent.test_generator import APITestGenerator
-from stlc_platform.agents.api_test_agent.test_classifier import TestClassifier
 from stlc_platform.core.contracts import APIModelArtifact
 
 
@@ -51,15 +51,15 @@ class APITestAgent(BaseAgent):
         errors: List[str] = []
         warnings: List[str] = []
 
-        openapi_spec = artifacts.get("openapi_spec")
-        har_data = artifacts.get("har_data")
-        graphql_schema = artifacts.get("graphql_schema")
+        # Treat empty strings the same as None — an empty string is not a valid spec
+        openapi_spec = artifacts.get("openapi_spec") or None
+        har_data = artifacts.get("har_data") or None
+        graphql_schema = artifacts.get("graphql_schema") or None
         api_model = artifacts.get("api_model")
 
         if all(v is None for v in [openapi_spec, har_data, graphql_schema, api_model]):
             errors.append(
-                "'openapi_spec', 'har_data', 'graphql_schema', or 'api_model' "
-                "is required."
+                "'openapi_spec', 'har_data', 'graphql_schema', or 'api_model' is required."
             )
         elif openapi_spec is not None:
             if not isinstance(openapi_spec, (str, dict)):
@@ -80,9 +80,7 @@ class APITestAgent(BaseAgent):
             warnings=warnings,
         )
 
-    def execute(
-        self, artifacts: Dict[str, Any], config: Dict[str, Any]
-    ) -> AgentResult:
+    def execute(self, artifacts: Dict[str, Any], config: Dict[str, Any]) -> AgentResult:
         """
         Parse an OpenAPI spec and generate API test code.
 
@@ -105,26 +103,14 @@ class APITestAgent(BaseAgent):
             api_model = artifacts.get("api_model")
 
             if api_model is None:
-                # Full pipeline: parse spec -> API model
-                if artifacts.get("openapi_spec") is not None:
-                    parser = OpenAPIParser()
-                    api_model = parser.parse(artifacts["openapi_spec"])
-                elif artifacts.get("har_data") is not None:
-                    har_parser = HARParser()
-                    api_model = har_parser.parse(artifacts["har_data"])
-                elif artifacts.get("graphql_schema") is not None:
-                    gql_parser = GraphQLParser()
-                    schema = artifacts["graphql_schema"]
-                    # Detect if it's SDL string vs introspection JSON
-                    if isinstance(schema, str) and "type " in schema:
-                        api_model = gql_parser.parse_sdl(schema)
-                    else:
-                        api_model = gql_parser.parse(schema)
+                api_model = self._parse_spec(artifacts)
 
             if api_model is None:
                 return AgentResult(
                     success=False,
-                    errors=["No API model available: provide api_model, openapi_spec, har_data, or graphql_schema"],
+                    errors=[
+                        "No API model available: provide api_model, openapi_spec, har_data, or graphql_schema"
+                    ],
                 )
 
             # Generate tests
@@ -135,20 +121,10 @@ class APITestAgent(BaseAgent):
                 config={"test_types": config.get("test_types")},
             )
 
-            # Classify and validate pyramid
-            classifier = TestClassifier()
-            # Filter out conftest for pyramid validation
-            test_only = [t for t in test_artifacts if t.test_count > 0]
-            pyramid = classifier.validate_pyramid(test_only)
-
-            # Separate conftest from test files
-            conftest = None
-            test_files = []
-            for artifact in test_artifacts:
-                if artifact.filename == "conftest.py":
-                    conftest = artifact
-                else:
-                    test_files.append(artifact)
+            test_files, conftest = self._split_test_artifacts(test_artifacts)
+            pyramid = TestClassifier().validate_pyramid(
+                [t for t in test_artifacts if t.test_count > 0]
+            )
 
             result_artifacts: Dict[str, Any] = {
                 "api_model": api_model,
@@ -157,21 +133,7 @@ class APITestAgent(BaseAgent):
             if conftest:
                 result_artifacts["conftest"] = conftest
 
-            total_tests = sum(t.test_count for t in test_files)
-            metadata: Dict[str, Any] = {
-                "total_endpoints": len(api_model.endpoints),
-                "total_test_files": len(test_files),
-                "total_tests": total_tests,
-                "framework": framework,
-                "spec_format": api_model.spec_format,
-                "test_level_distribution": pyramid.get("distribution", {}),
-            }
-
-            if pyramid.get("warnings"):
-                metadata["pyramid_warnings"] = pyramid["warnings"]
-
-            if validation.warnings:
-                metadata["validation_warnings"] = validation.warnings
+            metadata = self._build_metadata(api_model, test_files, framework, pyramid, validation)
 
             return AgentResult(
                 success=True,
@@ -184,6 +146,55 @@ class APITestAgent(BaseAgent):
                 success=False,
                 errors=[f"API test agent failed: {e}"],
             )
+
+    def _parse_spec(self, artifacts: Dict[str, Any]) -> Any:
+        """Parse an API spec from artifacts into an APIModelArtifact."""
+        if artifacts.get("openapi_spec"):  # falsy check treats empty string as absent
+            return OpenAPIParser().parse(artifacts["openapi_spec"])
+        if artifacts.get("har_data"):
+            return HARParser().parse(artifacts["har_data"])
+        if artifacts.get("graphql_schema"):
+            gql_parser = GraphQLParser()
+            schema = artifacts["graphql_schema"]
+            if isinstance(schema, str) and "type " in schema:
+                return gql_parser.parse_sdl(schema)
+            return gql_parser.parse(schema)
+        return None
+
+    def _split_test_artifacts(self, test_artifacts: List[Any]) -> tuple:
+        """Separate conftest from test file artifacts."""
+        conftest = None
+        test_files = []
+        for artifact in test_artifacts:
+            if artifact.filename == "conftest.py":
+                conftest = artifact
+            else:
+                test_files.append(artifact)
+        return test_files, conftest
+
+    def _build_metadata(
+        self,
+        api_model: Any,
+        test_files: List[Any],
+        framework: str,
+        pyramid: Dict[str, Any],
+        validation: Any,
+    ) -> Dict[str, Any]:
+        """Build result metadata dict."""
+        total_tests = sum(t.test_count for t in test_files)
+        metadata: Dict[str, Any] = {
+            "total_endpoints": len(api_model.endpoints),
+            "total_test_files": len(test_files),
+            "total_tests": total_tests,
+            "framework": framework,
+            "spec_format": api_model.spec_format,
+            "test_level_distribution": pyramid.get("distribution", {}),
+        }
+        if pyramid.get("warnings"):
+            metadata["pyramid_warnings"] = pyramid["warnings"]
+        if validation.warnings:
+            metadata["validation_warnings"] = validation.warnings
+        return metadata
 
     def get_capabilities(self) -> AgentCapabilities:
         """Return agent capabilities for pipeline discovery."""

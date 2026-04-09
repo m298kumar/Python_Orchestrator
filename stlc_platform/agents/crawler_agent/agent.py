@@ -62,38 +62,8 @@ class CrawlerAgent(BaseAgent):
         errors: List[str] = []
         warnings: List[str] = []
 
-        base_url = artifacts.get("base_url")
-        html_pages = artifacts.get("html_pages")
-        site_model = artifacts.get("site_model")
+        self._validate_input_source(artifacts, errors, warnings)
 
-        if base_url is None and html_pages is None and site_model is None:
-            errors.append(
-                "'base_url' (str), 'html_pages' (Dict[str, str]), or "
-                "'site_model' (SiteModelArtifact) is required."
-            )
-        elif base_url is not None:
-            if not isinstance(base_url, str) or not base_url.startswith("http"):
-                errors.append("'base_url' must be a valid HTTP/HTTPS URL.")
-            elif not is_playwright_available():
-                warnings.append(
-                    "Playwright not installed. Dynamic crawling unavailable. "
-                    "Install with: pip install playwright && playwright install chromium"
-                )
-        elif html_pages is not None:
-            if not isinstance(html_pages, dict):
-                errors.append("'html_pages' must be a dict mapping URL to HTML string.")
-            elif len(html_pages) == 0:
-                errors.append("'html_pages' must not be empty.")
-            else:
-                if len(html_pages) == 1:
-                    warnings.append(
-                        "Only 1 page provided. Site model will have minimal coverage."
-                    )
-        elif site_model is not None:
-            if not isinstance(site_model, SiteModelArtifact):
-                errors.append("'site_model' must be a SiteModelArtifact instance.")
-
-        # Check requirements (optional)
         requirements = artifacts.get("requirements")
         if requirements is not None and not isinstance(requirements, list):
             errors.append("'requirements' must be a list of RequirementArtifact.")
@@ -104,9 +74,50 @@ class CrawlerAgent(BaseAgent):
             warnings=warnings,
         )
 
-    def execute(
-        self, artifacts: Dict[str, Any], config: Dict[str, Any]
-    ) -> AgentResult:
+    def _validate_input_source(
+        self, artifacts: Dict[str, Any], errors: List[str], warnings: List[str]
+    ) -> None:
+        """Validate that exactly one usable input source is present."""
+        base_url = artifacts.get("base_url")
+        html_pages = artifacts.get("html_pages")
+        site_model = artifacts.get("site_model")
+
+        if site_model is not None:
+            if not isinstance(site_model, SiteModelArtifact):
+                errors.append("'site_model' must be a SiteModelArtifact instance.")
+        elif base_url is not None:
+            # base_url is valid with or without Playwright:
+            # DynamicCrawler (Playwright) when available, SimpleHTTPCrawler otherwise.
+            self._validate_base_url(base_url, errors, warnings)
+            if not is_playwright_available():
+                warnings.append(
+                    "Playwright is not installed — using SimpleHTTPCrawler (static HTML only, "
+                    "no JavaScript rendering). Install Playwright for full dynamic crawling: "
+                    "pip install playwright && playwright install chromium"
+                )
+        elif html_pages is not None:
+            self._validate_html_pages(html_pages, errors, warnings)
+        else:
+            errors.append(
+                "'base_url' (str), 'html_pages' (Dict[str, str]), or "
+                "'site_model' (SiteModelArtifact) is required."
+            )
+
+    def _validate_base_url(self, base_url: Any, errors: List[str], warnings: List[str]) -> None:
+        """Validate the base_url input."""
+        if not isinstance(base_url, str) or not base_url.startswith("http"):
+            errors.append("'base_url' must be a valid HTTP/HTTPS URL.")
+
+    def _validate_html_pages(self, html_pages: Any, errors: List[str], warnings: List[str]) -> None:
+        """Validate the html_pages input."""
+        if not isinstance(html_pages, dict):
+            errors.append("'html_pages' must be a dict mapping URL to HTML string.")
+        elif len(html_pages) == 0:
+            errors.append("'html_pages' must not be empty.")
+        elif len(html_pages) == 1:
+            warnings.append("Only 1 page provided. Site model will have minimal coverage.")
+
+    def execute(self, artifacts: Dict[str, Any], config: Dict[str, Any]) -> AgentResult:
         """
         Parse HTML pages into a site model and optionally detect discrepancies.
 
@@ -126,112 +137,30 @@ class CrawlerAgent(BaseAgent):
                 errors=validation.errors,
             )
 
-        max_pages = config.get("max_pages", 100)
+        # Crawler settings live under the nested "crawler" key in stlc_config.yaml;
+        # fall back to top-level for backwards-compat with direct config dicts.
+        crawler_cfg = config.get("crawler", config)
+        max_pages = int(crawler_cfg.get("max_pages", 100))
 
         try:
             site_model = artifacts.get("site_model")
 
             if site_model is None:
-                base_url_input = artifacts.get("base_url")
-
-                if base_url_input and is_playwright_available():
-                    # Dynamic crawl mode (Playwright)
-                    max_depth = config.get("max_depth", 3)
-                    crawler = DynamicCrawler(
-                        base_url=base_url_input,
-                        max_depth=max_depth,
-                        max_pages=max_pages,
-                        headless=config.get("headless", True),
-                        capture_screenshots=config.get("capture_screenshots", False),
-                        auth_config=config.get("auth_config"),
+                site_model = self._build_site_model(artifacts, config, max_pages)
+                if site_model is None:
+                    return AgentResult(
+                        success=False,
+                        errors=["No base_url or html_pages provided — cannot build site model."],
                     )
-                    crawl_result = crawler.crawl()
-
-                    # Build site model from crawled pages
-                    builder = SiteModelBuilder()
-                    site_model = builder.build(
-                        crawl_result.pages, base_url=base_url_input
-                    )
-
-                    # Store captured API requests in metadata for cross-layer use
-                    if crawl_result.captured_requests:
-                        config["_captured_requests"] = crawl_result.captured_requests
-                else:
-                    # Static parsing mode (BeautifulSoup)
-                    html_pages = artifacts.get("html_pages", {})
-                    if not html_pages:
-                        return AgentResult(
-                            success=False,
-                            errors=["No html_pages provided and dynamic crawl unavailable."],
-                        )
-                    parser = PageParser()
-                    builder = SiteModelBuilder()
-
-                    parsed_pages = []
-                    for url, html in list(html_pages.items())[:max_pages]:
-                        page = parser.parse(html, url=url)
-                        parsed_pages.append(page)
-
-                    base_url = config.get("base_url", "")
-                    site_model = builder.build(parsed_pages, base_url=base_url)
 
             # Optionally run discrepancy detection
-            requirements = artifacts.get("requirements")
-            discrepancy_report = None
-            if requirements:
-                detector = DiscrepancyDetector()
-                discrepancy_report = detector.detect(site_model, requirements)
-                site_model.discrepancies = discrepancy_report
-
-            # Compute metadata
-            total_elements = sum(len(p.elements) for p in site_model.pages)
-            total_forms = sum(len(p.forms) for p in site_model.pages)
-            total_links = sum(
-                len([e for e in p.elements if e.element_type == "link"])
-                for p in site_model.pages
+            discrepancy_report = self._run_discrepancy_detection(
+                site_model, artifacts.get("requirements")
             )
 
-            result_artifacts: Dict[str, Any] = {
-                "site_model": site_model,
-            }
-            if discrepancy_report:
-                result_artifacts["discrepancy_report"] = discrepancy_report
-
-            metadata: Dict[str, Any] = {
-                "total_pages": len(site_model.pages),
-                "total_elements": total_elements,
-                "total_forms": total_forms,
-                "total_links": total_links,
-            }
-            if discrepancy_report:
-                metadata["total_discrepancies"] = discrepancy_report.total_discrepancies
-                metadata["gate_decision"] = discrepancy_report.gate_decision
-
-            if validation.warnings:
-                metadata["validation_warnings"] = validation.warnings
-
-            # Optional: embed site model into ChromaDB for RAG retrieval
-            chromadb_embedded = False
-            try:
-                from stlc_platform.agents.crawler_agent.embedding_store import (
-                    CrawlerEmbeddingStore,
-                )
-
-                store = CrawlerEmbeddingStore()
-                doc_count = store.embed_site_model(site_model)
-                chromadb_embedded = doc_count > 0
-                logger.info(
-                    "Embedded %d pages into ChromaDB", doc_count
-                )
-            except ImportError:
-                logger.debug(
-                    "ChromaDB not available — skipping page embedding"
-                )
-            except Exception as exc:
-                logger.warning(
-                    "ChromaDB embedding failed (non-fatal): %s", exc
-                )
-            metadata["chromadb_embedded"] = chromadb_embedded
+            result_artifacts, metadata = self._compile_results(
+                site_model, discrepancy_report, validation
+            )
 
             return AgentResult(
                 success=True,
@@ -244,6 +173,148 @@ class CrawlerAgent(BaseAgent):
                 success=False,
                 errors=[f"Crawler agent failed: {type(e).__name__}: {e}"],
             )
+
+    def _build_site_model(
+        self, artifacts: Dict[str, Any], config: Dict[str, Any], max_pages: int
+    ) -> Any:
+        """Build a SiteModelArtifact from base_url or html_pages.
+
+        Crawl mode priority:
+          1. DynamicCrawler (Playwright)  — base_url + Playwright installed
+          2. SimpleHTTPCrawler (requests) — base_url + Playwright absent
+          3. Static PageParser            — html_pages dict provided
+        """
+        base_url_input = artifacts.get("base_url")
+        crawler_cfg = config.get("crawler", config)
+
+        if base_url_input:
+            if is_playwright_available():
+                try:
+                    return self._dynamic_crawl(base_url_input, config, max_pages)
+                except Exception as exc:
+                    # Chromium binary missing or launch failed — fall back to HTTP crawler
+                    logger.warning(
+                        "DynamicCrawler failed (%s) — falling back to SimpleHTTPCrawler for %s",
+                        exc,
+                        base_url_input,
+                    )
+            else:
+                logger.warning(
+                    "Playwright unavailable — falling back to SimpleHTTPCrawler for %s",
+                    base_url_input,
+                )
+            return self._simple_http_crawl(base_url_input, crawler_cfg, max_pages)
+
+        # Static parsing from pre-fetched html_pages dict
+        html_pages = artifacts.get("html_pages", {})
+        if not html_pages:
+            return None
+
+        parser = PageParser()
+        builder = SiteModelBuilder()
+        parsed_pages = [
+            parser.parse(html, url=url) for url, html in list(html_pages.items())[:max_pages]
+        ]
+        base_url = crawler_cfg.get("base_url", config.get("base_url", ""))
+        return builder.build(parsed_pages, base_url=base_url)
+
+    def _simple_http_crawl(
+        self, base_url: str, crawler_cfg: Dict[str, Any], max_pages: int
+    ) -> Any:
+        """Perform a requests-based HTTP crawl and return a SiteModelArtifact."""
+        from stlc_platform.agents.crawler_agent.simple_http_crawler import SimpleHTTPCrawler
+
+        auth_raw = crawler_cfg.get("auth", {}) or {}
+        auth = auth_raw if isinstance(auth_raw, dict) and any(auth_raw.values()) else None
+
+        crawler = SimpleHTTPCrawler(
+            base_url=base_url,
+            max_depth=int(crawler_cfg.get("max_depth", 3)),
+            max_pages=max_pages,
+            rate_limit_ms=int(crawler_cfg.get("rate_limit_ms", 1000)),
+            respect_robots_txt=bool(crawler_cfg.get("respect_robots_txt", True)),
+            auth=auth,
+        )
+        crawl_result = crawler.crawl()
+        builder = SiteModelBuilder()
+        return builder.build(crawl_result.pages, base_url=base_url)
+
+    def _dynamic_crawl(self, base_url_input: str, config: Dict[str, Any], max_pages: int) -> Any:
+        """Perform a dynamic Playwright crawl and return a SiteModelArtifact."""
+        crawler_cfg = config.get("crawler", config)
+        auth_raw = crawler_cfg.get("auth", config.get("auth_config")) or {}
+        auth_config = auth_raw if isinstance(auth_raw, dict) and any(auth_raw.values()) else None
+        crawler = DynamicCrawler(
+            base_url=base_url_input,
+            max_depth=int(crawler_cfg.get("max_depth", 3)),
+            max_pages=max_pages,
+            headless=bool(crawler_cfg.get("headless", True)),
+            wait_for_idle=bool(crawler_cfg.get("wait_for_network_idle", True)),
+            capture_screenshots=bool(crawler_cfg.get("capture_screenshots", False)),
+            timeout_ms=int(crawler_cfg.get("rate_limit_ms", 30000)),
+            auth_config=auth_config,
+        )
+        crawl_result = crawler.crawl()
+
+        builder = SiteModelBuilder()
+        site_model = builder.build(crawl_result.pages, base_url=base_url_input)
+
+        if crawl_result.captured_requests:
+            config["_captured_requests"] = crawl_result.captured_requests
+        return site_model
+
+    def _run_discrepancy_detection(self, site_model: Any, requirements: Any) -> Any:
+        """Run discrepancy detection if requirements are provided."""
+        if not requirements:
+            return None
+        detector = DiscrepancyDetector()
+        report = detector.detect(site_model, requirements)
+        site_model.discrepancies = report
+        return report
+
+    def _compile_results(self, site_model: Any, discrepancy_report: Any, validation: Any) -> tuple:
+        """Compile result artifacts and metadata."""
+        total_elements = sum(len(p.elements) for p in site_model.pages)
+        total_forms = sum(len(p.forms) for p in site_model.pages)
+        total_links = sum(
+            len([e for e in p.elements if e.element_type == "link"]) for p in site_model.pages
+        )
+
+        result_artifacts: Dict[str, Any] = {"site_model": site_model}
+        if discrepancy_report:
+            result_artifacts["discrepancy_report"] = discrepancy_report
+
+        metadata: Dict[str, Any] = {
+            "total_pages": len(site_model.pages),
+            "total_elements": total_elements,
+            "total_forms": total_forms,
+            "total_links": total_links,
+        }
+        if discrepancy_report:
+            metadata["total_discrepancies"] = discrepancy_report.total_discrepancies
+            metadata["gate_decision"] = discrepancy_report.gate_decision
+        if validation.warnings:
+            metadata["validation_warnings"] = validation.warnings
+
+        metadata["chromadb_embedded"] = self._try_embed_chromadb(site_model)
+        return result_artifacts, metadata
+
+    def _try_embed_chromadb(self, site_model: Any) -> bool:
+        """Attempt to embed site model into ChromaDB (non-fatal)."""
+        try:
+            from stlc_platform.agents.crawler_agent.embedding_store import (
+                CrawlerEmbeddingStore,
+            )
+
+            store = CrawlerEmbeddingStore()
+            doc_count = store.embed_site_model(site_model)
+            logger.info("Embedded %d pages into ChromaDB", doc_count)
+            return doc_count > 0
+        except ImportError:
+            logger.debug("ChromaDB not available — skipping page embedding")
+        except Exception as exc:
+            logger.warning("ChromaDB embedding failed (non-fatal): %s", exc)
+        return False
 
     def get_capabilities(self) -> AgentCapabilities:
         """Return agent capabilities for pipeline discovery."""

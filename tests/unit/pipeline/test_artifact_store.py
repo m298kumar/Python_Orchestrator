@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
-
 from stlc_platform.pipeline.artifact_store import ArtifactStore
 
 

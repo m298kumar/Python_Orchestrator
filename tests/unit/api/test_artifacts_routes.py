@@ -5,19 +5,18 @@ The artifacts route uses RunManager for state and produces ZIP downloads.
 We reset the RunManager between tests to ensure isolation.
 """
 
-import zipfile
 import io
+import zipfile
 
 import pytest
 from fastapi.testclient import TestClient
-
-from stlc_platform.api.main import app
 from stlc_platform.api import deps as deps_module
-
+from stlc_platform.api.main import app
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _reset_run_manager(tmp_path):
@@ -49,6 +48,7 @@ def _seed_run(run_id: str = "test-run", pipeline: str = "full_stlc", artifacts=N
 # GET /api/artifacts/{run_id}/download — non-existent run
 # ---------------------------------------------------------------------------
 
+
 class TestDownloadArtifactsNotFound:
     """GET /api/artifacts/{run_id}/download returns 404 for unknown runs."""
 
@@ -65,6 +65,7 @@ class TestDownloadArtifactsNotFound:
 # ---------------------------------------------------------------------------
 # GET /api/artifacts/{run_id}/download — valid run
 # ---------------------------------------------------------------------------
+
 
 class TestDownloadArtifactsValid:
     """GET /api/artifacts/{run_id}/download returns a ZIP for existing runs."""

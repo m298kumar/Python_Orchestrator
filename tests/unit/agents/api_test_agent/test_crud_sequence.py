@@ -5,14 +5,13 @@ Validates that the APITestGenerator correctly detects CRUD resource groups
 and generates integration-level sequence tests.
 """
 
-
 from stlc_platform.agents.api_test_agent.test_generator import APITestGenerator
 from stlc_platform.core.contracts import APIEndpointArtifact, APIModelArtifact
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_endpoint(path: str, method: str, **kwargs) -> APIEndpointArtifact:
     """Shortcut to build an APIEndpointArtifact."""
@@ -190,10 +189,21 @@ class TestCrudSequenceGeneration:
         test = tests[0]
 
         required_keys = {
-            "func_name", "description", "test_type", "test_level",
-            "failure_type", "create_payload", "update_payload",
-            "base_path", "resource_name", "post_path", "get_path",
-            "put_path", "delete_path", "update_method", "auth_required",
+            "func_name",
+            "description",
+            "test_type",
+            "test_level",
+            "failure_type",
+            "create_payload",
+            "update_payload",
+            "base_path",
+            "resource_name",
+            "post_path",
+            "get_path",
+            "put_path",
+            "delete_path",
+            "update_method",
+            "auth_required",
         }
         assert required_keys.issubset(test.keys())
 
@@ -232,9 +242,7 @@ class TestCrudSequenceGeneration:
         model = _petstore_model()
 
         artifacts = gen.generate(model)
-        crud_artifact = next(
-            a for a in artifacts if a.test_type == "crud_sequence"
-        )
+        crud_artifact = next(a for a in artifacts if a.test_type == "crud_sequence")
         content = crud_artifact.content
 
         # All five steps should be present in the rendered template

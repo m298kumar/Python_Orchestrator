@@ -121,8 +121,7 @@ class TestMetricsCollector:
     def test_detect_degradation_warning(self, tmp_path):
         collector = MetricsCollector(metrics_dir=tmp_path)
         history = [
-            RunMetrics(run_id=f"h{i}", timestamp="", avg_quality_score=0.80)
-            for i in range(5)
+            RunMetrics(run_id=f"h{i}", timestamp="", avg_quality_score=0.80) for i in range(5)
         ]
         current = RunMetrics(run_id="cur", timestamp="", avg_quality_score=0.60)
         warning = collector.detect_degradation(current, history)
@@ -133,8 +132,7 @@ class TestMetricsCollector:
     def test_detect_degradation_no_warning(self, tmp_path):
         collector = MetricsCollector(metrics_dir=tmp_path)
         history = [
-            RunMetrics(run_id=f"h{i}", timestamp="", avg_quality_score=0.80)
-            for i in range(5)
+            RunMetrics(run_id=f"h{i}", timestamp="", avg_quality_score=0.80) for i in range(5)
         ]
         current = RunMetrics(run_id="cur", timestamp="", avg_quality_score=0.75)
         warning = collector.detect_degradation(current, history)

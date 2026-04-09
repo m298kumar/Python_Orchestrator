@@ -5,11 +5,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from stlc_platform.agents.requirements_agent.classifier import (
     ACClassifier,
     ACTypeConfig,
-    ClassificationResult,
     default_ac_types,
 )
 
@@ -24,7 +22,14 @@ class TestDefaultACTypes:
     def test_type_names(self):
         types = default_ac_types()
         names = {t.name for t in types}
-        assert names == {"security", "timing", "eligibility", "data_valid", "ui_behaviour", "general"}
+        assert names == {
+            "security",
+            "timing",
+            "eligibility",
+            "data_valid",
+            "ui_behaviour",
+            "general",
+        }
 
     def test_general_has_no_keywords(self):
         types = default_ac_types()
@@ -101,7 +106,9 @@ class TestACClassifier:
         assert result.ac_type == "timing"
 
     def test_insurance_eligibility(self, classifier):
-        result = classifier.classify("Only customers with active subscription are eligible for claims")
+        result = classifier.classify(
+            "Only customers with active subscription are eligible for claims"
+        )
         assert result.ac_type == "eligibility"
 
     def test_education_ui_behaviour(self, classifier):
@@ -128,7 +135,11 @@ class TestCustomACTypes:
 
     def test_from_config(self):
         config_list = [
-            {"name": "accessibility", "description": "A11y", "keywords": ["aria", "screen reader", "wcag"]},
+            {
+                "name": "accessibility",
+                "description": "A11y",
+                "keywords": ["aria", "screen reader", "wcag"],
+            },
             {"name": "general", "description": "Fallback"},
         ]
         classifier = ACClassifier.from_config(config_list)

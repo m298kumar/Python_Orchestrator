@@ -13,9 +13,12 @@ class TestOpenAIClient:
     def _make_client(self, **kwargs):
         """Create an OpenAIClient with mocked SDK and config."""
         with patch.dict("os.environ", {"STLC_LLM__API_KEY": "sk-test-key-123"}, clear=False):
-            with patch("stlc_platform.core.llm.openai_client.OpenAIClient.__init__", return_value=None):
-                from stlc_platform.core.llm.openai_client import OpenAIClient
+            with patch(
+                "stlc_platform.core.llm.openai_client.OpenAIClient.__init__", return_value=None
+            ):
                 from stlc_platform.core.llm.base_client import TokenUsage
+                from stlc_platform.core.llm.openai_client import OpenAIClient
+
                 client = OpenAIClient.__new__(OpenAIClient)
                 # Base class attributes (normally set by BaseLLMClient.__init__)
                 client._last_token_usage = TokenUsage()
@@ -130,6 +133,7 @@ class TestOpenAIClient:
 
     def test_is_base_llm_client_subclass(self):
         """Test OpenAIClient inherits from BaseLLMClient."""
-        from stlc_platform.core.llm.openai_client import OpenAIClient
         from stlc_platform.core.llm.base_client import BaseLLMClient
+        from stlc_platform.core.llm.openai_client import OpenAIClient
+
         assert issubclass(OpenAIClient, BaseLLMClient)

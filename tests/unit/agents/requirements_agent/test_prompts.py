@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import List
 
 import pytest
-
 from stlc_platform.agents.requirements_agent.prompts import PromptRenderer
 
 
@@ -17,10 +15,12 @@ class MockRequirement:
     title: str = "User Login Feature"
     description: str = "User should be able to log in with valid credentials"
     category: str = "Authentication"
-    acceptance_criteria: List[str] = field(default_factory=lambda: [
-        "User can login with valid credentials",
-        "System displays error for invalid password",
-    ])
+    acceptance_criteria: List[str] = field(
+        default_factory=lambda: [
+            "User can login with valid credentials",
+            "System displays error for invalid password",
+        ]
+    )
 
 
 class TestRenderSystemPrompt:
@@ -53,16 +53,24 @@ class TestRenderSystemPrompt:
         assert "banking" not in result.lower()
 
     def test_platform_verbs_web(self):
-        renderer = PromptRenderer(platform_verbs={
-            "web": {"click": "click", "navigate": "navigate to", "page_loads": "page loads"},
-        })
+        renderer = PromptRenderer(
+            platform_verbs={
+                "web": {"click": "click", "navigate": "navigate to", "page_loads": "page loads"},
+            }
+        )
         result = renderer.render_system_prompt(tech_stack={"platform": "web"})
         assert "Click" in result or "click" in result
 
     def test_platform_verbs_mobile(self):
-        renderer = PromptRenderer(platform_verbs={
-            "mobile": {"click": "tap", "navigate": "navigate to", "page_loads": "screen appears"},
-        })
+        renderer = PromptRenderer(
+            platform_verbs={
+                "mobile": {
+                    "click": "tap",
+                    "navigate": "navigate to",
+                    "page_loads": "screen appears",
+                },
+            }
+        )
         result = renderer.render_system_prompt(tech_stack={"platform": "mobile"})
         assert "Tap" in result or "tap" in result
 
@@ -75,9 +83,9 @@ class TestRenderTypeHints:
         return PromptRenderer()
 
     @pytest.mark.parametrize("test_type", ["positive", "negative", "edge_case"])
-    @pytest.mark.parametrize("ac_type", [
-        "eligibility", "ui_behaviour", "timing", "data_valid", "security", "general"
-    ])
+    @pytest.mark.parametrize(
+        "ac_type", ["eligibility", "ui_behaviour", "timing", "data_valid", "security", "general"]
+    )
     def test_all_combinations(self, renderer, test_type, ac_type):
         """All 18 test_type × ac_type combinations must render valid hints."""
         hints = renderer.render_type_hints(
@@ -114,21 +122,23 @@ class TestRenderFewShotBlock:
         assert result == ""
 
     def test_single_example(self, renderer):
-        examples = [{
-            "test_type": "positive",
-            "ac_type": "general",
-            "description": "Test description",
-            "preconditions": "Test preconditions",
-            "given": "Given clause",
-            "when": "When clause",
-            "then": "Then clause",
-            "steps": [
-                {"action": "Step 1 action", "expected_result": "Step 1 result"},
-                {"action": "Step 2 action", "expected_result": "Step 2 result"},
-            ],
-            "expected_outcome": "Expected outcome",
-            "component": "Login Screen",
-        }]
+        examples = [
+            {
+                "test_type": "positive",
+                "ac_type": "general",
+                "description": "Test description",
+                "preconditions": "Test preconditions",
+                "given": "Given clause",
+                "when": "When clause",
+                "then": "Then clause",
+                "steps": [
+                    {"action": "Step 1 action", "expected_result": "Step 1 result"},
+                    {"action": "Step 2 action", "expected_result": "Step 2 result"},
+                ],
+                "expected_outcome": "Expected outcome",
+                "component": "Login Screen",
+            }
+        ]
         result = renderer.render_few_shot_block(examples)
         assert "EXAMPLE 1" in result
         assert "FEW-SHOT" in result
@@ -145,8 +155,7 @@ class TestRenderFewShotBlock:
 
     def test_max_two_examples(self, renderer):
         examples = [
-            {"test_type": "positive", "description": f"Desc {i}", "steps": []}
-            for i in range(5)
+            {"test_type": "positive", "description": f"Desc {i}", "steps": []} for i in range(5)
         ]
         result = renderer.render_few_shot_block(examples)
         assert "EXAMPLE 3" not in result
@@ -168,7 +177,10 @@ class TestRenderUserPrompt:
             "ac_type": "general",
         }
         result = renderer.render_user_prompt(
-            requirement=req, slot=slot, test_number=1, total=3,
+            requirement=req,
+            slot=slot,
+            test_number=1,
+            total=3,
         )
         assert "REQ-001" in result
         assert "User Login Feature" in result
@@ -177,26 +189,52 @@ class TestRenderUserPrompt:
 
     def test_gherkin_format(self, renderer):
         req = MockRequirement()
-        slot = {"test_type": "positive", "target_ac": "AC text", "title": "Title", "ac_type": "general"}
+        slot = {
+            "test_type": "positive",
+            "target_ac": "AC text",
+            "title": "Title",
+            "ac_type": "general",
+        }
         result = renderer.render_user_prompt(
-            requirement=req, slot=slot, test_number=1, total=1, tc_format="gherkin",
+            requirement=req,
+            slot=slot,
+            test_number=1,
+            total=1,
+            tc_format="gherkin",
         )
         assert "GIVEN / WHEN / THEN" in result
 
     def test_standard_format(self, renderer):
         req = MockRequirement()
-        slot = {"test_type": "positive", "target_ac": "AC text", "title": "Title", "ac_type": "general"}
+        slot = {
+            "test_type": "positive",
+            "target_ac": "AC text",
+            "title": "Title",
+            "ac_type": "general",
+        }
         result = renderer.render_user_prompt(
-            requirement=req, slot=slot, test_number=1, total=1, tc_format="standard",
+            requirement=req,
+            slot=slot,
+            test_number=1,
+            total=1,
+            tc_format="standard",
         )
         assert "GIVEN / WHEN / THEN" not in result
 
     def test_no_hardcoded_domains(self, renderer):
         """User prompt should not contain hardcoded domain references."""
         req = MockRequirement()
-        slot = {"test_type": "positive", "target_ac": "AC text", "title": "Title", "ac_type": "general"}
+        slot = {
+            "test_type": "positive",
+            "target_ac": "AC text",
+            "title": "Title",
+            "ac_type": "general",
+        }
         result = renderer.render_user_prompt(
-            requirement=req, slot=slot, test_number=1, total=1,
+            requirement=req,
+            slot=slot,
+            test_number=1,
+            total=1,
         )
         assert "cheque" not in result.lower()
         assert "patient registration" not in result.lower()
@@ -205,7 +243,10 @@ class TestRenderUserPrompt:
         req = MockRequirement()
         slot = {"test_type": "negative", "target_ac": "AC", "title": "T", "ac_type": "security"}
         result = renderer.render_user_prompt(
-            requirement=req, slot=slot, test_number=1, total=1,
+            requirement=req,
+            slot=slot,
+            test_number=1,
+            total=1,
             context="Related requirement about password policy",
         )
         assert "RELATED REQUIREMENTS" in result
@@ -215,7 +256,10 @@ class TestRenderUserPrompt:
         for tt in ["positive", "negative", "edge_case"]:
             slot = {"test_type": tt, "target_ac": "AC text", "title": "Title", "ac_type": "general"}
             result = renderer.render_user_prompt(
-                requirement=req, slot=slot, test_number=1, total=1,
+                requirement=req,
+                slot=slot,
+                test_number=1,
+                total=1,
             )
             assert len(result) > 100  # Non-trivial prompt
 

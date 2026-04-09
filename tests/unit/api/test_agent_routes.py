@@ -2,9 +2,9 @@
 Tests for /api/agents/* endpoints.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from stlc_platform.api.main import app
 from stlc_platform.core.base_agent import AgentCapabilities

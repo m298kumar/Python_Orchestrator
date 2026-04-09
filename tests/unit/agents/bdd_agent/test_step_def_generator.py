@@ -1,10 +1,11 @@
 """Tests for StepDefinitionGenerator."""
 
 import ast
+
 import pytest
-from stlc_platform.core.contracts import FeatureFileArtifact
-from stlc_platform.agents.bdd_agent.step_parser import ParameterizedStep
 from stlc_platform.agents.bdd_agent.step_def_generator import StepDefinitionGenerator
+from stlc_platform.agents.bdd_agent.step_parser import ParameterizedStep
+from stlc_platform.core.contracts import FeatureFileArtifact
 
 
 @pytest.fixture
@@ -79,8 +80,7 @@ class TestPytestBddGeneration:
     def test_generates_step_definitions(self, pytest_bdd_gen):
         features = [
             FeatureFileArtifact(
-                req_id="REQ-001", filename="test.feature",
-                content="", scenario_count=1
+                req_id="REQ-001", filename="test.feature", content="", scenario_count=1
             )
         ]
         result = pytest_bdd_gen.generate(_make_steps(), features)
@@ -111,10 +111,7 @@ class TestFunctionNaming:
         content = result[0].content
         # Should be valid Python
         tree = ast.parse(content)
-        func_names = [
-            node.name for node in ast.walk(tree)
-            if isinstance(node, ast.FunctionDef)
-        ]
+        func_names = [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
         for name in func_names:
             assert name.isidentifier(), f"'{name}' is not a valid identifier"
 
@@ -126,10 +123,7 @@ class TestFunctionNaming:
         result = behave_gen.generate(steps)
         content = result[0].content
         tree = ast.parse(content)
-        func_names = [
-            node.name for node in ast.walk(tree)
-            if isinstance(node, ast.FunctionDef)
-        ]
+        func_names = [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
         # All names should be unique
         assert len(func_names) == len(set(func_names))
 

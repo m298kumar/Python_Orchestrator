@@ -1,9 +1,9 @@
 """Tests for FeatureFileGenerator."""
 
 import pytest
-from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 from stlc_platform.agents.bdd_agent.feature_generator import FeatureFileGenerator
 from stlc_platform.agents.bdd_agent.gherkin_validator import GherkinValidator
+from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 
 
 @pytest.fixture

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import pytest
-
 from stlc_platform.agents.api_test_agent.test_generator import (
-    APITestGenerator,
     SUPPORTED_FRAMEWORKS,
+    APITestGenerator,
 )
 from stlc_platform.core.contracts import APIEndpointArtifact, APIModelArtifact
 

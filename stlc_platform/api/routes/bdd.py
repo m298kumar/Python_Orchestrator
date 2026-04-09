@@ -15,6 +15,7 @@ import io
 import json
 import logging
 import re
+import threading
 import zipfile
 from typing import Any, Dict, List, Optional
 
@@ -28,6 +29,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/bdd", tags=["bdd"])
 
+# Guard so _load_all_runs only scans disk once per server lifetime.
+_all_runs_loaded: bool = False
+_load_all_lock = threading.Lock()
+
 
 # ── Population helpers ─────────────────────────────────────────────────────
 
@@ -35,12 +40,14 @@ router = APIRouter(prefix="/api/bdd", tags=["bdd"])
 def populate_feature_files(
     feature_files: List[Dict[str, Any]],
     store: Optional[FeatureFileStore] = None,
+    run_id: str = "",
 ) -> int:
-    """Populate the store from a list of feature-file dicts.
+    """Populate the store from a list of feature-file dicts, tagging each with run_id.
 
     Called by the background task runner after a pipeline completes.
     Returns the number of feature files loaded.
     """
+    global _all_runs_loaded
     store = store or get_ff_store()
     # Derive scenario_count from content if not present
     for f in feature_files:
@@ -52,8 +59,10 @@ def populate_feature_files(
                     re.MULTILINE,
                 )
             )
-    count = store.populate(feature_files)
-    logger.info("Populated %d feature files into API store", count)
+    count = store.populate(feature_files, run_id=run_id)
+    # New run added directly — let next request re-scan for any other new runs
+    _all_runs_loaded = False
+    logger.info("Populated %d feature files into API store (run=%s)", count, run_id or "unknown")
     return count
 
 
@@ -63,44 +72,45 @@ def load_feature_files_from_run(
 ) -> int:
     """Load feature files from a completed pipeline run's disk artifacts."""
     output_dir = get_output_dir()
-    stage_file = (
-        output_dir / ".stlc_runs" / run_id / "generate_bdd_code.json"
-    )
+    stage_file = output_dir / ".stlc_runs" / run_id / "generate_bdd_code.json"
     if not stage_file.exists():
         return 0
     try:
         data = json.loads(stage_file.read_text(encoding="utf-8"))
         features = data.get("artifacts", {}).get("feature_files", [])
-        return populate_feature_files(features, store=store)
+        return populate_feature_files(features, store=store, run_id=run_id)
     except (json.JSONDecodeError, OSError, KeyError) as exc:
-        logger.exception(
-            "Failed to load feature files from run %s: %s", run_id, exc
-        )
+        logger.exception("Failed to load feature files from run %s: %s", run_id, exc)
         return 0
 
 
-def _load_latest_run_if_empty(store: FeatureFileStore) -> None:
-    """Auto-load from the most recent completed run if the store is empty."""
-    if store:
+def _load_all_runs(store: FeatureFileStore) -> None:
+    """Load feature files from ALL completed runs into the consolidated store.
+
+    Only scans disk once per server lifetime (guarded by _all_runs_loaded flag).
+    The flag is reset by populate_feature_files() when a new run is added directly.
+    """
+    global _all_runs_loaded
+    if _all_runs_loaded:
         return
-    output_dir = get_output_dir()
-    runs_dir = output_dir / ".stlc_runs"
-    if not runs_dir.exists():
-        return
-    candidates = sorted(
-        runs_dir.glob("*/generate_bdd_code.json"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    if candidates:
-        run_id = candidates[0].parent.name
-        loaded = load_feature_files_from_run(run_id, store=store)
-        if loaded:
-            logger.info(
-                "Auto-loaded %d feature files from latest run '%s'",
-                loaded,
-                run_id,
+    with _load_all_lock:
+        if _all_runs_loaded:  # double-check under lock
+            return
+        output_dir = get_output_dir()
+        runs_dir = output_dir / ".stlc_runs"
+        if runs_dir.exists():
+            candidates = sorted(
+                runs_dir.glob("*/generate_bdd_code.json"),
+                key=lambda p: p.stat().st_mtime,
             )
+            loaded_runs = {v.get("run_id") for v in store.get_all().values() if v.get("run_id")}
+            for candidate in candidates:
+                rid = candidate.parent.name
+                if rid not in loaded_runs:
+                    count = load_feature_files_from_run(rid, store=store)
+                    if count:
+                        logger.info("Auto-loaded %d feature files from run '%s'", count, rid)
+        _all_runs_loaded = True
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
@@ -108,9 +118,7 @@ def _load_latest_run_if_empty(store: FeatureFileStore) -> None:
 
 @router.get("/features", response_model=list[FeatureFileResponse])
 def list_features(
-    run_id: Optional[str] = Query(
-        None, description="Load from a specific pipeline run"
-    ),
+    run_id: Optional[str] = Query(None, description="Load from a specific pipeline run"),
     limit: int = Query(default=100, ge=1, le=500, description="Max items to return"),
     offset: int = Query(default=0, ge=0, description="Number of items to skip"),
 ) -> list[FeatureFileResponse]:
@@ -121,10 +129,13 @@ def list_features(
             raise HTTPException(status_code=400, detail="Invalid run_id format")
         load_feature_files_from_run(run_id, store=store)
     else:
-        _load_latest_run_if_empty(store)
+        _load_all_runs(store)
+
+    # When run_id is given, filter to only that run's feature files
+    source = store.get_by_run(run_id) if run_id else store.get_all()
 
     results: List[FeatureFileResponse] = []
-    for f in store.get_all().values():
+    for f in source.values():
         results.append(
             FeatureFileResponse(
                 filename=f.get("filename", ""),
@@ -132,6 +143,7 @@ def list_features(
                 scenario_count=f.get("scenario_count", 0),
                 tags=f.get("tags", []),
                 content="",  # Omit content in list view
+                run_id=f.get("run_id") or None,
             )
         )
     return results[offset : offset + limit]
@@ -153,6 +165,7 @@ def get_feature(filename: str) -> FeatureFileResponse:
         scenario_count=f.get("scenario_count", 0),
         tags=f.get("tags", []),
         content=f.get("content", ""),
+        run_id=f.get("run_id") or None,
     )
 
 
@@ -181,7 +194,5 @@ def download_project() -> StreamingResponse:
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={
-            "Content-Disposition": "attachment; filename=bdd_project.zip"
-        },
+        headers={"Content-Disposition": "attachment; filename=bdd_project.zip"},
     )

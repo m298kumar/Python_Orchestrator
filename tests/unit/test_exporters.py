@@ -6,7 +6,6 @@ import os
 from unittest.mock import patch
 
 import pytest
-
 from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 from stlc_platform.exporters.exporters import (
     CSVExporter,
@@ -35,8 +34,12 @@ def sample_test_cases():
             tags=["login", "smoke"],
             estimated_duration="3",
             steps=[
-                TestStepArtifact(action="Navigate to login page", expected_result="Login page loads"),
-                TestStepArtifact(action="Enter username 'admin'", expected_result="Field populated"),
+                TestStepArtifact(
+                    action="Navigate to login page", expected_result="Login page loads"
+                ),
+                TestStepArtifact(
+                    action="Enter username 'admin'", expected_result="Field populated"
+                ),
                 TestStepArtifact(action="Click Login button", expected_result="Dashboard appears"),
             ],
         ),
@@ -129,8 +132,12 @@ class TestCSVExporter:
     def test_format_steps_no_steps(self, mock_output_dir):
         exporter = CSVExporter()
         tc = TestCaseArtifact(
-            tc_id="TC-X", req_id="REQ-X", title="No steps",
-            description="d", preconditions="p", test_type="positive",
+            tc_id="TC-X",
+            req_id="REQ-X",
+            title="No steps",
+            description="d",
+            preconditions="p",
+            test_type="positive",
             priority="High",
         )
         assert exporter._format_steps(tc) == ""

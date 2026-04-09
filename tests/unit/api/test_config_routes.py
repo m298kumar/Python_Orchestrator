@@ -10,14 +10,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-
 from stlc_platform.api.main import app
 from stlc_platform.api.routes import config as config_module
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _reset_config():
@@ -39,6 +38,7 @@ def client():
 # ---------------------------------------------------------------------------
 # GET /api/config/
 # ---------------------------------------------------------------------------
+
 
 class TestGetConfig:
     """GET /api/config/ returns the current configuration."""
@@ -69,6 +69,7 @@ class TestGetConfig:
 # ---------------------------------------------------------------------------
 # PUT /api/config/ — dot-notation updates
 # ---------------------------------------------------------------------------
+
 
 class TestUpdateConfig:
     """PUT /api/config/ updates configuration values."""
@@ -107,6 +108,7 @@ class TestUpdateConfig:
 # PUT /api/config/ — structured section updates
 # ---------------------------------------------------------------------------
 
+
 class TestStructuredUpdate:
     """PUT /api/config/ with structured section dicts."""
 
@@ -143,6 +145,7 @@ class TestStructuredUpdate:
 # YAML persistence
 # ---------------------------------------------------------------------------
 
+
 class TestYAMLPersistence:
     """Updates are persisted to YAML via save_config_yaml."""
 
@@ -161,22 +164,19 @@ class TestYAMLPersistence:
 
     def test_masked_values_not_persisted(self, client: TestClient):
         """Values equal to '***' must NOT be written to YAML."""
-        with patch("stlc_platform.core.config_loader.save_config_yaml") as mock_save:
+        with patch("stlc_platform.core.config_loader.save_config_yaml"):
             client.put(
                 "/api/config/",
                 json={"updates": {"llm.api_key": "***", "llm.model": "phi3"}},
             )
-            # save_config_yaml may or may not be called depending on import path;
-            # verify via the in-memory state that *** was still applied in-memory
-            # but the _strip_masked helper would remove it before YAML write.
             assert config_module._config["llm"]["model"] == "phi3"
-            # The *** value was applied in-memory (it's the API's job to mask on read)
             assert config_module._config["llm"]["api_key"] == "***"
 
 
 # ---------------------------------------------------------------------------
 # POST /api/config/test-llm — unknown provider
 # ---------------------------------------------------------------------------
+
 
 class TestLLMEndpoint:
     """POST /api/config/test-llm tests provider connectivity."""

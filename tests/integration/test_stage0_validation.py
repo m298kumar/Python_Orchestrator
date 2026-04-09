@@ -7,12 +7,9 @@ These go beyond unit tests by testing real interactions between modules.
 
 import json
 import os
-import tempfile
-
-import pytest
-
 
 # ── 1. Config Loader → All Modules ──────────────────────────────────────────
+
 
 class TestConfigIntegration:
     """Verify that config loaded from YAML is correctly consumed by all modules."""
@@ -21,6 +18,7 @@ class TestConfigIntegration:
         """Config loaded in different modules returns the same object."""
         from stlc_platform.core.config_loader import config as config1
         from stlc_platform.core.config_loader import config as config2
+
         assert config1 is config2
 
     def test_config_feeds_ollama_client(self):
@@ -47,11 +45,13 @@ class TestConfigIntegration:
         """Environment variable override propagates through config to clients."""
         monkeypatch.setenv("OLLAMA_MODEL", "integration-test-model:1b")
         from stlc_platform.core.config_loader import load_config
+
         cfg = load_config()
         assert cfg.ollama.model == "integration-test-model:1b"
 
 
 # ── 2. Contracts → Storage/Export ────────────────────────────────────────────
+
 
 class TestContractIntegration:
     """Verify contracts work with storage and export modules."""
@@ -93,7 +93,9 @@ class TestContractIntegration:
             steps=[
                 TestStepArtifact(action="Open the application", expected_result="App loads"),
                 TestStepArtifact(action="Click the login button", expected_result="Form shown"),
-                TestStepArtifact(action="Enter credentials and submit", expected_result="Dashboard"),
+                TestStepArtifact(
+                    action="Enter credentials and submit", expected_result="Dashboard"
+                ),
             ],
             given="a running application",
             when="user logs in",
@@ -110,31 +112,42 @@ class TestContractIntegration:
     def test_all_contract_types_are_serializable(self):
         """Every artifact contract can be serialized to JSON and back."""
         from stlc_platform.core.contracts import (
-            RequirementArtifact,
-            TestCaseArtifact,
-            FeatureFileArtifact,
-            StepDefinitionArtifact,
-            SiteModelArtifact,
             APIModelArtifact,
             APITestArtifact,
+            FeatureFileArtifact,
             PipelineRunArtifact,
+            RequirementArtifact,
+            SiteModelArtifact,
+            StepDefinitionArtifact,
+            TestCaseArtifact,
         )
 
         # Minimal valid instances for each type
         instances = [
             RequirementArtifact(req_id="R1", title="T", description="D"),
             TestCaseArtifact(
-                tc_id="TC1", req_id="R1", title="T", description="D",
-                preconditions="P", test_type="positive", priority="High",
+                tc_id="TC1",
+                req_id="R1",
+                title="T",
+                description="D",
+                preconditions="P",
+                test_type="positive",
+                priority="High",
             ),
             FeatureFileArtifact(req_id="R1", filename="f.feature", content="c"),
             StepDefinitionArtifact(
-                language="python", framework="behave", filename="s.py", content="c",
+                language="python",
+                framework="behave",
+                filename="s.py",
+                content="c",
             ),
             SiteModelArtifact(base_url="https://example.com"),
             APIModelArtifact(),
             APITestArtifact(
-                framework="pytest", language="python", filename="t.py", content="c",
+                framework="pytest",
+                language="python",
+                filename="t.py",
+                content="c",
             ),
             PipelineRunArtifact(run_id="run-1", pipeline_name="test"),
         ]
@@ -149,6 +162,7 @@ class TestContractIntegration:
 
 
 # ── 3. Reader → Contracts Compatibility ──────────────────────────────────────
+
 
 class TestReaderContractIntegration:
     """Verify that the requirements reader output is compatible with contracts."""
@@ -188,14 +202,20 @@ class TestReaderContractIntegration:
         from stlc_platform.agents.requirements_agent.reader import RequirementsReader
 
         json_file = tmp_path / "reqs.json"
-        json_file.write_text(json.dumps({
-            "requirements": [{
-                "id": "REQ-002",
-                "title": "Password Reset",
-                "description": "Users can reset password via email",
-                "acceptance_criteria": ["Link sent within 5 minutes"],
-            }]
-        }))
+        json_file.write_text(
+            json.dumps(
+                {
+                    "requirements": [
+                        {
+                            "id": "REQ-002",
+                            "title": "Password Reset",
+                            "description": "Users can reset password via email",
+                            "acceptance_criteria": ["Link sent within 5 minutes"],
+                        }
+                    ]
+                }
+            )
+        )
 
         reader = RequirementsReader()
         reqs = reader.read(str(json_file))
@@ -207,6 +227,7 @@ class TestReaderContractIntegration:
 
 
 # ── 4. Export Pipeline ───────────────────────────────────────────────────────
+
 
 class TestExportIntegration:
     """Verify export pipeline works with contract-based test cases."""
@@ -255,12 +276,14 @@ class TestExportIntegration:
 
 # ── 5. Schema Validation ────────────────────────────────────────────────────
 
+
 class TestSchemaValidation:
     """Verify that config schema JSON exists and is valid JSON Schema."""
 
     def test_schema_file_is_valid_json(self):
         """stlc_config.schema.json is valid JSON."""
         from stlc_platform.core.utils import find_project_root
+
         schema_path = find_project_root() / "config" / "stlc_config.schema.json"
 
         assert schema_path.exists(), f"Schema file not found: {schema_path}"
@@ -277,22 +300,28 @@ class TestSchemaValidation:
     def test_schema_covers_all_config_sections(self):
         """Schema has entries for every section in stlc_config.yaml."""
         from stlc_platform.core.utils import find_project_root
+
         schema_path = find_project_root() / "config" / "stlc_config.schema.json"
 
         with open(schema_path, "r", encoding="utf-8") as f:
             schema = json.load(f)
 
         expected_sections = [
-            "project", "llm", "chromadb", "test_generation",
-            "bdd", "crawler", "api_testing", "export",
+            "project",
+            "llm",
+            "chromadb",
+            "test_generation",
+            "bdd",
+            "crawler",
+            "api_testing",
+            "export",
         ]
         for section in expected_sections:
-            assert section in schema["properties"], (
-                f"Missing section '{section}' in config schema"
-            )
+            assert section in schema["properties"], f"Missing section '{section}' in config schema"
 
 
 # ── 6. Utils Module ─────────────────────────────────────────────────────────
+
 
 class TestUtilsIntegration:
     """Verify utility functions work correctly."""
@@ -300,16 +329,19 @@ class TestUtilsIntegration:
     def test_find_project_root(self):
         """find_project_root() returns a directory with expected structure."""
         from stlc_platform.core.utils import find_project_root
+
         root = find_project_root()
         assert (root / "stlc_platform").is_dir() or (root / "config").is_dir()
 
     def test_slugify(self):
         from stlc_platform.core.utils import slugify
+
         assert slugify("User Login Auth") == "user-login-auth"
         assert slugify("REQ-001: Test!@#") == "req-001-test"
 
     def test_deep_merge(self):
         from stlc_platform.core.utils import deep_merge
+
         base = {"a": 1, "b": {"c": 2, "d": 3}}
         override = {"b": {"c": 99}, "e": 5}
         result = deep_merge(base, override)
@@ -317,20 +349,24 @@ class TestUtilsIntegration:
 
     def test_safe_filename(self):
         from stlc_platform.core.utils import safe_filename
+
         assert safe_filename('Test: "Special" <chars>') == "Test_Special_chars"
 
     def test_flatten_dict(self):
         from stlc_platform.core.utils import flatten_dict
+
         nested = {"a": {"b": 1, "c": {"d": 2}}}
         flat = flatten_dict(nested)
         assert flat == {"a.b": 1, "a.c.d": 2}
 
     def test_chunk_list(self):
         from stlc_platform.core.utils import chunk_list
+
         assert chunk_list([1, 2, 3, 4, 5], 2) == [[1, 2], [3, 4], [5]]
 
 
 # ── 7. Migration Script ─────────────────────────────────────────────────────
+
 
 class TestMigrationIntegration:
     """Verify migration script functions work."""
@@ -338,6 +374,7 @@ class TestMigrationIntegration:
     def test_get_current_versions(self):
         """All artifact types report version 1.0 or 1.1."""
         import sys
+
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
         from migrate import get_current_versions
 
@@ -350,9 +387,11 @@ class TestMigrationIntegration:
     def test_check_no_migrations_needed(self):
         """With no artifact files, no migrations are needed."""
         import sys
+
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
-        from migrate import check_migrations_needed
         from pathlib import Path
+
+        from migrate import check_migrations_needed
 
         issues = check_migrations_needed(Path("/nonexistent"))
         assert any("No migrations needed" in i for i in issues)

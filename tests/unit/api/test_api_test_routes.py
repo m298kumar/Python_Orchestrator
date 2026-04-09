@@ -6,15 +6,14 @@ We clear it between tests to ensure isolation.
 """
 
 import pytest
-
 from fastapi.testclient import TestClient
 from stlc_platform.api.main import app
 from stlc_platform.api.routes import api_tests as api_tests_module
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _clear_api_tests():
@@ -49,6 +48,7 @@ def _seed_api_test(filename="test_pets.py", **overrides):
 # GET /api/api-tests/
 # ---------------------------------------------------------------------------
 
+
 class TestListAPITests:
     """GET /api/api-tests/ returns stored API test files."""
 
@@ -74,6 +74,7 @@ class TestListAPITests:
 # ---------------------------------------------------------------------------
 # GET /api/api-tests/{filename}
 # ---------------------------------------------------------------------------
+
 
 class TestGetAPITest:
     """GET /api/api-tests/{filename} returns a single API test file."""

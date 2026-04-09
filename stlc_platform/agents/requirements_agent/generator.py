@@ -72,9 +72,7 @@ class TestCaseGenerator:
         self.prompt_renderer = prompt_renderer or PromptRenderer()
         self.classifier = classifier or ACClassifier()
         self.sanitiser = sanitiser or TestCaseSanitiser()
-        self.component_resolver = component_resolver or ComponentResolver(
-            vector_store=vector_store
-        )
+        self.component_resolver = component_resolver or ComponentResolver(vector_store=vector_store)
         self.domain_detector = domain_detector or DomainDetector()
         self.tech_stack = tech_stack or TechStackContext()
         self.vector_store = vector_store
@@ -91,196 +89,279 @@ class TestCaseGenerator:
         include_edge: bool = True,
         tc_format: str = "gherkin",
     ) -> List[TestCaseArtifact]:
-        """
-        Generate test cases for a single requirement.
-
-        Args:
-            requirement: Object with req_id, title, description, acceptance_criteria, category.
-            max_tests: Maximum number of test cases to generate.
-            include_negative: Include negative/error handling test cases.
-            include_edge: Include edge case/boundary test cases.
-            tc_format: "gherkin" or "standard".
-
-        Returns:
-            List of TestCaseArtifact instances.
-        """
-        tech_stack_dict = {"platform": self.tech_stack.platform} if self.tech_stack else {}
-        system_prompt = self.prompt_renderer.render_system_prompt(
-            domain=self._domain,
-            tech_stack=tech_stack_dict,
-        )
-
-        context = ""
-        if self.vector_store:
-            try:
-                context = self.vector_store.get_context_for_requirement(requirement)
-            except (AttributeError, RuntimeError, OSError):
-                pass
-
-        # Retrieve feedback constraints for this agent + requirement context
-        feedback_constraints: list = []
-        if self.feedback_store:
-            try:
-                feedback_constraints = self.feedback_store.retrieve(
-                    agent_id="test_generation",
-                    context={
-                        "requirement": requirement,
-                        "query": getattr(requirement, "title", ""),
-                    },
-                    limit=3,
-                )
-            except (AttributeError, RuntimeError, OSError):
-                pass
-
+        system_prompt = self._build_system_prompt()
+        context = self._fetch_context(requirement)
+        feedback_constraints = self._fetch_feedback(requirement)
         slots = self._build_slot_plan(
             requirement=requirement,
             max_tc=max_tests,
             include_negative=include_negative,
             include_edge=include_edge,
         )
+        max_prompt_tokens = self._calc_max_prompt_tokens()
 
         results: List[TestCaseArtifact] = []
         max_regen = self.scorer.config.max_regeneration_attempts
 
-        # Calculate max_prompt_tokens once (LLM attributes don't change between slots)
+        for i, slot in enumerate(slots):
+            best_tc, best_report = self._generate_single_test_case(
+                requirement,
+                slot,
+                system_prompt,
+                context,
+                feedback_constraints,
+                max_prompt_tokens,
+                max_regen,
+                results,
+            )
+            results.append(best_tc)
+            self._maybe_store_example(best_tc, slot, results)
+
+        return results
+
+    def _build_system_prompt(self) -> str:
+        tech_stack_dict = {"platform": self.tech_stack.platform} if self.tech_stack else {}
+        return self.prompt_renderer.render_system_prompt(
+            domain=self._domain,
+            tech_stack=tech_stack_dict,
+        )
+
+    def _fetch_context(self, requirement: Any) -> str:
+        if not self.vector_store:
+            return ""
         try:
-            _num_predict = getattr(self.llm, "num_predict", None) or getattr(self.llm, "max_tokens", None)
+            return self.vector_store.get_context_for_requirement(requirement)
+        except (AttributeError, RuntimeError, OSError):
+            return ""
+
+    def _fetch_feedback(self, requirement: Any) -> list:
+        if not self.feedback_store:
+            return []
+        try:
+            return self.feedback_store.retrieve(
+                agent_id="test_generation",
+                context={
+                    "requirement": requirement,
+                    "query": getattr(requirement, "title", ""),
+                },
+                limit=3,
+            )
+        except (AttributeError, RuntimeError, OSError):
+            return []
+
+    def _calc_max_prompt_tokens(self) -> int:
+        try:
+            _num_predict = getattr(self.llm, "num_predict", None) or getattr(
+                self.llm, "max_tokens", None
+            )
             _num_predict = int(_num_predict) if _num_predict is not None else 3200
             _num_ctx = getattr(self.llm, "num_ctx", None)
             _num_ctx = int(_num_ctx) if _num_ctx is not None else 8192
-            max_prompt_tokens = max((_num_ctx - _num_predict) * 6 // 10, 1024)
+            return max((_num_ctx - _num_predict) * 6 // 10, 1024)
         except (TypeError, ValueError):
-            max_prompt_tokens = 3000  # safe default
+            return 3000
 
-        for i, slot in enumerate(slots):
-            ac_type_label = slot.get("ac_type", "general")
-            test_type = slot["test_type"]
-            ac_text = slot["target_ac"]
+    def _retrieve_few_shot_examples(self, slot: Dict[str, str]) -> list:
+        if not self.vector_store:
+            return []
+        try:
+            return self.vector_store.retrieve_examples(
+                ac_text=slot["target_ac"],
+                ac_type=slot.get("ac_type", "general"),
+                test_type=slot["test_type"],
+                n=2,
+            )
+        except (AttributeError, RuntimeError, OSError):
+            return []
 
-            # Retrieve few-shot examples from ChromaDB
-            examples: list = []
-            if self.vector_store:
-                try:
-                    examples = self.vector_store.retrieve_examples(
-                        ac_text=ac_text,
-                        ac_type=ac_type_label,
-                        test_type=test_type,
-                        n=2,
-                    )
-                except (AttributeError, RuntimeError, OSError):
-                    pass
+    def _generate_single_test_case(
+        self,
+        requirement: Any,
+        slot: Dict[str, str],
+        system_prompt: str,
+        context: str,
+        feedback_constraints: list,
+        max_prompt_tokens: int,
+        max_regen: int,
+        existing_tcs: List[TestCaseArtifact],
+    ) -> tuple[TestCaseArtifact, QualityReport]:
+        examples = self._retrieve_few_shot_examples(slot)
+        prompt = self.prompt_renderer.render_user_prompt(
+            requirement=requirement,
+            slot=slot,
+            test_number=len(existing_tcs) + 1,
+            total=len(self._build_slot_plan(requirement, 6, True, True)),
+            context=context,
+            tc_format="gherkin",
+            examples=examples,
+            feedback_constraints=feedback_constraints,
+            max_prompt_tokens=max_prompt_tokens,
+        )
 
-            prompt = self.prompt_renderer.render_user_prompt(
-                requirement=requirement,
+        best_tc, best_report = self._run_generation_attempts(
+            requirement,
+            slot,
+            system_prompt,
+            prompt,
+            max_regen,
+            existing_tcs,
+        )
+
+        if best_tc is None or best_report is None:
+            best_tc = self._synthesise_tc(requirement, slot)
+            best_tc = self.sanitiser.sanitise(tc=best_tc, slot=slot, requirement=requirement)
+            best_report = self.scorer.score(
+                tc=best_tc,
                 slot=slot,
-                test_number=i + 1,
-                total=max_tests,
-                context=context,
-                tc_format=tc_format,
-                examples=examples,
-                feedback_constraints=feedback_constraints,
-                max_prompt_tokens=max_prompt_tokens,
+                requirement=requirement,
+                existing_tcs=existing_tcs,
             )
 
-            best_tc: Optional[TestCaseArtifact] = None
-            best_report: Optional[QualityReport] = None
-
-            for attempt in range(1, 2 + max_regen):
-                tc = None
-                current_prompt = prompt
-
-                # On regeneration attempts, append quality issue hints
-                if attempt > 1 and best_report and best_report.issues:
-                    hint = "\n\nIMPORTANT — fix these issues from previous attempt:\n"
-                    for issue in best_report.issues[:5]:
-                        hint += f"  - {issue}\n"
-                    current_prompt = prompt + hint
-
-                try:
-                    raw = self.llm.generate_test_case(
-                        prompt=current_prompt,
-                        system_prompt=system_prompt,
-                        slot=slot,
-                        requirement=requirement,
-                    )
-                    tc = self._parse(raw, requirement, slot)
-                except Exception as e:
-                    console.print(f"    [yellow]  attempt {attempt} error: {e}[/yellow]")
-
-                if not tc:
-                    continue
-
-                # Sanitise
-                tc = self.sanitiser.sanitise(
-                    tc=tc,
-                    slot=slot,
-                    requirement=requirement,
-                )
-
-                # Score
-                report = self.scorer.score(
-                    tc=tc,
-                    slot=slot,
-                    requirement=requirement,
-                    existing_tcs=results,
-                )
-
-                # Keep the best attempt
-                if best_tc is None or report.overall_score > best_report.overall_score:
-                    best_tc = tc
-                    best_report = report
-
-                # Accept if quality is sufficient
-                if report.suggestion == "accept":
-                    break
-
-                if attempt == 1 and report.suggestion == "fallback":
-                    # Don't waste retries on very poor output
-                    break
-
-                if attempt > 1:
-                    console.print(
-                        f"    [yellow]  regen {attempt - 1}: "
-                        f"score {report.overall_score:.2f} ({report.suggestion})[/yellow]"
-                    )
-
-            # If no LLM attempt produced a TC, synthesise
-            if best_tc is None:
-                best_tc = self._synthesise_tc(requirement, slot)
-                best_tc = self.sanitiser.sanitise(
-                    tc=best_tc, slot=slot, requirement=requirement,
-                )
-                best_report = self.scorer.score(
-                    tc=best_tc, slot=slot,
-                    requirement=requirement, existing_tcs=results,
-                )
-
-            # Stamp quality metadata onto the TC
-            best_tc = best_tc.model_copy(update={
+        best_tc = best_tc.model_copy(
+            update={
                 "quality_score": best_report.overall_score,
                 "quality_issues": best_report.issues,
-            })
+            }
+        )
+        return best_tc, best_report
 
-            # Auto-store high-quality TCs as few-shot examples in ChromaDB
-            auto_threshold = self.scorer.config.auto_example_threshold
-            if (
-                best_report.overall_score >= auto_threshold
-                and self.vector_store
-                and hasattr(self.vector_store, "store_approved_tc")
+    def _run_generation_attempts(
+        self,
+        requirement: Any,
+        slot: Dict[str, str],
+        system_prompt: str,
+        base_prompt: str,
+        max_regen: int,
+        existing_tcs: List[TestCaseArtifact],
+    ) -> tuple[Optional[TestCaseArtifact], Optional[QualityReport]]:
+        best_tc: Optional[TestCaseArtifact] = None
+        best_report: Optional[QualityReport] = None
+
+        for attempt in range(1, 2 + max_regen):
+            current_prompt = self._build_prompt_with_feedback(
+                base_prompt,
+                attempt,
+                best_report,
+            )
+            tc = self._call_llm_and_parse(
+                current_prompt,
+                system_prompt,
+                slot,
+                requirement,
+                attempt,
+            )
+            if not tc:
+                continue
+
+            tc = self.sanitiser.sanitise(tc=tc, slot=slot, requirement=requirement)
+            report = self.scorer.score(
+                tc=tc,
+                slot=slot,
+                requirement=requirement,
+                existing_tcs=existing_tcs,
+            )
+
+            if best_tc is None or report.overall_score > (
+                best_report.overall_score if best_report else -1
             ):
-                try:
-                    self.vector_store.store_approved_tc(
-                        tc_dict=best_tc.model_dump(),
-                        ac_type=ac_type_label,
-                        test_type=test_type,
-                        domain=self._domain or "",
-                    )
-                except (AttributeError, RuntimeError, OSError):
-                    pass  # non-critical — don't fail generation for example storage
+                best_tc = tc
+                best_report = report
 
-            results.append(best_tc)
+            if report.suggestion == "accept":
+                break
+            if attempt == 1 and report.suggestion == "fallback":
+                break
+            if attempt > 1:
+                console.print(
+                    f"    [yellow]  regen {attempt - 1}: "
+                    f"score {report.overall_score:.2f} ({report.suggestion})[/yellow]"
+                )
 
-        return results
+        return best_tc, best_report
+
+    def _build_prompt_with_feedback(
+        self,
+        base_prompt: str,
+        attempt: int,
+        best_report: Optional[QualityReport],
+    ) -> str:
+        if attempt <= 1 or not best_report or not best_report.issues:
+            return base_prompt
+        hint = "\n\nIMPORTANT — fix these issues from previous attempt:\n"
+        for issue in best_report.issues[:5]:
+            hint += f"  - {issue}\n"
+        return base_prompt + hint
+
+    def _call_llm_and_parse(
+        self,
+        prompt: str,
+        system_prompt: str,
+        slot: Dict[str, str],
+        requirement: Any,
+        attempt: int,
+    ) -> Optional[TestCaseArtifact]:
+        try:
+            raw = self.llm.generate_test_case(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                slot=slot,
+                requirement=requirement,
+            )
+            return self._parse(raw, requirement, slot)
+        except Exception as e:
+            console.print(f"    [yellow]  attempt {attempt} error: {e}[/yellow]")
+            return None
+
+    def _maybe_store_example(
+        self,
+        tc: TestCaseArtifact,
+        slot: Dict[str, str],
+        results: List[TestCaseArtifact],
+    ) -> None:
+        auto_threshold = self.scorer.config.auto_example_threshold
+        report = self.scorer.score(tc=tc, slot=slot, requirement=None, existing_tcs=results)
+        if report.overall_score < auto_threshold or not self.vector_store:
+            return
+        if not hasattr(self.vector_store, "store_approved_tc"):
+            return
+        try:
+            self.vector_store.store_approved_tc(
+                tc_dict=tc.model_dump(),
+                ac_type=slot.get("ac_type", "general"),
+                test_type=slot["test_type"],
+                domain=self._domain or "",
+            )
+        except (AttributeError, RuntimeError, OSError):
+            pass
+
+    def _deduplicate_tcs(self, all_tc: List[TestCaseArtifact]) -> List[TestCaseArtifact]:
+        """Cross-requirement deduplication of generated test cases."""
+        import logging as _logging
+
+        from stlc_platform.core.quality.deduplicator import TestCaseDeduplicator
+
+        _dedup_logger = _logging.getLogger(__name__)
+        deduplicator = TestCaseDeduplicator(threshold=0.85)
+        dedup_result = deduplicator.deduplicate(all_tc)
+        if dedup_result.removed:
+            _dedup_logger.info("Deduplication removed %d duplicate TCs", len(dedup_result.removed))
+            console.print(
+                f"  [yellow]Dedup removed {len(dedup_result.removed)} near-duplicate TC(s)[/yellow]"
+            )
+        return dedup_result.kept
+
+    def _enrich_vocab(self, all_tc: List[TestCaseArtifact]) -> None:
+        """Enrich domain vocabulary from generated test cases."""
+        if not self.vector_store:
+            return
+        try:
+            vocab_terms = self._extract_vocab(all_tc)
+            if vocab_terms:
+                added = self.vector_store.add_vocab(vocab_terms, domain=self._domain or "")
+                if added:
+                    logger.info("Enriched domain vocabulary with %d new terms", added)
+        except Exception as e:
+            logger.debug("Vocab enrichment skipped: %s", e)
 
     def generate_for_all(
         self,
@@ -341,37 +422,10 @@ class TestCaseGenerator:
                 console.print(f"  [red]ERR {req.req_id}: {e}[/red]")
 
         # Phase D: Cross-requirement deduplication
-        import logging as _logging
-
-        from stlc_platform.core.quality.deduplicator import TestCaseDeduplicator
-
-        _dedup_logger = _logging.getLogger(__name__)
-        deduplicator = TestCaseDeduplicator(threshold=0.85)
-        dedup_result = deduplicator.deduplicate(all_tc)
-        if dedup_result.removed:
-            _dedup_logger.info(
-                "Deduplication removed %d duplicate TCs", len(dedup_result.removed)
-            )
-            console.print(
-                f"  [yellow]Dedup removed {len(dedup_result.removed)} "
-                f"near-duplicate TC(s)[/yellow]"
-            )
-        all_tc = dedup_result.kept
+        all_tc = self._deduplicate_tcs(all_tc)
 
         # Phase D4: Domain vocabulary enrichment from generated test cases
-        if self.vector_store:
-            try:
-                vocab_terms = self._extract_vocab(all_tc)
-                if vocab_terms:
-                    added = self.vector_store.add_vocab(
-                        vocab_terms, domain=self._domain or ""
-                    )
-                    if added:
-                        logger.info(
-                            "Enriched domain vocabulary with %d new terms", added
-                        )
-            except Exception as e:
-                logger.debug("Vocab enrichment skipped: %s", e)
+        self._enrich_vocab(all_tc)
 
         console.print(
             f"\n[bold green]{len(all_tc)} test cases "
@@ -420,12 +474,14 @@ class TestCaseGenerator:
                 suffix += 1
 
             seen_titles.add(title.lower())
-            slots.append({
-                "test_type": test_type,
-                "target_ac": target_ac,
-                "title": title,
-                "ac_type": ac_type,
-            })
+            slots.append(
+                {
+                    "test_type": test_type,
+                    "target_ac": target_ac,
+                    "title": title,
+                    "ac_type": ac_type,
+                }
+            )
 
         return slots
 
@@ -482,7 +538,9 @@ class TestCaseGenerator:
             steps=[
                 TestStepArtifact(
                     action=s.action if hasattr(s, "action") else s["action"],  # type: ignore[index]
-                    expected_result=s.expected_result if hasattr(s, "expected_result") else s["expected_result"],  # type: ignore[index]
+                    expected_result=s.expected_result
+                    if hasattr(s, "expected_result")
+                    else s["expected_result"],  # type: ignore[index]
                 )
                 for s in steps
             ],
@@ -498,9 +556,7 @@ class TestCaseGenerator:
 
     # -- Synthesis fallback ----------------------------------------------------
 
-    def _synthesise_tc(
-        self, requirement: Any, slot: Dict[str, str]
-    ) -> TestCaseArtifact:
+    def _synthesise_tc(self, requirement: Any, slot: Dict[str, str]) -> TestCaseArtifact:
         """Create a deterministic fallback test case when LLM fails."""
         self._tc_counter += 1
         ac = slot["target_ac"]
@@ -521,7 +577,9 @@ class TestCaseGenerator:
         pydantic_steps = [
             TestStepArtifact(
                 action=s.action if hasattr(s, "action") else s["action"],  # type: ignore[index]
-                expected_result=s.expected_result if hasattr(s, "expected_result") else s["expected_result"],  # type: ignore[index]
+                expected_result=s.expected_result
+                if hasattr(s, "expected_result")
+                else s["expected_result"],  # type: ignore[index]
             )
             for s in synth_steps
         ]
@@ -546,9 +604,7 @@ class TestCaseGenerator:
 
     # -- Vocabulary extraction -------------------------------------------------
 
-    _GENERIC_TAGS = frozenset(
-        {"positive", "negative", "edge_case", "general", "synthesised"}
-    )
+    _GENERIC_TAGS = frozenset({"positive", "negative", "edge_case", "general", "synthesised"})
 
     def _extract_vocab(self, test_cases: List[TestCaseArtifact]) -> List[str]:
         """Extract component names and UI element names from generated test cases."""
@@ -569,9 +625,7 @@ class TestCaseGenerator:
                 action = (
                     getattr(step, "action", "")
                     if hasattr(step, "action")
-                    else (
-                        step.get("action", "") if isinstance(step, dict) else ""
-                    )
+                    else (step.get("action", "") if isinstance(step, dict) else "")
                 )
                 quoted = re.findall(r'"([^"]+)"', action)
                 terms.update(q for q in quoted if len(q) > 2)

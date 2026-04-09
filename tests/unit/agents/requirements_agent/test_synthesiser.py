@@ -5,9 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List
 
-import pytest
-
-from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 from stlc_platform.agents.requirements_agent.synthesiser import (
     clean_duration,
     extract_steps,
@@ -17,6 +14,7 @@ from stlc_platform.agents.requirements_agent.synthesiser import (
     synthesise_steps,
     synthesise_tc,
 )
+from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 
 
 @dataclass
@@ -25,7 +23,9 @@ class MockRequirement:
     title: str = "User Login"
     description: str = "User should be able to log in"
     category: str = "Authentication"
-    acceptance_criteria: List[str] = field(default_factory=lambda: ["User can login with valid creds"])
+    acceptance_criteria: List[str] = field(
+        default_factory=lambda: ["User can login with valid creds"]
+    )
 
 
 class TestMakeGWT:
@@ -109,8 +109,14 @@ class TestExtractSteps:
     def test_valid_steps_kept(self):
         raw = [
             {"action": "Log in with valid credentials to the app", "expected_result": "Home loads"},
-            {"action": "Navigate to the settings screen in the app", "expected_result": "Settings shown"},
-            {"action": "Click save button on the settings page", "expected_result": "Settings saved"},
+            {
+                "action": "Navigate to the settings screen in the app",
+                "expected_result": "Settings shown",
+            },
+            {
+                "action": "Click save button on the settings page",
+                "expected_result": "Settings saved",
+            },
         ]
         steps = extract_steps(raw, "AC", "positive", "Title")
         assert len(steps) == 3
@@ -124,7 +130,10 @@ class TestExtractSteps:
         assert len(steps) == 5  # Fell back to synthesis
 
     def test_string_steps_handled(self):
-        raw = ["Log in with valid credentials to the test account", "Navigate to the dashboard screen"]
+        raw = [
+            "Log in with valid credentials to the test account",
+            "Navigate to the dashboard screen",
+        ]
         steps = extract_steps(raw, "AC", "positive", "Title")
         assert len(steps) >= 2
 

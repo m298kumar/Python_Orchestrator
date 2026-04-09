@@ -14,8 +14,10 @@ from pydantic import BaseModel, Field
 
 # ── Pipeline ─────────────────────────────────────────────────────────────────
 
+
 class PipelineRunRequest(BaseModel):
     """Request to trigger a pipeline run."""
+
     pipeline_path: str = Field(
         default="config/pipelines/full_stlc.yaml",
         description="Path to pipeline YAML definition.",
@@ -37,6 +39,7 @@ class PipelineRunRequest(BaseModel):
 
 class PipelineRunStatus(BaseModel):
     """Status of a pipeline run."""
+
     run_id: str
     pipeline_name: str
     status: Literal["pending", "running", "completed", "failed"]
@@ -48,22 +51,29 @@ class PipelineRunStatus(BaseModel):
     current_stage: Optional[str] = None
     total_duration_seconds: Optional[float] = None
     error_message: Optional[str] = None
+    archived: bool = False
+    archived_at: Optional[str] = None
 
 
 class PipelineRunSummary(BaseModel):
     """Brief summary for listing runs."""
+
     run_id: str
     pipeline_name: str
     status: str
     started_at: str
     stages_completed_count: int = 0
     total_duration_seconds: Optional[float] = None
+    archived: bool = False
+    archived_at: Optional[str] = None
 
 
 # ── Agents ───────────────────────────────────────────────────────────────────
 
+
 class AgentInfo(BaseModel):
     """Agent capability information."""
+
     agent_id: str
     agent_version: str
     description: str
@@ -75,8 +85,10 @@ class AgentInfo(BaseModel):
 
 # ── Requirements ─────────────────────────────────────────────────────────────
 
+
 class RequirementResponse(BaseModel):
     """A single requirement."""
+
     req_id: str
     title: str
     description: str
@@ -88,6 +100,7 @@ class RequirementResponse(BaseModel):
 
 class RequirementUpdate(BaseModel):
     """Editable fields of a requirement."""
+
     title: Optional[str] = None
     description: Optional[str] = None
     priority: Optional[str] = None
@@ -98,14 +111,17 @@ class RequirementUpdate(BaseModel):
 
 # ── Test Cases ───────────────────────────────────────────────────────────────
 
+
 class TestStepResponse(BaseModel):
     """A single test step."""
+
     action: str = ""
     expected_result: str = ""
 
 
 class TestCaseResponse(BaseModel):
     """A single test case."""
+
     tc_id: str
     req_id: str
     title: str
@@ -124,10 +140,12 @@ class TestCaseResponse(BaseModel):
     status: str = "generated"  # generated, approved, rejected
     test_level: str = ""
     quality_score: float = 0.0
+    run_id: Optional[str] = None
 
 
 class TestCaseUpdate(BaseModel):
     """Editable fields of a test case."""
+
     title: Optional[str] = None
     description: Optional[str] = None
     steps: Optional[List[TestStepResponse]] = None
@@ -138,40 +156,49 @@ class TestCaseUpdate(BaseModel):
 
 class TestCaseAction(BaseModel):
     """Approve/reject a test case."""
+
     reason: Optional[str] = None
 
 
 class BulkTestCaseAction(BaseModel):
     """Bulk approve/reject test cases."""
+
     tc_ids: List[str] = Field(..., min_length=1, max_length=500)
     reason: Optional[str] = None
 
 
 # ── BDD ──────────────────────────────────────────────────────────────────────
 
+
 class FeatureFileResponse(BaseModel):
     """A generated feature file."""
+
     filename: str
     req_id: str
     scenario_count: int
     tags: List[str] = Field(default_factory=list)
     content: str = ""
+    run_id: Optional[str] = None
 
 
 # ── Crawler ──────────────────────────────────────────────────────────────────
 
+
 class SiteModelResponse(BaseModel):
     """Site model summary."""
+
     base_url: str
     total_pages: int
     total_elements: int
     total_forms: int
     navigation_graph: Dict[str, List[str]] = Field(default_factory=dict)
     crawl_timestamp: str = ""
+    run_id: Optional[str] = None
 
 
 class PageSummary(BaseModel):
     """Summary of a crawled page."""
+
     url: str
     title: str
     element_count: int
@@ -181,8 +208,10 @@ class PageSummary(BaseModel):
 
 # ── API Tests ────────────────────────────────────────────────────────────────
 
+
 class APITestFileResponse(BaseModel):
     """A generated API test file."""
+
     filename: str
     framework: str
     language: str
@@ -190,12 +219,15 @@ class APITestFileResponse(BaseModel):
     test_count: int
     test_level: str = "api"
     content: str = ""
+    run_id: Optional[str] = None
 
 
 # ── Feedback ─────────────────────────────────────────────────────────────────
 
+
 class FeedbackRequest(BaseModel):
     """Submit feedback for an agent."""
+
     agent_id: str
     feedback_type: Literal["correction", "preference", "constraint"] = Field(
         default="correction",
@@ -206,6 +238,7 @@ class FeedbackRequest(BaseModel):
 
 class FeedbackResponse(BaseModel):
     """A feedback entry."""
+
     agent_id: str
     feedback_type: str
     message: str
@@ -215,11 +248,23 @@ class FeedbackResponse(BaseModel):
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
+
 class ConfigResponse(BaseModel):
     """Current configuration (sanitized)."""
+
     project: Dict[str, Any] = Field(default_factory=dict)
     llm: Dict[str, Any] = Field(default_factory=dict)
+    crawler: Dict[str, Any] = Field(default_factory=dict)
+    api_testing: Dict[str, Any] = Field(default_factory=dict)
+    test_generation: Dict[str, Any] = Field(default_factory=dict)
+    bdd: Dict[str, Any] = Field(default_factory=dict)
+    quality_gate: Dict[str, Any] = Field(default_factory=dict)
+    coverage: Dict[str, Any] = Field(default_factory=dict)
     output: Dict[str, Any] = Field(default_factory=dict)
+    chromadb: Dict[str, Any] = Field(default_factory=dict)
+    export: Dict[str, Any] = Field(default_factory=dict)
+    circuit_breaker: Dict[str, Any] = Field(default_factory=dict)
+    metrics: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ConfigUpdate(BaseModel):
@@ -231,14 +276,26 @@ class ConfigUpdate(BaseModel):
 
     Both can be combined; ``updates`` is applied first, then sections are deep-merged.
     """
+
     updates: Optional[Dict[str, Any]] = None
     project: Optional[Dict[str, Any]] = None
     llm: Optional[Dict[str, Any]] = None
+    crawler: Optional[Dict[str, Any]] = None
+    api_testing: Optional[Dict[str, Any]] = None
+    test_generation: Optional[Dict[str, Any]] = None
+    bdd: Optional[Dict[str, Any]] = None
+    quality_gate: Optional[Dict[str, Any]] = None
+    coverage: Optional[Dict[str, Any]] = None
     output: Optional[Dict[str, Any]] = None
+    chromadb: Optional[Dict[str, Any]] = None
+    export: Optional[Dict[str, Any]] = None
+    circuit_breaker: Optional[Dict[str, Any]] = None
+    metrics: Optional[Dict[str, Any]] = None
 
 
 class LLMTestRequest(BaseModel):
     """Request to test an LLM provider connection."""
+
     provider: str  # ollama | openai | anthropic | azure
     model: str = ""
     base_url: str = ""
@@ -247,6 +304,7 @@ class LLMTestRequest(BaseModel):
 
 class LLMTestResponse(BaseModel):
     """Result of an LLM provider connection test."""
+
     success: bool
     message: str
     models: list[str] = []
@@ -254,8 +312,10 @@ class LLMTestResponse(BaseModel):
 
 # ── WebSocket Messages ──────────────────────────────────────────────────────
 
+
 class WSMessage(BaseModel):
     """WebSocket message from server to client."""
+
     event: str  # stage_start, stage_complete, stage_error, pipeline_complete
     run_id: str
     data: Dict[str, Any] = Field(default_factory=dict)
@@ -263,6 +323,7 @@ class WSMessage(BaseModel):
 
 
 # ── Generic ──────────────────────────────────────────────────────────────────
+
 
 class HealthResponse(BaseModel):
     status: str = "ok"
@@ -273,8 +334,10 @@ class HealthResponse(BaseModel):
 
 # ── Metrics ─────────────────────────────────────────────────────────────────
 
+
 class MetricsResponse(BaseModel):
     """Metrics for a single pipeline run."""
+
     run_id: str
     timestamp: str
     pipeline_name: str = ""
@@ -295,6 +358,7 @@ class MetricsResponse(BaseModel):
 
 class MetricsTrendResponse(BaseModel):
     """Aggregated quality and cost trends."""
+
     run_count: int
     avg_quality_score: float
     avg_generation_time: float
@@ -306,6 +370,7 @@ class MetricsTrendResponse(BaseModel):
 
 class MetricsComparisonResponse(BaseModel):
     """Side-by-side comparison of two pipeline runs."""
+
     run_a: MetricsResponse
     run_b: MetricsResponse
     deltas: Dict[str, float] = Field(default_factory=dict)

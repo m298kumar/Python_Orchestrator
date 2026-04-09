@@ -140,9 +140,7 @@ class LLMResponseCache:
                 "hits": self._hits,
                 "misses": self._misses,
             }
-            cache_file.write_text(
-                json.dumps(data, ensure_ascii=False), encoding="utf-8"
-            )
+            cache_file.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         except Exception as e:
             logger.warning("Failed to persist LLM cache: %s", e)
 
@@ -159,7 +157,7 @@ class LLMResponseCache:
             # Only load up to max_size entries (most recent)
             items = list(entries.items())
             if len(items) > self._max_size:
-                items = items[-self._max_size:]
+                items = items[-self._max_size :]
             self._cache = OrderedDict(items)
             self._hits = data.get("hits", 0)
             self._misses = data.get("misses", 0)

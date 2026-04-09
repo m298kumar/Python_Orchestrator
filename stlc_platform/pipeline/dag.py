@@ -60,9 +60,7 @@ class PipelineDAG:
         for stage in self._stages.values():
             for dep in stage.depends_on:
                 if dep not in self._stages:
-                    errors.append(
-                        f"Stage '{stage.stage_id}' depends on unknown stage '{dep}'."
-                    )
+                    errors.append(f"Stage '{stage.stage_id}' depends on unknown stage '{dep}'.")
 
         # Check for cycles via topological sort attempt
         if not errors:
@@ -109,9 +107,7 @@ class PipelineDAG:
 
         if processed != len(self._stages):
             remaining = [sid for sid, deg in in_degree.items() if deg > 0]
-            raise ValueError(
-                f"Pipeline has a cycle involving stages: {remaining}"
-            )
+            raise ValueError(f"Pipeline has a cycle involving stages: {remaining}")
 
         return waves
 
@@ -119,8 +115,4 @@ class PipelineDAG:
         """Return stage IDs that directly depend on the given stage."""
         if stage_id not in self._stages:
             raise KeyError(f"Stage '{stage_id}' not found in pipeline.")
-        return [
-            s.stage_id
-            for s in self._stages.values()
-            if stage_id in s.depends_on
-        ]
+        return [s.stage_id for s in self._stages.values() if stage_id in s.depends_on]

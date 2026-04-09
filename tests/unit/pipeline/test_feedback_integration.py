@@ -5,14 +5,11 @@ Verifies that feedback is retrieved, injected into prompts, and
 high-quality TCs are auto-stored as examples.
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from stlc_platform.pipeline.feedback_store import FeedbackStore
-from stlc_platform.core.contracts import AgentFeedbackArtifact
 from stlc_platform.agents.requirements_agent.prompts import PromptRenderer
-
+from stlc_platform.core.contracts import AgentFeedbackArtifact
+from stlc_platform.pipeline.feedback_store import FeedbackStore
 
 # ── FeedbackStore Semantic Retrieval ────────────────────────────────────────
 
@@ -23,15 +20,19 @@ class TestFeedbackStoreSemanticSearch:
     def test_retrieve_without_chroma_falls_back_to_keyword(self, tmp_path):
         """No ChromaDB → plain keyword filter + least-applied ordering."""
         store = FeedbackStore(persist_path=tmp_path)
-        store.store(AgentFeedbackArtifact(
-            agent_id="test_generation",
-            feedback_type="correction",
-            message="Always include error message validation",
-        ))
-        store.store(AgentFeedbackArtifact(
-            agent_id="bdd_agent",
-            message="BDD unrelated",
-        ))
+        store.store(
+            AgentFeedbackArtifact(
+                agent_id="test_generation",
+                feedback_type="correction",
+                message="Always include error message validation",
+            )
+        )
+        store.store(
+            AgentFeedbackArtifact(
+                agent_id="bdd_agent",
+                message="BDD unrelated",
+            )
+        )
 
         results = store.retrieve(
             "test_generation",
@@ -45,10 +46,12 @@ class TestFeedbackStoreSemanticSearch:
         """Context is provided but no ChromaDB — still works via fallback."""
         store = FeedbackStore(persist_path=tmp_path)
         for i in range(5):
-            store.store(AgentFeedbackArtifact(
-                agent_id="test_generation",
-                message=f"Feedback {i}",
-            ))
+            store.store(
+                AgentFeedbackArtifact(
+                    agent_id="test_generation",
+                    message=f"Feedback {i}",
+                )
+            )
 
         results = store.retrieve(
             "test_generation",
@@ -60,10 +63,12 @@ class TestFeedbackStoreSemanticSearch:
     def test_retrieve_increments_applied_count(self, tmp_path):
         """applied_count is bumped on each retrieval."""
         store = FeedbackStore(persist_path=tmp_path)
-        store.store(AgentFeedbackArtifact(
-            agent_id="test_generation",
-            message="Test feedback",
-        ))
+        store.store(
+            AgentFeedbackArtifact(
+                agent_id="test_generation",
+                message="Test feedback",
+            )
+        )
 
         store.retrieve("test_generation")
         store.retrieve("test_generation")
@@ -96,10 +101,12 @@ class TestFeedbackStoreSemanticSearch:
         mock_client.get_or_create_collection.return_value = mock_collection
 
         store = FeedbackStore(persist_path=tmp_path, chroma_store=mock_store)
-        store.store(AgentFeedbackArtifact(
-            agent_id="test_generation",
-            message="Use data-testid for selectors",
-        ))
+        store.store(
+            AgentFeedbackArtifact(
+                agent_id="test_generation",
+                message="Use data-testid for selectors",
+            )
+        )
 
         # Verify upsert was called on the collection
         assert mock_collection.upsert.called
@@ -116,22 +123,28 @@ class TestFeedbackStoreSemanticSearch:
 
         # Set up query results — use fb_index for mapping
         mock_collection.query.return_value = {
-            "metadatas": [[{
-                "agent_id": "test_generation",
-                "feedback_type": "correction",
-                "created_at": "2026-01-01T00:00:00",
-                "fb_index": 0,
-            }]],
+            "metadatas": [
+                [
+                    {
+                        "agent_id": "test_generation",
+                        "feedback_type": "correction",
+                        "created_at": "2026-01-01T00:00:00",
+                        "fb_index": 0,
+                    }
+                ]
+            ],
             "distances": [[0.2]],  # 0.8 similarity — above threshold
         }
 
         store = FeedbackStore(persist_path=tmp_path, chroma_store=mock_store)
-        store.store(AgentFeedbackArtifact(
-            agent_id="test_generation",
-            message="Always validate error messages",
-        ))
+        store.store(
+            AgentFeedbackArtifact(
+                agent_id="test_generation",
+                message="Always validate error messages",
+            )
+        )
 
-        results = store.retrieve(
+        store.retrieve(
             "test_generation",
             context={"query": "error handling for login"},
             limit=3,
@@ -151,20 +164,26 @@ class TestFeedbackStoreSemanticSearch:
 
         # Low similarity (distance 0.9 = 0.1 similarity, below 0.3 threshold)
         mock_collection.query.return_value = {
-            "metadatas": [[{
-                "agent_id": "test_generation",
-                "feedback_type": "correction",
-                "created_at": "",
-                "fb_index": 0,
-            }]],
+            "metadatas": [
+                [
+                    {
+                        "agent_id": "test_generation",
+                        "feedback_type": "correction",
+                        "created_at": "",
+                        "fb_index": 0,
+                    }
+                ]
+            ],
             "distances": [[0.9]],
         }
 
         store = FeedbackStore(persist_path=tmp_path, chroma_store=mock_store)
-        store.store(AgentFeedbackArtifact(
-            agent_id="test_generation",
-            message="Unrelated feedback",
-        ))
+        store.store(
+            AgentFeedbackArtifact(
+                agent_id="test_generation",
+                message="Unrelated feedback",
+            )
+        )
 
         # Semantic search returns nothing relevant, fallback kicks in
         results = store.retrieve(
@@ -236,7 +255,12 @@ class TestFeedbackPromptInjection:
 
         prompt = renderer.render_user_prompt(
             requirement=MockReq(),
-            slot={"test_type": "positive", "target_ac": "User can log in", "title": "TC-Login", "ac_type": "general"},
+            slot={
+                "test_type": "positive",
+                "target_ac": "User can log in",
+                "title": "TC-Login",
+                "ac_type": "general",
+            },
             test_number=1,
             total=1,
             feedback_constraints=[fb],
@@ -258,7 +282,12 @@ class TestFeedbackPromptInjection:
 
         prompt = renderer.render_user_prompt(
             requirement=MockReq(),
-            slot={"test_type": "positive", "target_ac": "Valid login works", "title": "TC-1", "ac_type": "general"},
+            slot={
+                "test_type": "positive",
+                "target_ac": "Valid login works",
+                "title": "TC-1",
+                "ac_type": "general",
+            },
             test_number=1,
             total=1,
         )
@@ -299,24 +328,26 @@ class TestGeneratorFeedbackIntegration:
         agent = TestGenerationAgent()
         mock_llm = MagicMock()
         mock_llm.generate_test_case.return_value = {
-            "test_cases": [{
-                "title": "Test Login",
-                "description": "Test login flow",
-                "preconditions": "User is on login page",
-                "test_type": "positive",
-                "priority": "High",
-                "steps": [
-                    {"action": "Enter username", "expected_result": "Username entered"},
-                    {"action": "Enter password", "expected_result": "Password entered"},
-                    {"action": "Click login", "expected_result": "Logged in"},
-                ],
-                "expected_outcome": "User is logged in",
-                "given": "User is on login page",
-                "when": "User enters valid credentials",
-                "then": "User is logged in",
-                "tags": ["auth", "positive"],
-                "component": "Login Screen",
-            }]
+            "test_cases": [
+                {
+                    "title": "Test Login",
+                    "description": "Test login flow",
+                    "preconditions": "User is on login page",
+                    "test_type": "positive",
+                    "priority": "High",
+                    "steps": [
+                        {"action": "Enter username", "expected_result": "Username entered"},
+                        {"action": "Enter password", "expected_result": "Password entered"},
+                        {"action": "Click login", "expected_result": "Logged in"},
+                    ],
+                    "expected_outcome": "User is logged in",
+                    "given": "User is on login page",
+                    "when": "User enters valid credentials",
+                    "then": "User is logged in",
+                    "tags": ["auth", "positive"],
+                    "component": "Login Screen",
+                }
+            ]
         }
 
         mock_feedback = MagicMock()
@@ -366,12 +397,15 @@ class TestArtifactResolverFeedbackStore:
         from stlc_platform.pipeline.artifact_store import ArtifactResolver, ArtifactStore
 
         store = ArtifactStore(run_dir=tmp_path)
-        resolver = ArtifactResolver(store, config={
-            "chromadb": {
-                "persist_directory": str(tmp_path / "chroma"),
-                "collection_name": "test",
-            }
-        })
+        resolver = ArtifactResolver(
+            store,
+            config={
+                "chromadb": {
+                    "persist_directory": str(tmp_path / "chroma"),
+                    "collection_name": "test",
+                }
+            },
+        )
 
         # Should still create a FeedbackStore even if ChromaDB fails
         fb_store = resolver.resolve_single("$runtime.feedback_store")
@@ -391,25 +425,39 @@ class TestAutoStoreExamples:
 
         mock_llm = MagicMock()
         mock_llm.generate_test_case.return_value = {
-            "test_cases": [{
-                "title": "Test Login",
-                "description": "Verifies user can log in with valid email and password to access the dashboard",
-                "preconditions": "User has registered account with verified email address",
-                "test_type": "positive",
-                "priority": "High",
-                "steps": [
-                    {"action": "Navigate to login page", "expected_result": "Login form displayed with email and password fields"},
-                    {"action": "Enter valid email in email field", "expected_result": "Email entered successfully"},
-                    {"action": "Enter valid password in password field", "expected_result": "Password masked and entered"},
-                    {"action": "Click the Login button", "expected_result": "System authenticates and redirects to dashboard"},
-                ],
-                "expected_outcome": "User is logged in and sees the dashboard",
-                "given": "User has a verified account and is on the login page",
-                "when": "User enters valid email and password and clicks Login",
-                "then": "User is authenticated and redirected to the dashboard",
-                "tags": ["auth", "positive", "req-001"],
-                "component": "Login Screen",
-            }]
+            "test_cases": [
+                {
+                    "title": "Test Login",
+                    "description": "Verifies user can log in with valid email and password to access the dashboard",
+                    "preconditions": "User has registered account with verified email address",
+                    "test_type": "positive",
+                    "priority": "High",
+                    "steps": [
+                        {
+                            "action": "Navigate to login page",
+                            "expected_result": "Login form displayed with email and password fields",
+                        },
+                        {
+                            "action": "Enter valid email in email field",
+                            "expected_result": "Email entered successfully",
+                        },
+                        {
+                            "action": "Enter valid password in password field",
+                            "expected_result": "Password masked and entered",
+                        },
+                        {
+                            "action": "Click the Login button",
+                            "expected_result": "System authenticates and redirects to dashboard",
+                        },
+                    ],
+                    "expected_outcome": "User is logged in and sees the dashboard",
+                    "given": "User has a verified account and is on the login page",
+                    "when": "User enters valid email and password and clicks Login",
+                    "then": "User is authenticated and redirected to the dashboard",
+                    "tags": ["auth", "positive", "req-001"],
+                    "component": "Login Screen",
+                }
+            ]
         }
 
         mock_vector = MagicMock()

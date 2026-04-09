@@ -8,21 +8,22 @@ import time
 from unittest.mock import MagicMock
 
 import pytest
-
-from stlc_platform.core.base_agent import AgentResult, AgentCapabilities, ValidationResult
+from stlc_platform.core.base_agent import AgentCapabilities, AgentResult, ValidationResult
 from stlc_platform.pipeline.agent_registry import AgentRegistry
 from stlc_platform.pipeline.dag import PipelineDAG, StageNode
 from stlc_platform.pipeline.orchestrator import PipelineOrchestrator, StageResult
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_mock_agent(success=True, artifacts=None, errors=None, delay=0):
     """Create a mock agent that returns a canned result."""
     agent = MagicMock()
     agent.validate_input.return_value = ValidationResult(valid=True)
     agent.get_capabilities.return_value = AgentCapabilities(
-        agent_id="mock", agent_version="1.0", description="Mock agent",
+        agent_id="mock",
+        agent_version="1.0",
+        description="Mock agent",
     )
 
     def _execute(inputs, config):
@@ -51,12 +52,23 @@ def _linear_dag():
     """A -> B -> C linear pipeline."""
     return PipelineDAG(
         stages=[
-            StageNode(stage_id="a", agent_id="agent_a", depends_on=[],
-                      input_map={}, output_keys=["out_a"]),
-            StageNode(stage_id="b", agent_id="agent_b", depends_on=["a"],
-                      input_map={"x": "$a.out_a"}, output_keys=["out_b"]),
-            StageNode(stage_id="c", agent_id="agent_c", depends_on=["b"],
-                      input_map={"y": "$b.out_b"}, output_keys=["out_c"]),
+            StageNode(
+                stage_id="a", agent_id="agent_a", depends_on=[], input_map={}, output_keys=["out_a"]
+            ),
+            StageNode(
+                stage_id="b",
+                agent_id="agent_b",
+                depends_on=["a"],
+                input_map={"x": "$a.out_a"},
+                output_keys=["out_b"],
+            ),
+            StageNode(
+                stage_id="c",
+                agent_id="agent_c",
+                depends_on=["b"],
+                input_map={"y": "$b.out_b"},
+                output_keys=["out_c"],
+            ),
         ],
         pipeline_name="linear_test",
     )
@@ -66,18 +78,26 @@ def _parallel_dag():
     """A and B run in parallel, C depends on both."""
     return PipelineDAG(
         stages=[
-            StageNode(stage_id="a", agent_id="agent_a", depends_on=[],
-                      input_map={}, output_keys=["out_a"]),
-            StageNode(stage_id="b", agent_id="agent_b", depends_on=[],
-                      input_map={}, output_keys=["out_b"]),
-            StageNode(stage_id="c", agent_id="agent_c", depends_on=["a", "b"],
-                      input_map={}, output_keys=["out_c"]),
+            StageNode(
+                stage_id="a", agent_id="agent_a", depends_on=[], input_map={}, output_keys=["out_a"]
+            ),
+            StageNode(
+                stage_id="b", agent_id="agent_b", depends_on=[], input_map={}, output_keys=["out_b"]
+            ),
+            StageNode(
+                stage_id="c",
+                agent_id="agent_c",
+                depends_on=["a", "b"],
+                input_map={},
+                output_keys=["out_c"],
+            ),
         ],
         pipeline_name="parallel_test",
     )
 
 
 # ── Tests ────────────────────────────────────────────────────────────────────
+
 
 class TestStageResult:
     def test_defaults(self):
@@ -106,11 +126,17 @@ class TestLinearPipeline:
         mock_a = _make_mock_agent(artifacts={"out_a": "data_a"})
         mock_b = _make_mock_agent(artifacts={"out_b": "data_b"})
         mock_c = _make_mock_agent(artifacts={"out_c": "data_c"})
-        registry = _make_registry({
-            "agent_a": mock_a, "agent_b": mock_b, "agent_c": mock_c,
-        })
+        registry = _make_registry(
+            {
+                "agent_a": mock_a,
+                "agent_b": mock_b,
+                "agent_c": mock_c,
+            }
+        )
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
         )
         result = orch.run()
         assert result.status == "completed"
@@ -123,11 +149,17 @@ class TestLinearPipeline:
         mock_a = _make_mock_agent(artifacts={"out_a": "data_a"})
         mock_b = _make_mock_agent(success=False, errors=["broken"])
         mock_c = _make_mock_agent()
-        registry = _make_registry({
-            "agent_a": mock_a, "agent_b": mock_b, "agent_c": mock_c,
-        })
+        registry = _make_registry(
+            {
+                "agent_a": mock_a,
+                "agent_b": mock_b,
+                "agent_c": mock_c,
+            }
+        )
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
         )
         result = orch.run()
         assert result.status == "failed"
@@ -140,23 +172,45 @@ class TestLinearPipeline:
         """If a failed stage is optional, downstream should still run."""
         dag = PipelineDAG(
             stages=[
-                StageNode(stage_id="a", agent_id="agent_a", depends_on=[],
-                          input_map={}, output_keys=["out_a"]),
-                StageNode(stage_id="b", agent_id="agent_b", depends_on=["a"],
-                          input_map={}, output_keys=["out_b"], optional=True),
-                StageNode(stage_id="c", agent_id="agent_c", depends_on=["b"],
-                          input_map={}, output_keys=["out_c"]),
+                StageNode(
+                    stage_id="a",
+                    agent_id="agent_a",
+                    depends_on=[],
+                    input_map={},
+                    output_keys=["out_a"],
+                ),
+                StageNode(
+                    stage_id="b",
+                    agent_id="agent_b",
+                    depends_on=["a"],
+                    input_map={},
+                    output_keys=["out_b"],
+                    optional=True,
+                ),
+                StageNode(
+                    stage_id="c",
+                    agent_id="agent_c",
+                    depends_on=["b"],
+                    input_map={},
+                    output_keys=["out_c"],
+                ),
             ],
             pipeline_name="optional_test",
         )
         mock_a = _make_mock_agent(artifacts={"out_a": "data_a"})
         mock_b = _make_mock_agent(success=False, errors=["optional fail"])
         mock_c = _make_mock_agent(artifacts={"out_c": "data_c"})
-        registry = _make_registry({
-            "agent_a": mock_a, "agent_b": mock_b, "agent_c": mock_c,
-        })
+        registry = _make_registry(
+            {
+                "agent_a": mock_a,
+                "agent_b": mock_b,
+                "agent_c": mock_c,
+            }
+        )
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
         )
         result = orch.run()
         # C should NOT be skipped since B is optional
@@ -169,11 +223,17 @@ class TestParallelExecution:
         mock_a = _make_mock_agent(artifacts={"out_a": "a"})
         mock_b = _make_mock_agent(artifacts={"out_b": "b"})
         mock_c = _make_mock_agent(artifacts={"out_c": "c"})
-        registry = _make_registry({
-            "agent_a": mock_a, "agent_b": mock_b, "agent_c": mock_c,
-        })
+        registry = _make_registry(
+            {
+                "agent_a": mock_a,
+                "agent_b": mock_b,
+                "agent_c": mock_c,
+            }
+        )
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
         )
         result = orch.run()
         assert result.status == "completed"
@@ -185,11 +245,17 @@ class TestParallelExecution:
         mock_a = _make_mock_agent(artifacts={"out_a": "a"}, delay=0.2)
         mock_b = _make_mock_agent(artifacts={"out_b": "b"}, delay=0.2)
         mock_c = _make_mock_agent(artifacts={"out_c": "c"})
-        registry = _make_registry({
-            "agent_a": mock_a, "agent_b": mock_b, "agent_c": mock_c,
-        })
+        registry = _make_registry(
+            {
+                "agent_a": mock_a,
+                "agent_b": mock_b,
+                "agent_c": mock_c,
+            }
+        )
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
             max_workers=4,
         )
         result = orch.run()
@@ -202,8 +268,14 @@ class TestRetryLogic:
         """Stage with retry_count=1 should retry once after failure."""
         dag = PipelineDAG(
             stages=[
-                StageNode(stage_id="a", agent_id="agent_a", depends_on=[],
-                          input_map={}, output_keys=["out"], retry_count=1),
+                StageNode(
+                    stage_id="a",
+                    agent_id="agent_a",
+                    depends_on=[],
+                    input_map={},
+                    output_keys=["out"],
+                    retry_count=1,
+                ),
             ],
             pipeline_name="retry_test",
         )
@@ -213,19 +285,23 @@ class TestRetryLogic:
         def _execute(inputs, config):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return AgentResult(success=False, artifacts={}, metadata={},
-                                   errors=["first try fail"])
-            return AgentResult(success=True, artifacts={"out": "ok"},
-                               metadata={})
+                return AgentResult(
+                    success=False, artifacts={}, metadata={}, errors=["first try fail"]
+                )
+            return AgentResult(success=True, artifacts={"out": "ok"}, metadata={})
 
         mock_agent = MagicMock()
         mock_agent.execute.side_effect = _execute
         mock_agent.get_capabilities.return_value = AgentCapabilities(
-            agent_id="agent_a", agent_version="1.0", description="test",
+            agent_id="agent_a",
+            agent_version="1.0",
+            description="test",
         )
         registry = _make_registry({"agent_a": mock_agent})
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
         )
         result = orch.run()
         assert result.status == "completed"
@@ -235,15 +311,23 @@ class TestRetryLogic:
         """If retry also fails, stage remains failed."""
         dag = PipelineDAG(
             stages=[
-                StageNode(stage_id="a", agent_id="agent_a", depends_on=[],
-                          input_map={}, output_keys=["out"], retry_count=1),
+                StageNode(
+                    stage_id="a",
+                    agent_id="agent_a",
+                    depends_on=[],
+                    input_map={},
+                    output_keys=["out"],
+                    retry_count=1,
+                ),
             ],
             pipeline_name="retry_fail_test",
         )
         mock_agent = _make_mock_agent(success=False, errors=["always fail"])
         registry = _make_registry({"agent_a": mock_agent})
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
         )
         result = orch.run()
         assert result.status == "failed"
@@ -254,8 +338,9 @@ class TestCallbacks:
     def test_on_stage_start_called(self, tmp_path):
         dag = PipelineDAG(
             stages=[
-                StageNode(stage_id="a", agent_id="agent_a", depends_on=[],
-                          input_map={}, output_keys=[]),
+                StageNode(
+                    stage_id="a", agent_id="agent_a", depends_on=[], input_map={}, output_keys=[]
+                ),
             ],
             pipeline_name="cb_test",
         )
@@ -263,7 +348,9 @@ class TestCallbacks:
         registry = _make_registry({"agent_a": mock_agent})
         started = []
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
             on_stage_start=lambda sid: started.append(sid),
         )
         orch.run()
@@ -272,8 +359,9 @@ class TestCallbacks:
     def test_on_stage_complete_called(self, tmp_path):
         dag = PipelineDAG(
             stages=[
-                StageNode(stage_id="a", agent_id="agent_a", depends_on=[],
-                          input_map={}, output_keys=[]),
+                StageNode(
+                    stage_id="a", agent_id="agent_a", depends_on=[], input_map={}, output_keys=[]
+                ),
             ],
             pipeline_name="cb_test",
         )
@@ -281,7 +369,9 @@ class TestCallbacks:
         registry = _make_registry({"agent_a": mock_agent})
         completed = []
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
             on_stage_complete=lambda sr: completed.append(sr),
         )
         orch.run()
@@ -295,7 +385,9 @@ class TestRunSingleStage:
         mock_a = _make_mock_agent(artifacts={"out_a": "hello"})
         registry = _make_registry({"agent_a": mock_a})
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
         )
         sr = orch.run_single_stage("a", {})
         assert sr.success is True
@@ -306,11 +398,15 @@ class TestRunSingleStage:
         mock_a = MagicMock()
         mock_a.execute.side_effect = RuntimeError("kaboom")
         mock_a.get_capabilities.return_value = AgentCapabilities(
-            agent_id="agent_a", agent_version="1.0", description="test",
+            agent_id="agent_a",
+            agent_version="1.0",
+            description="test",
         )
         registry = _make_registry({"agent_a": mock_a})
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
         )
         sr = orch.run_single_stage("a", {})
         assert sr.success is False
@@ -321,30 +417,36 @@ class TestRunMetadata:
     def test_run_id_is_set(self, tmp_path):
         dag = PipelineDAG(
             stages=[
-                StageNode(stage_id="a", agent_id="agent_a", depends_on=[],
-                          input_map={}, output_keys=[]),
+                StageNode(
+                    stage_id="a", agent_id="agent_a", depends_on=[], input_map={}, output_keys=[]
+                ),
             ],
             pipeline_name="meta_test",
         )
         mock_agent = _make_mock_agent()
         registry = _make_registry({"agent_a": mock_agent})
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
         )
         assert len(orch.run_id) == 8
 
     def test_result_has_timing(self, tmp_path):
         dag = PipelineDAG(
             stages=[
-                StageNode(stage_id="a", agent_id="agent_a", depends_on=[],
-                          input_map={}, output_keys=[]),
+                StageNode(
+                    stage_id="a", agent_id="agent_a", depends_on=[], input_map={}, output_keys=[]
+                ),
             ],
             pipeline_name="timing_test",
         )
         mock_agent = _make_mock_agent()
         registry = _make_registry({"agent_a": mock_agent})
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
         )
         result = orch.run()
         assert result.total_duration_seconds >= 0
@@ -358,19 +460,24 @@ class TestExceptionHandling:
         """If agent.execute raises, stage should fail gracefully."""
         dag = PipelineDAG(
             stages=[
-                StageNode(stage_id="a", agent_id="agent_a", depends_on=[],
-                          input_map={}, output_keys=[]),
+                StageNode(
+                    stage_id="a", agent_id="agent_a", depends_on=[], input_map={}, output_keys=[]
+                ),
             ],
             pipeline_name="exception_test",
         )
         mock_agent = MagicMock()
         mock_agent.execute.side_effect = ValueError("bad input")
         mock_agent.get_capabilities.return_value = AgentCapabilities(
-            agent_id="agent_a", agent_version="1.0", description="test",
+            agent_id="agent_a",
+            agent_version="1.0",
+            description="test",
         )
         registry = _make_registry({"agent_a": mock_agent})
         orch = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path / "run",
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path / "run",
         )
         result = orch.run()
         assert result.status == "failed"

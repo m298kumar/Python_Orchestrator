@@ -26,15 +26,17 @@ def _make_tc(tc_id: str = "TC-0001", req_id: str = "REQ-001") -> TestCaseArtifac
 def _make_report(n_items: int = 2) -> DiscrepancyReportArtifact:
     items = []
     for i in range(n_items):
-        items.append(DiscrepancyArtifact(
-            discrepancy_type="missing_element",
-            requirement_id=f"REQ-{i + 1:03d}",
-            expected=f"Submit button #{i + 1}",
-            actual="Element not found",
-            severity="warning",
-            page_url=f"https://app.test/page{i + 1}",
-            details=f"Expected submit button #{i + 1} on page{i + 1}",
-        ))
+        items.append(
+            DiscrepancyArtifact(
+                discrepancy_type="missing_element",
+                requirement_id=f"REQ-{i + 1:03d}",
+                expected=f"Submit button #{i + 1}",
+                actual="Element not found",
+                severity="warning",
+                page_url=f"https://app.test/page{i + 1}",
+                details=f"Expected submit button #{i + 1} on page{i + 1}",
+            )
+        )
     return DiscrepancyReportArtifact(
         total_discrepancies=n_items,
         items=items,
@@ -42,7 +44,6 @@ def _make_report(n_items: int = 2) -> DiscrepancyReportArtifact:
 
 
 class TestValidateInput:
-
     def test_validate_input_with_test_cases(self):
         agent = EnrichmentAgent()
         result = agent.validate_input({"test_cases": [_make_tc()]})
@@ -56,7 +57,6 @@ class TestValidateInput:
 
 
 class TestExecute:
-
     def test_passthrough_without_discrepancies(self):
         agent = EnrichmentAgent()
         tcs = [_make_tc("TC-001"), _make_tc("TC-002")]
@@ -115,7 +115,6 @@ class TestExecute:
 
 
 class TestGetCapabilities:
-
     def test_get_capabilities(self):
         agent = EnrichmentAgent()
         caps = agent.get_capabilities()

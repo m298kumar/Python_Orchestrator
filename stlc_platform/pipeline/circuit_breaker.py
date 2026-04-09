@@ -115,9 +115,7 @@ class CircuitBreaker:
                 elapsed = time.monotonic() - circuit.last_failure_time
                 if elapsed >= self._reset_timeout:
                     circuit.state = CircuitState.HALF_OPEN
-                    logger.info(
-                        "Circuit HALF-OPEN for '%s' (%.1fs elapsed)", stage_id, elapsed
-                    )
+                    logger.info("Circuit HALF-OPEN for '%s' (%.1fs elapsed)", stage_id, elapsed)
                     return False
                 return True
 
@@ -148,10 +146,7 @@ class CircuitBreaker:
                 f"{fail_count} failures. "
                 f"Most common: {most_common_type} ({most_common_count}x)"
             )
-        return (
-            f"Stage '{stage_id}' circuit {state_val}: "
-            f"{fail_count} failures"
-        )
+        return f"Stage '{stage_id}' circuit {state_val}: {fail_count} failures"
 
     @property
     def all_circuits(self) -> Dict[str, StageCircuit]:

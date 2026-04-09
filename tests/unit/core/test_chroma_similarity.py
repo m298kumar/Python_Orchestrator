@@ -72,11 +72,13 @@ class TestRetrieveExamplesSimilarityThreshold:
         store._coll_tcs.count.return_value = 3
         store._coll_tcs.query.return_value = {
             "documents": [["doc1", "doc2", "doc3"]],
-            "metadatas": [[
-                _tc_meta("TC High"),
-                _tc_meta("TC Medium"),
-                _tc_meta("TC Exact"),
-            ]],
+            "metadatas": [
+                [
+                    _tc_meta("TC High"),
+                    _tc_meta("TC Medium"),
+                    _tc_meta("TC Exact"),
+                ]
+            ],
             "distances": [[0.1, 0.3, 0.5]],  # similarities: 0.9, 0.7, 0.5
         }
         results = store.retrieve_examples("login", "functional", "positive", min_similarity=0.5)
@@ -90,15 +92,20 @@ class TestRetrieveExamplesSimilarityThreshold:
         store._coll_tcs.count.return_value = 3
         store._coll_tcs.query.return_value = {
             "documents": [["doc1", "doc2", "doc3"]],
-            "metadatas": [[
-                _tc_meta("TC1"),
-                _tc_meta("TC2"),
-                _tc_meta("TC3"),
-            ]],
+            "metadatas": [
+                [
+                    _tc_meta("TC1"),
+                    _tc_meta("TC2"),
+                    _tc_meta("TC3"),
+                ]
+            ],
             "distances": [[0.1, 0.7, 0.99]],  # similarities: 0.9, 0.3, 0.01
         }
         results = store.retrieve_examples(
-            "login", "functional", "positive", min_similarity=0.0,
+            "login",
+            "functional",
+            "positive",
+            min_similarity=0.0,
         )
         assert len(results) == 3
 
@@ -111,7 +118,10 @@ class TestRetrieveExamplesSimilarityThreshold:
             "distances": [[0.01, 0.2]],  # similarities: 0.99, 0.8
         }
         results = store.retrieve_examples(
-            "login", "functional", "positive", min_similarity=1.0,
+            "login",
+            "functional",
+            "positive",
+            min_similarity=1.0,
         )
         assert len(results) == 0
 
@@ -143,11 +153,13 @@ class TestSearchSimilarThreshold:
         store._coll_reqs.count.return_value = 3
         store._coll_reqs.query.return_value = {
             "documents": [["doc1", "doc2", "doc3"]],
-            "metadatas": [[
-                {"req_id": "REQ-001"},
-                {"req_id": "REQ-002"},
-                {"req_id": "REQ-003"},
-            ]],
+            "metadatas": [
+                [
+                    {"req_id": "REQ-001"},
+                    {"req_id": "REQ-002"},
+                    {"req_id": "REQ-003"},
+                ]
+            ],
             "distances": [[0.1, 0.5, 0.85]],  # similarities: 0.9, 0.5, 0.15
         }
         results = store.search_similar("login", min_similarity=0.4)

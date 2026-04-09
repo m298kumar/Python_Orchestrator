@@ -5,7 +5,6 @@ Unit tests for SiteModelBuilder.
 from __future__ import annotations
 
 import pytest
-
 from stlc_platform.agents.crawler_agent.site_model_builder import SiteModelBuilder
 from stlc_platform.core.contracts import CrawledPageArtifact, PageElementArtifact
 
@@ -22,7 +21,7 @@ def _make_page(
 ) -> CrawledPageArtifact:
     """Helper to build a CrawledPageArtifact with link elements."""
     elements = []
-    for href in (link_hrefs or []):
+    for href in link_hrefs or []:
         elements.append(
             PageElementArtifact(
                 element_type="link",

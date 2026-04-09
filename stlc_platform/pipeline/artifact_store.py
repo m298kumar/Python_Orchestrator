@@ -103,9 +103,7 @@ class ArtifactStore:
             manifest["stages"][stage_id] = str(stage_file.name)
 
         manifest_file = self._run_dir / "manifest.json"
-        manifest_file.write_text(
-            json.dumps(manifest, indent=2), encoding="utf-8"
-        )
+        manifest_file.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
         # Export human-readable files (.feature, .csv)
         self._export_files()
@@ -116,67 +114,78 @@ class ArtifactStore:
             return
         logger = logging.getLogger(__name__)
 
-        # Export .feature files from BDD stage
-        for stage_id in ("generate_bdd_code",):
-            if stage_id not in self._artifacts:
-                continue
-            features = self._artifacts[stage_id].get("feature_files", [])
-            if not features:
-                continue
-            features_dir = self._run_dir / "features"
-            features_dir.mkdir(exist_ok=True)
-            for i, feat in enumerate(features):
-                if isinstance(feat, BaseModel):
-                    feat = feat.model_dump()
-                if isinstance(feat, dict):
-                    filename = feat.get("filename", f"feature_{i}.feature")
-                    content = feat.get("content", "")
-                elif isinstance(feat, str):
-                    # Already serialized as plain string content
-                    filename = f"feature_{i}.feature"
-                    content = feat
-                else:
-                    continue
-                if content:
-                    (features_dir / filename).write_text(content, encoding="utf-8")
-            logger.info("Exported %d .feature files to %s", len(features), features_dir)
+        self._export_feature_files(logger)
+        self._export_test_cases_csv(logger)
 
-        # Export test_cases.csv from requirements stage
-        for stage_id in ("parse_requirements",):
-            if stage_id not in self._artifacts:
-                continue
-            test_cases = self._artifacts[stage_id].get("test_cases", [])
-            if not test_cases:
-                continue
-            csv_path = self._run_dir / "test_cases.csv"
-            fieldnames = [
-                "tc_id", "req_id", "title", "description", "test_type",
-                "priority", "category", "component", "preconditions",
-                "steps", "expected_outcome", "given", "when", "then",
-                "tags", "test_level", "estimated_duration",
-            ]
-            with open(csv_path, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-                writer.writeheader()
-                for tc in test_cases:
-                    if isinstance(tc, BaseModel):
-                        tc = tc.model_dump()
-                    row = dict(tc)
-                    # Flatten steps to readable text
-                    steps = row.get("steps", [])
-                    if isinstance(steps, list):
-                        step_lines = []
-                        for i, s in enumerate(steps, 1):
-                            act = s.get("action", "") if isinstance(s, dict) else str(s)
-                            exp = s.get("expected_result", "") if isinstance(s, dict) else ""
-                            step_lines.append(f"{i}. {act} -> {exp}")
-                        row["steps"] = "\n".join(step_lines)
-                    # Flatten tags
-                    tags = row.get("tags", [])
-                    if isinstance(tags, list):
-                        row["tags"] = ", ".join(str(t) for t in tags)
-                    writer.writerow(row)
-            logger.info("Exported %d test cases to %s", len(test_cases), csv_path)
+    def _export_feature_files(self, logger) -> None:
+        features = self._artifacts.get("generate_bdd_code", {}).get("feature_files", [])
+        if not features:
+            return
+        features_dir = self._run_dir / "features"
+        features_dir.mkdir(exist_ok=True)
+        for i, feat in enumerate(features):
+            filename, content = self._extract_feature_content(feat, i)
+            if content:
+                (features_dir / filename).write_text(content, encoding="utf-8")
+        logger.info("Exported %d .feature files to %s", len(features), features_dir)
+
+    def _extract_feature_content(self, feat, index: int) -> tuple[str, str]:
+        if isinstance(feat, BaseModel):
+            feat = feat.model_dump()
+        if isinstance(feat, dict):
+            return feat.get("filename", f"feature_{index}.feature"), feat.get("content", "")
+        if isinstance(feat, str):
+            return f"feature_{index}.feature", feat
+        return "", ""
+
+    def _export_test_cases_csv(self, logger) -> None:
+        test_cases = self._artifacts.get("parse_requirements", {}).get("test_cases", [])
+        if not test_cases:
+            return
+        csv_path = self._run_dir / "test_cases.csv"
+        fieldnames = [
+            "tc_id",
+            "req_id",
+            "title",
+            "description",
+            "test_type",
+            "priority",
+            "category",
+            "component",
+            "preconditions",
+            "steps",
+            "expected_outcome",
+            "given",
+            "when",
+            "then",
+            "tags",
+            "test_level",
+            "estimated_duration",
+        ]
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            for tc in test_cases:
+                if isinstance(tc, BaseModel):
+                    tc = tc.model_dump()
+                row = dict(tc)
+                row["steps"] = self._flatten_steps(row.get("steps", []))
+                tags = row.get("tags", [])
+                if isinstance(tags, list):
+                    row["tags"] = ", ".join(str(t) for t in tags)
+                writer.writerow(row)
+        logger.info("Exported %d test cases to %s", len(test_cases), csv_path)
+
+    @staticmethod
+    def _flatten_steps(steps) -> str:
+        if not isinstance(steps, list):
+            return str(steps)
+        step_lines = []
+        for i, s in enumerate(steps, 1):
+            act = s.get("action", "") if isinstance(s, dict) else str(s)
+            exp = s.get("expected_result", "") if isinstance(s, dict) else ""
+            step_lines.append(f"{i}. {act} -> {exp}")
+        return "\n".join(step_lines)
 
     def load_from_disk(self, up_to_stage: Optional[str] = None) -> List[str]:
         """Load persisted artifacts from disk. Returns list of loaded stage_ids."""
@@ -213,10 +222,7 @@ class ArtifactStore:
             if isinstance(value, BaseModel):
                 result[key] = value.model_dump()
             elif isinstance(value, list):
-                result[key] = [
-                    v.model_dump() if isinstance(v, BaseModel) else v
-                    for v in value
-                ]
+                result[key] = [v.model_dump() if isinstance(v, BaseModel) else v for v in value]
             else:
                 try:
                     json.dumps(value, default=str)
@@ -244,31 +250,52 @@ class ArtifactResolver:
         """Resolve a single reference string.
 
         Patterns:
-            $stage_id.artifact_key  -> store.get(stage_id, artifact_key)
-            $config.dotted.path     -> nested config lookup
-            $runtime.llm_client     -> auto-create LLM client from config
-            literal_value           -> pass through
+            $stage_id.artifact_key   -> store.get(stage_id, artifact_key); raises KeyError if missing
+            $?stage_id.artifact_key  -> returns None if stage was skipped/missing (optional input)
+            $config.dotted.path      -> nested config lookup
+            $runtime.llm_client      -> auto-create LLM client from config
+            literal_value            -> pass through
         """
         if not isinstance(ref, str) or not ref.startswith("$"):
             return ref
 
         ref_body = ref[1:]  # strip leading $
 
+        # Optional reference: $?stage_id.artifact_key → None if stage missing
+        optional = ref_body.startswith("?")
+        if optional:
+            ref_body = ref_body[1:]
+
         if ref_body.startswith("config."):
-            config_path = ref_body[len("config."):]
-            return self._resolve_config_path(config_path)
+            return self._resolve_config_ref(ref_body[len("config."):], optional)
 
         if ref_body.startswith("runtime."):
-            runtime_key = ref_body[len("runtime."):]
-            return self._resolve_runtime(runtime_key)
+            return self._resolve_runtime(ref_body[len("runtime."):])
 
-        # $stage_id.artifact_key
+        return self._resolve_stage_ref(ref, ref_body, optional)
+
+    def _resolve_config_ref(self, config_path: str, optional: bool) -> Any:
+        """Resolve a $[?]config.dotted.path reference."""
+        if optional:
+            try:
+                return self._resolve_config_path(config_path)
+            except KeyError:
+                return None
+        return self._resolve_config_path(config_path)
+
+    def _resolve_stage_ref(self, original_ref: str, ref_body: str, optional: bool) -> Any:
+        """Resolve a $[?]stage_id.artifact_key reference."""
         parts = ref_body.split(".", 1)
         if len(parts) != 2:
             raise ValueError(
-                f"Invalid reference '{ref}'. Expected '$stage_id.key' or '$config.path'."
+                f"Invalid reference '{original_ref}'. Expected '$stage_id.key' or '$config.path'."
             )
         stage_id, artifact_key = parts
+        if optional:
+            try:
+                return self._store.get(stage_id, artifact_key)
+            except KeyError:
+                return None
         return self._store.get(stage_id, artifact_key)
 
     def _resolve_runtime(self, key: str) -> Any:
@@ -289,6 +316,7 @@ class ArtifactResolver:
         chroma_store = None
         try:
             from stlc_platform.core.storage.chroma_store import RequirementsVectorStore
+
             chroma_cfg = self._config.get("chromadb", {})
             if chroma_cfg:
                 chroma_store = RequirementsVectorStore(chromadb_config=chroma_cfg)
@@ -312,6 +340,7 @@ class ArtifactResolver:
 
         if provider == "ollama":
             from stlc_platform.core.llm.ollama_client import OllamaClient
+
             return OllamaClient(
                 model=model or "qwen2.5:7b-instruct",
                 base_url=base_url or "http://localhost:11434",
@@ -320,6 +349,7 @@ class ArtifactResolver:
             import os
 
             from stlc_platform.core.llm.openai_client import OpenAIClient
+
             return OpenAIClient(
                 model=model or "gpt-4o-mini",
                 api_key=api_key or os.environ.get("OPENAI_API_KEY", ""),
@@ -328,14 +358,14 @@ class ArtifactResolver:
             import os
 
             from stlc_platform.core.llm.anthropic_client import AnthropicClient
+
             return AnthropicClient(
                 model=model or "claude-sonnet-4-20250514",
                 api_key=api_key or os.environ.get("ANTHROPIC_API_KEY", ""),
             )
         else:
             raise ValueError(
-                f"Unsupported LLM provider: '{provider}'. "
-                "Supported: ollama, openai, anthropic"
+                f"Unsupported LLM provider: '{provider}'. Supported: ollama, openai, anthropic"
             )
 
     def _resolve_config_path(self, dotted_path: str) -> Any:
@@ -346,8 +376,5 @@ class ArtifactResolver:
             if isinstance(current, dict) and part in current:
                 current = current[part]
             else:
-                raise KeyError(
-                    f"Config path '{dotted_path}' not found "
-                    f"(failed at '{part}')."
-                )
+                raise KeyError(f"Config path '{dotted_path}' not found (failed at '{part}').")
         return current

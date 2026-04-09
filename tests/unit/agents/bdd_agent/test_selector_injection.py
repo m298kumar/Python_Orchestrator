@@ -15,6 +15,7 @@ from stlc_platform.core.contracts import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_site_model(elements=None):
     """Build a minimal SiteModelArtifact with a single page."""
     page = CrawledPageArtifact(
@@ -54,15 +55,9 @@ def _make_tc(**overrides) -> TestCaseArtifact:
 def _make_steps():
     """Steps whose text overlaps with typical element names."""
     return [
-        ParameterizedStep(
-            keyword="given", pattern="a user on the login page", params=[]
-        ),
-        ParameterizedStep(
-            keyword="when", pattern="the user clicks the login button", params=[]
-        ),
-        ParameterizedStep(
-            keyword="then", pattern="the dashboard is displayed", params=[]
-        ),
+        ParameterizedStep(keyword="given", pattern="a user on the login page", params=[]),
+        ParameterizedStep(keyword="when", pattern="the user clicks the login button", params=[]),
+        ParameterizedStep(keyword="then", pattern="the dashboard is displayed", params=[]),
     ]
 
 
@@ -120,16 +115,12 @@ class TestFuzzyMatchSelector:
     def test_exact_selector_match(self):
         """Exact lowercased key match returns the selector."""
         selector_map = {"login button": "#login-btn"}
-        result = StepDefinitionGenerator._fuzzy_match_selector(
-            "login button", selector_map
-        )
+        result = StepDefinitionGenerator._fuzzy_match_selector("login button", selector_map)
         assert result == "#login-btn"
 
     def test_exact_match_case_insensitive(self):
         selector_map = {"login button": "#login-btn"}
-        result = StepDefinitionGenerator._fuzzy_match_selector(
-            "Login Button", selector_map
-        )
+        result = StepDefinitionGenerator._fuzzy_match_selector("Login Button", selector_map)
         assert result == "#login-btn"
 
     def test_fuzzy_selector_match_substring(self):
@@ -143,9 +134,7 @@ class TestFuzzyMatchSelector:
     def test_fuzzy_selector_match_word_overlap(self):
         """Word overlap > 50% should match."""
         selector_map = {"submit order button": "button.submit-order"}
-        result = StepDefinitionGenerator._fuzzy_match_selector(
-            "submit order", selector_map
-        )
+        result = StepDefinitionGenerator._fuzzy_match_selector("submit order", selector_map)
         # "submit" and "order" overlap with "submit", "order", "button" -> 2/3 > 50%
         assert result == "button.submit-order"
 
@@ -158,15 +147,11 @@ class TestFuzzyMatchSelector:
         assert result is None
 
     def test_empty_selector_map_returns_none(self):
-        result = StepDefinitionGenerator._fuzzy_match_selector(
-            "some step", {}
-        )
+        result = StepDefinitionGenerator._fuzzy_match_selector("some step", {})
         assert result is None
 
     def test_empty_element_name_returns_none(self):
-        result = StepDefinitionGenerator._fuzzy_match_selector(
-            "", {"login": "#btn"}
-        )
+        result = StepDefinitionGenerator._fuzzy_match_selector("", {"login": "#btn"})
         assert result is None
 
 

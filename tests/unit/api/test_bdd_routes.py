@@ -13,16 +13,13 @@ from stlc_platform.api.main import app
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _isolated_store(tmp_path, monkeypatch):
     """Inject a fresh FeatureFileStore and redirect output_dir per test."""
     store = FeatureFileStore()
-    monkeypatch.setattr(
-        "stlc_platform.api.routes.bdd.get_output_dir", lambda: tmp_path
-    )
-    monkeypatch.setattr(
-        "stlc_platform.api.routes.bdd.get_ff_store", lambda: store
-    )
+    monkeypatch.setattr("stlc_platform.api.routes.bdd.get_output_dir", lambda: tmp_path)
+    monkeypatch.setattr("stlc_platform.api.routes.bdd.get_ff_store", lambda: store)
     monkeypatch.setattr("stlc_platform.api.deps._ff_store", store)
     yield store
 
@@ -50,6 +47,7 @@ def _seed_feature(store_fixture, filename="login.feature", **overrides):
 # GET /api/bdd/features
 # ---------------------------------------------------------------------------
 
+
 class TestListFeatures:
     """GET /api/bdd/features returns stored feature files."""
 
@@ -65,9 +63,7 @@ class TestListFeatures:
         data = client.get("/api/bdd/features").json()
         assert len(data) == 0
 
-    def test_returns_seeded_features(
-        self, client: TestClient, _isolated_store
-    ):
+    def test_returns_seeded_features(self, client: TestClient, _isolated_store):
         _seed_feature(_isolated_store, "login.feature")
         _seed_feature(_isolated_store, "checkout.feature", req_id="REQ-002")
         data = client.get("/api/bdd/features").json()
@@ -77,6 +73,7 @@ class TestListFeatures:
 # ---------------------------------------------------------------------------
 # GET /api/bdd/features/{filename}
 # ---------------------------------------------------------------------------
+
 
 class TestGetFeature:
     """GET /api/bdd/features/{filename} returns a single feature file."""
@@ -95,6 +92,7 @@ class TestGetFeature:
 # ---------------------------------------------------------------------------
 # GET /api/bdd/project/download
 # ---------------------------------------------------------------------------
+
 
 class TestDownloadProject:
     """GET /api/bdd/project/download returns a ZIP archive."""

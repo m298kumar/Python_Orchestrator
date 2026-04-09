@@ -40,6 +40,15 @@ class ComponentResolver:
         self._generic_names = generic_names or set(DEFAULT_GENERIC_APP_NAMES)
         self._vector_store = vector_store
 
+    def _is_specific_llm_name(self, raw_clean: str) -> bool:
+        """Check if the LLM-returned name is specific enough to keep as-is."""
+        if not raw_clean or len(raw_clean) <= 15:
+            return False
+        lower = raw_clean.lower()
+        if "specific screen" in lower or "not a generic" in lower:
+            return False
+        return not any(g in lower for g in self._generic_names)
+
     def resolve(
         self,
         raw: str,
@@ -60,11 +69,7 @@ class ComponentResolver:
         """
         # 1. LLM returned something specific — keep it
         raw_clean = raw.strip()
-        if (raw_clean
-                and len(raw_clean) > 15
-                and "specific screen" not in raw_clean.lower()
-                and "not a generic" not in raw_clean.lower()
-                and not any(g in raw_clean.lower() for g in self._generic_names)):
+        if self._is_specific_llm_name(raw_clean):
             return raw_clean
 
         # 2. ChromaDB domain_vocab lookup
@@ -77,6 +82,15 @@ class ComponentResolver:
                 pass  # graceful degradation
 
         # 3. Suffix map keyword match
+        match = self._match_suffix_map(category, req_title)
+        if match:
+            return match
+
+        # 4. Construct from category or title
+        return self._construct_fallback(category, req_title)
+
+    def _match_suffix_map(self, category: str, req_title: str) -> str:
+        """Try to match a component name from the suffix map."""
         for source in [category, req_title]:
             s = source.strip().lower()
             for key, val in self._suffix_map.items():
@@ -85,11 +99,13 @@ class ComponentResolver:
                     if len(prefix) > len(key) + 3:
                         return f"{prefix} Screen"
                     return val
+        return ""
 
-        # 4. Construct from category or title
+    @staticmethod
+    def _construct_fallback(category: str, req_title: str) -> str:
+        """Construct a component name from category or title as last resort."""
         if category.strip():
             return f"{' '.join(w.capitalize() for w in category.strip().split())} Screen"
         if req_title.strip():
             return f"{req_title[:40].strip()} Screen"
-
         return "Application Screen"

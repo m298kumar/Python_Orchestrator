@@ -18,6 +18,7 @@ from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact  # n
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_tc(**overrides) -> TestCaseArtifact:
     """Build a minimal TestCaseArtifact with sensible defaults."""
     defaults = {
@@ -49,6 +50,7 @@ def _make_generator(vector_store=None):
 # ---------------------------------------------------------------------------
 # _extract_vocab tests
 # ---------------------------------------------------------------------------
+
 
 class TestExtractVocabFromComponents:
     def test_extracts_non_generic_component(self):
@@ -129,12 +131,14 @@ class TestExtractVocabFromQuotedStrings:
         """Steps passed as dicts (legacy format) should also work."""
         gen = _make_generator()
         # Manually override steps with dicts to test the fallback path
-        tc_dict_steps = _make_tc(steps=[
-            TestStepArtifact(
-                action='Navigate to "Dashboard Page"',
-                expected_result="Page loads",
-            ),
-        ])
+        tc_dict_steps = _make_tc(
+            steps=[
+                TestStepArtifact(
+                    action='Navigate to "Dashboard Page"',
+                    expected_result="Page loads",
+                ),
+            ]
+        )
         result = gen._extract_vocab([tc_dict_steps])
         assert "Dashboard Page" in result
 
@@ -161,6 +165,7 @@ class TestExtractVocabSkipsGenericTerms:
 # add_vocab tests (ChromaDB collection mocked)
 # ---------------------------------------------------------------------------
 
+
 class TestAddVocabToChroma:
     def test_add_vocab_upserts_terms(self):
         from stlc_platform.core.storage.chroma_store import RequirementsVectorStore
@@ -174,7 +179,11 @@ class TestAddVocabToChroma:
         assert count == 2
         store._coll_vocab.upsert.assert_called_once()
         call_kwargs = store._coll_vocab.upsert.call_args
-        ids = call_kwargs.kwargs.get("ids") or call_kwargs[1].get("ids") or call_kwargs[0][0] if call_kwargs[0] else None
+        ids = (
+            call_kwargs.kwargs.get("ids") or call_kwargs[1].get("ids") or call_kwargs[0][0]
+            if call_kwargs[0]
+            else None
+        )
         # Verify IDs are deterministic based on term text
         assert "vocab_auto_login_screen" in (ids or call_kwargs.kwargs.get("ids", []))
         assert "vocab_auto_checkout_flow" in (ids or call_kwargs.kwargs.get("ids", []))
@@ -218,6 +227,7 @@ class TestAddVocabToChroma:
 # ---------------------------------------------------------------------------
 # End-to-end enrichment test (vector_store mocked)
 # ---------------------------------------------------------------------------
+
 
 class TestVocabEnrichmentEndToEnd:
     def test_generate_for_all_calls_add_vocab(self):

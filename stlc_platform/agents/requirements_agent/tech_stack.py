@@ -13,7 +13,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-
 # Default verb mappings per platform
 _DEFAULT_PLATFORM_VERBS: Dict[str, Dict[str, str]] = {
     "web": {
