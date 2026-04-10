@@ -198,7 +198,8 @@ test_generation:
 bdd:
   language: python
   framework: behave
-  automation_lib: playwright
+  automation_lib: playwright   # playwright | selenium
+  pom_language: python         # python | java | javascript  (javascript = TypeScript + Playwright)
 crawler:
   base_url: https://demo.opencart.com/index.php
   max_depth: 3

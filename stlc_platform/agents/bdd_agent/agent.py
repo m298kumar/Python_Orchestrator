@@ -136,11 +136,23 @@ class BDDAgent(BaseAgent):
         selector_map: Dict[str, str] = {}
         if not site_model:
             return selector_map
-        for page in getattr(site_model, "pages", []):
-            for element in getattr(page, "elements", []):
-                name = getattr(element, "name", "") or getattr(element, "text", "") or ""
+        pages = getattr(site_model, "pages", None)
+        if pages is None and isinstance(site_model, dict):
+            pages = site_model.get("pages", [])
+        for page in (pages or []):
+            elements = getattr(page, "elements", None)
+            if elements is None and isinstance(page, dict):
+                elements = page.get("elements", [])
+            for element in (elements or []):
+                name = (
+                    getattr(element, "name", "")
+                    or (element.get("name", "") if isinstance(element, dict) else "")
+                    or getattr(element, "text", "")
+                    or (element.get("text", "") if isinstance(element, dict) else "")
+                )
                 selector = (
-                    getattr(element, "selector", "") or getattr(element, "css_selector", "") or ""
+                    getattr(element, "selector", "")
+                    or (element.get("selector", "") if isinstance(element, dict) else "")
                 )
                 if name and selector:
                     selector_map[name.lower().strip()] = selector
@@ -195,13 +207,28 @@ class BDDAgent(BaseAgent):
         generate_pom = config.get("generate_pom", True)
         if not generate_pom or language not in POMGenerator.SUPPORTED_LANGUAGES:
             return []
+
+        # Extract crawled pages from the site_model artifact.
+        # The pipeline provides site_model (SiteModelArtifact), not a separate
+        # "crawled_pages" key — so we pull .pages from it here.
+        site_model = artifacts.get("site_model")
+        crawled_pages = None
+        if site_model is not None:
+            # Pydantic object (live pipeline run)
+            pages_attr = getattr(site_model, "pages", None)
+            if pages_attr is not None:
+                crawled_pages = pages_attr
+            # Dict (deserialized from disk / ArtifactStore)
+            elif isinstance(site_model, dict):
+                crawled_pages = site_model.get("pages") or None
+
         pom_gen = POMGenerator(
             language=language,
             automation_lib=automation_lib,
             template_dir=config.get("template_dir"),
             override_dir=config.get("override_dir"),
         )
-        return pom_gen.generate(test_cases, crawled_pages=artifacts.get("crawled_pages"))
+        return pom_gen.generate(test_cases, crawled_pages=crawled_pages)
 
     def _scaffold_project_if_requested(
         self,

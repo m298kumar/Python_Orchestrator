@@ -12,12 +12,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Set
+from typing import ClassVar, Dict, List, Optional, Set
 
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 
 from stlc_platform.core.contracts import (
-    CrawledPageArtifact,
     PageElementArtifact,
     TestCaseArtifact,
 )
@@ -48,6 +47,7 @@ class PageInfo:
 
     name: str
     class_name: str
+    page_url: str = ""
     elements: List[Dict[str, str]] = field(default_factory=list)
     actions: List[Dict[str, str]] = field(default_factory=list)
 
@@ -67,7 +67,7 @@ class POMGenerator:
       - Java (Selenium)
     """
 
-    SUPPORTED_LANGUAGES: ClassVar[List[str]] = ["python", "java"]
+    SUPPORTED_LANGUAGES: ClassVar[List[str]] = ["python", "java", "javascript"]
 
     def __init__(
         self,
@@ -100,25 +100,18 @@ class POMGenerator:
     def generate(
         self,
         test_cases: List[TestCaseArtifact],
-        crawled_pages: Optional[List[CrawledPageArtifact]] = None,
+        crawled_pages=None,
     ) -> List[PageObjectStub]:
         """
         Generate POM stubs from test cases, optionally enriched with
-        crawled page selectors.
-
-        Args:
-            test_cases: Test case artifacts with component fields.
-            crawled_pages: Optional crawled pages for real selector data.
-
-        Returns:
-            List of PageObjectStub, one per discovered page/component.
+        crawled page selectors and URLs.
         """
         # Step 1: Extract pages from test case components
         pages = self._extract_pages(test_cases)
 
-        # Step 2: Merge crawled selectors if available
+        # Step 2: Merge crawled selectors + page URLs if available
         if crawled_pages:
-            self._merge_crawled_selectors(pages, crawled_pages)
+            self._merge_crawled_data(pages, crawled_pages)
 
         # Step 3: Render templates
         results = []
@@ -180,52 +173,92 @@ class POMGenerator:
                     page.elements.append(elem)
                     existing_names.add(elem["name"])
 
-    def _merge_crawled_selectors(
-        self,
-        pages: Dict[str, PageInfo],
-        crawled_pages: List[CrawledPageArtifact],
-    ) -> None:
-        """Merge real selectors from crawled pages into POM page info."""
-        selector_lookup = self._build_selector_lookup(crawled_pages)
+    def _merge_crawled_data(self, pages: Dict[str, "PageInfo"], crawled_pages) -> None:
+        """Merge real selectors, XPaths, and page URLs from crawled pages into POM stubs."""
+        selector_lookup: Dict[str, Dict[str, str]] = {}  # name → {selector, xpath}
+        url_lookup: Dict[str, str] = {}  # keyword → url
 
-        # Merge into page elements
+        for cp in crawled_pages:
+            # Support both Pydantic objects and dicts
+            cp_url = getattr(cp, "url", None) or (cp.get("url", "") if isinstance(cp, dict) else "")
+            cp_elements = getattr(cp, "elements", None)
+            if cp_elements is None and isinstance(cp, dict):
+                cp_elements = cp.get("elements", [])
+
+            # Build keyword → URL map from page URL path segments
+            if cp_url:
+                path_parts = [p.lower() for p in cp_url.rstrip("/").split("/") if p]
+                for part in path_parts:
+                    if len(part) > 2 and part not in ("index", "html", "php", "asp"):
+                        url_lookup[part] = cp_url
+
+            for elem in (cp_elements or []):
+                self._index_element(selector_lookup, elem)
+
+        # Merge selectors into page elements
         for page in pages.values():
+            # Try to find a matching URL for this page
+            page_key = page.name.lower().replace(" ", "").replace("page", "").strip()
+            for keyword, url in url_lookup.items():
+                if keyword in page_key or page_key in keyword:
+                    page.page_url = url
+                    break
+
             for element in page.elements:
                 elem_name = element["name"].lower().strip()
                 if element.get("selector", "").startswith("TODO"):
-                    if elem_name in selector_lookup:
-                        element["selector"] = selector_lookup[elem_name]
+                    locator_data = selector_lookup.get(elem_name)
+                    if locator_data:
+                        element["selector"] = locator_data.get("selector", element["selector"])
+                        element["xpath"] = locator_data.get("xpath", "")
+                elif not element.get("xpath"):
+                    # Element has a real CSS selector from test step text — try to find matching xpath
+                    locator_data = selector_lookup.get(elem_name)
+                    if locator_data:
+                        element["xpath"] = locator_data.get("xpath", "")
 
-    def _build_selector_lookup(self, crawled_pages: List[CrawledPageArtifact]) -> Dict[str, str]:
-        """Build a lookup mapping element name/text to CSS selector."""
+    def _build_selector_lookup(self, crawled_pages) -> Dict[str, str]:
+        """Legacy shim — internal logic moved to _merge_crawled_data."""
         lookup: Dict[str, str] = {}
         for cp in crawled_pages:
-            for elem in cp.elements:
-                self._index_element(lookup, elem)
+            elements = getattr(cp, "elements", None)
+            if elements is None and isinstance(cp, dict):
+                elements = cp.get("elements", [])
+            for elem in (elements or []):
+                d: Dict[str, str] = {}
+                self._index_element(d, elem)  # type: ignore[arg-type]
+                lookup.update(d)
         return lookup
 
-    def _index_element(self, lookup: Dict[str, str], elem: Any) -> None:
+    def _index_element(self, lookup: Dict, elem) -> None:
         """Add a single crawled element's name and text to the selector lookup."""
         if isinstance(elem, PageElementArtifact):
             key_name = elem.name.lower().strip() if elem.name else ""
             key_text = elem.text.lower().strip() if elem.text else ""
             selector = elem.selector or ""
+            xpath = getattr(elem, "xpath", "") or ""
         elif isinstance(elem, dict):
             key_name = str(elem.get("name", "")).lower().strip()
             key_text = str(elem.get("text", "")).lower().strip()
             selector = str(elem.get("selector", ""))
+            xpath = str(elem.get("xpath", ""))
         else:
             return
-        if key_name and selector:
-            lookup[key_name] = selector
-        if key_text and selector:
-            lookup[key_text] = selector
 
-    def _render_page(self, page_info: PageInfo) -> PageObjectStub:
+        locator_data = {"selector": selector, "xpath": xpath}
+        if key_name and selector:
+            lookup[key_name] = locator_data
+        if key_text and selector and key_text != key_name:
+            lookup[key_text] = locator_data
+
+    def _render_page(self, page_info: "PageInfo") -> "PageObjectStub":
         """Render a single POM class from page info."""
         if self.language == "java":
             template_name = "pom_java.java.j2"
             ext = ".java"
+        elif self.language == "javascript":
+            template_name = "pom_typescript.ts.j2"
+            ext = ".ts"
         else:
             template_name = "pom_python.py.j2"
             ext = ".py"
@@ -234,6 +267,7 @@ class POMGenerator:
         content = template.render(
             page_name=page_info.name,
             class_name=page_info.class_name,
+            page_url=page_info.page_url or "TODO: set page URL",
             elements=page_info.elements,
             actions=page_info.actions,
             automation_lib=self.automation_lib,
@@ -304,6 +338,7 @@ class POMGenerator:
                         "name": name,
                         "const_name": const_name,
                         "selector": f'TODO: "{name}"',
+                        "xpath": "",
                         "element_type": "element",
                     }
                 )
@@ -324,6 +359,7 @@ class POMGenerator:
                             "name": full_name,
                             "const_name": const_name,
                             "selector": f'TODO: "{full_name}"',
+                            "xpath": "",
                             "element_type": elem_type,
                         }
                     )

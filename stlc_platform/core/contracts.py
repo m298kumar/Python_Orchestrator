@@ -122,7 +122,8 @@ class PageElementArtifact(BaseModel):
 
     element_type: str  # input, button, link, form, etc.
     name: str = ""
-    selector: str = ""
+    selector: str = ""   # CSS selector (highest-priority)
+    xpath: str = ""      # XPath locator (fallback / alternative)
     text: str = ""
     attributes: Dict[str, str] = Field(default_factory=dict)
 
