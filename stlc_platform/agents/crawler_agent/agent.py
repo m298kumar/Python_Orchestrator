@@ -241,6 +241,10 @@ class CrawlerAgent(BaseAgent):
         auth_raw = crawler_cfg.get("auth", {}) or {}
         auth = auth_raw if isinstance(auth_raw, dict) and any(auth_raw.values()) else None
 
+        # verify_ssl=False bypasses Windows CRL revocation checks
+        # (CRYPT_E_NO_REVOCATION_CHECK) — configure via crawler.verify_ssl in stlc_config.yaml
+        verify_ssl = bool(crawler_cfg.get("verify_ssl", True))
+
         crawler = SimpleHTTPCrawler(
             base_url=base_url,
             max_depth=int(crawler_cfg.get("max_depth", 3)),
@@ -248,6 +252,7 @@ class CrawlerAgent(BaseAgent):
             rate_limit_ms=int(crawler_cfg.get("rate_limit_ms", 1000)),
             respect_robots_txt=bool(crawler_cfg.get("respect_robots_txt", True)),
             auth=auth,
+            verify_ssl=verify_ssl,
         )
         crawl_result = crawler.crawl()
         builder = SiteModelBuilder()

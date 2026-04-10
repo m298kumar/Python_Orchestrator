@@ -207,6 +207,7 @@ crawler:
   wait_for_network_idle: true
   respect_robots_txt: true
   rate_limit_ms: 1000
+  verify_ssl: false   # set false if Windows CRL check fails (CRYPT_E_NO_REVOCATION_CHECK)
   auth:
     type: ''
     login_url: ''

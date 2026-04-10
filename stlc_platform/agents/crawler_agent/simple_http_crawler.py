@@ -67,6 +67,7 @@ class SimpleHTTPCrawler:
         respect_robots_txt: bool = True,
         auth: Optional[Dict[str, Any]] = None,
         timeout_s: int = 30,
+        verify_ssl: bool = True,
     ):
         self.base_url = base_url.rstrip("/")
         self.max_depth = max_depth
@@ -75,6 +76,7 @@ class SimpleHTTPCrawler:
         self.respect_robots_txt = respect_robots_txt
         self.auth = auth or {}
         self.timeout_s = timeout_s
+        self.verify_ssl = verify_ssl
 
         parsed = urlparse(self.base_url)
         self._origin = f"{parsed.scheme}://{parsed.netloc}"
@@ -166,6 +168,16 @@ class SimpleHTTPCrawler:
 
         session = requests.Session()
         session.headers.update({"User-Agent": _CRAWL_USER_AGENT})
+        session.verify = self.verify_ssl
+
+        if not self.verify_ssl:
+            # Suppress the InsecureRequestWarning that urllib3 emits when
+            # verify=False — users have explicitly opted in via config.
+            try:
+                import urllib3
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            except Exception:
+                pass
 
         # HTTP Basic auth
         username = self.auth.get("username", "")
