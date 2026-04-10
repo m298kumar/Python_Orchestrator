@@ -576,13 +576,28 @@ class PipelineOrchestrator:
             )
 
     def _extract_quality_scores(self) -> List[float]:
-        """Extract quality_score from test case artifacts produced by any stage."""
+        """Extract quality_score from test case artifacts produced by any stage.
+
+        Deduplicates by tc_id so that enrichment/downstream stages re-outputting
+        the same test cases do not inflate total_test_cases in metrics (e.g.
+        parse_requirements produces 20 TCs, enrich_test_cases re-outputs the same
+        20 enriched TCs → without deduplication metrics would report 40).
+        """
+        seen_tc_ids: set = set()
         scores: List[float] = []
         for sr in self._stage_results.values():
             if not sr.agent_result or not sr.success:
                 continue
             test_cases = sr.agent_result.artifacts.get("test_cases", [])
             for tc in test_cases:
+                tc_id = getattr(tc, "tc_id", None)
+                if tc_id is None and isinstance(tc, dict):
+                    tc_id = tc.get("tc_id")
+                # Skip duplicate TCs (same tc_id already counted from an earlier stage)
+                if tc_id is not None:
+                    if tc_id in seen_tc_ids:
+                        continue
+                    seen_tc_ids.add(tc_id)
                 score = getattr(tc, "quality_score", None)
                 if score is None and isinstance(tc, dict):
                     score = tc.get("quality_score")

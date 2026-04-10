@@ -589,6 +589,7 @@ export default function TestCases() {
                 >
                   <span className={`w-2 h-2 rounded-full ${c.dot}`} />
                   Run {meta.label}
+                  <span className="font-mono opacity-60 text-[10px]">{shortRunId(rid)}…</span>
                   <span className="ml-0.5 opacity-60">({runCounts[rid] ?? 0})</span>
                 </button>
               );

@@ -153,6 +153,20 @@ class CrawlerAgent(BaseAgent):
                         errors=["No base_url or html_pages provided — cannot build site model."],
                     )
 
+            # Fail fast when no pages were crawled so the optional stage is cleanly
+            # skipped rather than completing with an empty (and misleading) site model.
+            if len(site_model.pages) == 0:
+                base_url = getattr(site_model, "base_url", None) or artifacts.get("base_url", "")
+                return AgentResult(
+                    success=False,
+                    errors=[
+                        f"Crawler found no pages at '{base_url}'. "
+                        "The application may be unavailable, require authentication, "
+                        "or have blocked the crawler via robots.txt. "
+                        "Stage is unavailable — configure base_url or provide html_pages."
+                    ],
+                )
+
             # Optionally run discrepancy detection
             discrepancy_report = self._run_discrepancy_detection(
                 site_model, artifacts.get("requirements")

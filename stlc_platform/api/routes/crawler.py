@@ -95,6 +95,15 @@ def load_crawler_from_run(run_id: str) -> bool:
                 }
             )
 
+        # Don't populate a run with zero pages — it would show up in the
+        # Crawler page run selector with no content, creating a misleading
+        # "No site model for this run" empty state.
+        if not pages:
+            logger.info(
+                "Skipping crawler population for run '%s': site model has no pages", run_id
+            )
+            return False
+
         summary = {
             "base_url": site_model.get("base_url", ""),
             "total_pages": len(pages),
