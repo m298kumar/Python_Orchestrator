@@ -18,7 +18,6 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -52,8 +51,8 @@ from stlc_platform.api.routes import (
 )
 from stlc_platform.api.schemas import HealthResponse
 
-
 # ── Lifespan ─────────────────────────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -94,9 +93,7 @@ _default_origins = [
 ]
 
 _extra_origins = os.environ.get("STLC_CORS_ORIGINS", "")
-_allowed_origins = _default_origins + [
-    o.strip() for o in _extra_origins.split(",") if o.strip()
-]
+_allowed_origins = _default_origins + [o.strip() for o in _extra_origins.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -127,6 +124,7 @@ app.include_router(metrics.router)
 
 # ── Global Exception Handlers ──────────────────────────────────────────
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     """Return consistent JSON for all HTTP errors."""
@@ -147,6 +145,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 # ── Health ───────────────────────────────────────────────────────────────────
+
 
 @app.get("/api/health", response_model=HealthResponse, tags=["health"])
 def health() -> HealthResponse:
@@ -193,9 +192,7 @@ async def websocket_pipeline(websocket: WebSocket, run_id: str) -> None:
 _frontend_dist = _Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 _serve_frontend = os.environ.get("STLC_SERVE_FRONTEND", "auto")
 
-if _serve_frontend == "true" or (
-    _serve_frontend == "auto" and _frontend_dist.is_dir()
-):
+if _serve_frontend == "true" or (_serve_frontend == "auto" and _frontend_dist.is_dir()):
     from fastapi.responses import FileResponse
     from fastapi.staticfiles import StaticFiles
 

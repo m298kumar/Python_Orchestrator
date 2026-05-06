@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from stlc_platform.pipeline.artifact_store import ArtifactResolver, ArtifactStore
 
 
@@ -46,11 +45,13 @@ class TestResolveReferences:
 
     def test_resolve_full_input_map(self, store_with_data, config):
         resolver = ArtifactResolver(store_with_data, config)
-        resolved = resolver.resolve({
-            "test_cases": "$parse_reqs.test_cases",
-            "base_url": "$config.app_url",
-            "threshold": "0.8",
-        })
+        resolved = resolver.resolve(
+            {
+                "test_cases": "$parse_reqs.test_cases",
+                "base_url": "$config.app_url",
+                "threshold": "0.8",
+            }
+        )
         assert resolved["test_cases"] == [{"id": "TC-001"}]
         assert resolved["base_url"] == "http://localhost:8080"
         assert resolved["threshold"] == "0.8"

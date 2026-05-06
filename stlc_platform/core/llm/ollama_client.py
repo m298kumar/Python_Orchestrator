@@ -130,9 +130,7 @@ class OllamaClient(BaseLLMClient):
                 "Increase OLLAMA_TIMEOUT or use a smaller model."
             )
         except requests.ConnectionError:
-            raise ConnectionError(
-                f"Cannot connect to Ollama at {self.base_url}. Run: ollama serve"
-            )
+            raise ConnectionError(f"Cannot connect to Ollama at {self.base_url}. Run: ollama serve")
         except requests.HTTPError as e:
             raise RuntimeError(f"Ollama API error: {e.response.text}")
 

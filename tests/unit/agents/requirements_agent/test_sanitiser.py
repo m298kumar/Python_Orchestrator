@@ -5,13 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List
 
-import pytest
-
-from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 from stlc_platform.agents.requirements_agent.sanitiser import (
     SanitiserConfig,
     TestCaseSanitiser,
 )
+from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 
 
 @dataclass
@@ -20,7 +18,9 @@ class MockRequirement:
     title: str = "User Login"
     description: str = "User should be able to log in"
     category: str = "Authentication"
-    acceptance_criteria: List[str] = field(default_factory=lambda: ["User can login with valid creds"])
+    acceptance_criteria: List[str] = field(
+        default_factory=lambda: ["User can login with valid creds"]
+    )
 
 
 def _make_tc(**overrides) -> TestCaseArtifact:
@@ -34,9 +34,18 @@ def _make_tc(**overrides) -> TestCaseArtifact:
         test_type="positive",
         priority="High",
         steps=[
-            TestStepArtifact(action="Open the application and navigate to login screen", expected_result="Login screen is displayed"),
-            TestStepArtifact(action="Enter valid username 'testuser' in the username field", expected_result="Username is accepted"),
-            TestStepArtifact(action="Enter valid password and click the Login button", expected_result="User is logged in successfully"),
+            TestStepArtifact(
+                action="Open the application and navigate to login screen",
+                expected_result="Login screen is displayed",
+            ),
+            TestStepArtifact(
+                action="Enter valid username 'testuser' in the username field",
+                expected_result="Username is accepted",
+            ),
+            TestStepArtifact(
+                action="Enter valid password and click the Login button",
+                expected_result="User is logged in successfully",
+            ),
         ],
         expected_outcome="User is successfully logged in and sees the home dashboard",
         tags=["authentication", "positive", "req-001"],
@@ -140,14 +149,19 @@ class TestSanitiserPipeline:
         s = TestCaseSanitiser()
         tc = _make_tc(preconditions="{'title': 'leaked json'}")
         result = s.sanitise(tc, _make_slot(), MockRequirement())
-        assert "eligibility" in result.preconditions.lower() or "installed" in result.preconditions.lower()
+        assert (
+            "eligibility" in result.preconditions.lower()
+            or "installed" in result.preconditions.lower()
+        )
 
     def test_generic_steps_replaced(self):
         s = TestCaseSanitiser()
-        tc = _make_tc(steps=[
-            TestStepArtifact(action="Perform the action", expected_result="Check result"),
-            TestStepArtifact(action="Trigger the feature", expected_result="Observe"),
-        ])
+        tc = _make_tc(
+            steps=[
+                TestStepArtifact(action="Perform the action", expected_result="Check result"),
+                TestStepArtifact(action="Trigger the feature", expected_result="Observe"),
+            ]
+        )
         result = s.sanitise(tc, _make_slot(), MockRequirement())
         assert len(result.steps) == 5  # Synthesised steps
 

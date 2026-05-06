@@ -2,22 +2,17 @@
 Tests for the authentication module and auth routes.
 """
 
-import os
 import time
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock
-
 from fastapi.testclient import TestClient
-
 from stlc_platform.api.auth import (
-    AuthUser,
     authenticate_user,
     create_token,
-    verify_token,
     verify_password,
+    verify_token,
 )
-
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -41,9 +36,7 @@ def client_auth_enabled():
     fake_registry.list_agents.return_value = []
     with patch("stlc_platform.api.deps._agent_registry", fake_registry):
         with patch("stlc_platform.api.auth.AUTH_ENABLED", True):
-            with patch(
-                "stlc_platform.api.routes.auth.AUTH_ENABLED", True
-            ):
+            with patch("stlc_platform.api.routes.auth.AUTH_ENABLED", True):
                 from stlc_platform.api.main import app
 
                 yield TestClient(app)
@@ -81,7 +74,7 @@ class TestCreateAndVerifyToken:
             "iat": int(time.time()) - 10,
             "exp": int(time.time()) - 5,
         }
-        from stlc_platform.api.auth import JWT_SECRET, JWT_ALGORITHM
+        from stlc_platform.api.auth import JWT_ALGORITHM, JWT_SECRET
 
         token = jwt_mod.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
         from fastapi import HTTPException
@@ -178,16 +171,12 @@ class TestLoginEndpoint:
 class TestGetCurrentUserDependency:
     """get_current_user FastAPI dependency (tested via health endpoint)."""
 
-    def test_auth_disabled_allows_anonymous(
-        self, client_auth_disabled: TestClient
-    ):
+    def test_auth_disabled_allows_anonymous(self, client_auth_disabled: TestClient):
         """When auth is disabled, all endpoints should work without tokens."""
         resp = client_auth_disabled.get("/api/health")
         assert resp.status_code == 200
 
-    def test_auth_enabled_with_valid_token(
-        self, client_auth_enabled: TestClient
-    ):
+    def test_auth_enabled_with_valid_token(self, client_auth_enabled: TestClient):
         """Login, then use token on a protected-capable endpoint."""
         login_resp = client_auth_enabled.post(
             "/api/auth/login",
@@ -203,9 +192,7 @@ class TestGetCurrentUserDependency:
 
     def test_auth_enabled_with_api_key(self, client_auth_enabled: TestClient):
         """API key authentication via X-API-Key header."""
-        with patch(
-            "stlc_platform.api.auth.API_KEYS", {"test-key-123"}
-        ):
+        with patch("stlc_platform.api.auth.API_KEYS", {"test-key-123"}):
             resp = client_auth_enabled.get(
                 "/api/auth/status",
                 headers={"X-API-Key": "test-key-123"},

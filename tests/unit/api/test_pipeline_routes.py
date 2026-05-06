@@ -39,23 +39,32 @@ class TestPipelineRun:
 
     @patch("stlc_platform.api.routes.pipeline.submit_pipeline_run")
     def test_run_accepts_pipeline_path(self, mock_submit, client: TestClient):
-        resp = client.post("/api/pipeline/run", json={
-            "pipeline_path": "config/pipelines/api_test_only.yaml",
-        })
+        resp = client.post(
+            "/api/pipeline/run",
+            json={
+                "pipeline_path": "config/pipelines/api_test_only.yaml",
+            },
+        )
         assert resp.status_code == 201
 
     @patch("stlc_platform.api.routes.pipeline.submit_pipeline_run")
     def test_run_accepts_config_overrides(self, mock_submit, client: TestClient):
-        resp = client.post("/api/pipeline/run", json={
-            "config": {"project": {"domain": "ecommerce"}},
-        })
+        resp = client.post(
+            "/api/pipeline/run",
+            json={
+                "config": {"project": {"domain": "ecommerce"}},
+            },
+        )
         assert resp.status_code == 201
 
     @patch("stlc_platform.api.routes.pipeline.submit_pipeline_run")
     def test_run_accepts_profile(self, mock_submit, client: TestClient):
-        resp = client.post("/api/pipeline/run", json={
-            "profile": "smoke",
-        })
+        resp = client.post(
+            "/api/pipeline/run",
+            json={
+                "profile": "smoke",
+            },
+        )
         assert resp.status_code == 201
 
     @patch("stlc_platform.api.routes.pipeline.submit_pipeline_run")

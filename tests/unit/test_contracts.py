@@ -5,24 +5,21 @@ Validates that all Pydantic models work correctly with valid and invalid data.
 
 import pytest
 from pydantic import ValidationError
-
 from stlc_platform.core.contracts import (
-    RequirementArtifact,
-    TestCaseArtifact,
-    TestStepArtifact,
-    FeatureFileArtifact,
-    SiteModelArtifact,
     APIEndpointArtifact,
     APIModelArtifact,
+    FeatureFileArtifact,
     PipelineRunArtifact,
+    RequirementArtifact,
+    SiteModelArtifact,
+    TestCaseArtifact,
+    TestStepArtifact,
 )
 
 
 class TestRequirementArtifact:
     def test_create_minimal(self):
-        r = RequirementArtifact(
-            req_id="REQ-001", title="Test", description="A test requirement"
-        )
+        r = RequirementArtifact(req_id="REQ-001", title="Test", description="A test requirement")
         assert r.req_id == "REQ-001"
         assert r.priority == "Medium"
         assert r.category == "Functional"
@@ -53,9 +50,7 @@ class TestRequirementArtifact:
         assert "AC1" in doc
 
     def test_to_dict(self):
-        r = RequirementArtifact(
-            req_id="REQ-001", title="Test", description="Desc"
-        )
+        r = RequirementArtifact(req_id="REQ-001", title="Test", description="Desc")
         d = r.to_dict()
         assert d["req_id"] == "REQ-001"
         assert "schema_version" not in d
@@ -75,9 +70,7 @@ class TestTestCaseArtifact:
             preconditions="User logged in",
             test_type="positive",
             priority="High",
-            steps=[
-                TestStepArtifact(action="Click login", expected_result="Form appears")
-            ],
+            steps=[TestStepArtifact(action="Click login", expected_result="Form appears")],
         )
         assert len(tc.steps) == 1
         assert tc.steps[0].action == "Click login"
@@ -115,9 +108,7 @@ class TestTestCaseArtifact:
 
 class TestPipelineRunArtifact:
     def test_create(self):
-        pr = PipelineRunArtifact(
-            run_id="run-001", pipeline_name="full_stlc"
-        )
+        pr = PipelineRunArtifact(run_id="run-001", pipeline_name="full_stlc")
         assert pr.status == "pending"
         assert pr.stages_completed == []
 
@@ -164,16 +155,12 @@ class TestAPIEndpointArtifact:
         assert ep.example_response == resp
 
     def test_status_codes_accepts_ints(self):
-        ep = APIEndpointArtifact(
-            path="/api/users", method="GET", status_codes=[200, 404]
-        )
+        ep = APIEndpointArtifact(path="/api/users", method="GET", status_codes=[200, 404])
         assert ep.status_codes == [200, 404]
 
     def test_status_codes_coerces_strings_to_ints(self):
         """Pydantic coerces string status codes to int."""
-        ep = APIEndpointArtifact(
-            path="/api/users", method="GET", status_codes=["200", "404"]
-        )
+        ep = APIEndpointArtifact(path="/api/users", method="GET", status_codes=["200", "404"])
         assert ep.status_codes == [200, 404]
 
     def test_serialization_roundtrip(self):
@@ -197,10 +184,12 @@ class TestAPIEndpointArtifact:
 
     def test_backward_compatible_without_new_fields(self):
         """Old data without example_request/response still loads fine."""
-        ep = APIEndpointArtifact.model_validate({
-            "path": "/api/test",
-            "method": "GET",
-        })
+        ep = APIEndpointArtifact.model_validate(
+            {
+                "path": "/api/test",
+                "method": "GET",
+            }
+        )
         assert ep.example_request is None
         assert ep.example_response is None
 

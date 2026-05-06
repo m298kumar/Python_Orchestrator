@@ -58,9 +58,7 @@ def get_trends(
     avg_time = sum(r.generation_time_seconds for r in runs) / len(runs)
     total_tokens = sum(r.tokens_used for r in runs)
     total_cost = sum(r.estimated_cost_usd for r in runs)
-    quality_trend = [
-        {"run_id": r.run_id, "score": r.avg_quality_score} for r in runs
-    ]
+    quality_trend = [{"run_id": r.run_id, "score": r.avg_quality_score} for r in runs]
 
     # Detect degradation on latest run
     warning = None
@@ -106,8 +104,14 @@ def compare_runs(
 
     da, db = _to_dict(ma), _to_dict(mb)
     deltas: dict = {}
-    for key in ("avg_quality_score", "tokens_used", "estimated_cost_usd",
-                "generation_time_seconds", "coverage_pct", "total_test_cases"):
+    for key in (
+        "avg_quality_score",
+        "tokens_used",
+        "estimated_cost_usd",
+        "generation_time_seconds",
+        "coverage_pct",
+        "total_test_cases",
+    ):
         va, vb = da.get(key, 0), db.get(key, 0)
         if isinstance(va, (int, float)) and isinstance(vb, (int, float)):
             deltas[key] = round(va - vb, 6)
@@ -122,4 +126,5 @@ def compare_runs(
 def _to_dict(m):
     """Convert RunMetrics dataclass to dict for Pydantic model."""
     from dataclasses import asdict
+
     return asdict(m)

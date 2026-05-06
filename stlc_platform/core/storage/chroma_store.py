@@ -32,36 +32,45 @@ logger = logging.getLogger(__name__)
 
 # ── client factory ───────────────────────────────────────────────────────────
 
+
 def _make_client(path):
     """
     Create a ChromaDB PersistentClient.
     Temporarily clears env vars to avoid pydantic-settings ValidationError.
+
+    Uses mkdtemp() + manual cleanup instead of TemporaryDirectory() context
+    manager to avoid WinError 32 on Windows: the context manager's __exit__
+    tries to delete the temp dir while ChromaDB still holds a lock on an
+    SQLite file inside it.
     """
+    import shutil
     import tempfile
 
     try:
         from dotenv import dotenv_values
+
         _dot_env_keys = set(dotenv_values().keys())
     except (ImportError, OSError):
         _dot_env_keys = set()
 
     _saved_env = {k: os.environ.pop(k) for k in _dot_env_keys if k in os.environ}
     _orig_cwd = os.getcwd()
+    _tmpdir = tempfile.mkdtemp()
 
     try:
-        with tempfile.TemporaryDirectory() as _tmpdir:
-            os.chdir(_tmpdir)
-            try:
-                import chromadb
-                abs_path = path if os.path.isabs(path) else os.path.join(_orig_cwd, path)
-                _settings = chromadb.Settings(
-                    is_persistent=True,
-                    persist_directory=abs_path,
-                    allow_reset=True,
-                    anonymized_telemetry=False,
-                )
-            finally:
-                os.chdir(_orig_cwd)
+        os.chdir(_tmpdir)
+        try:
+            import chromadb
+
+            abs_path = path if os.path.isabs(path) else os.path.join(_orig_cwd, path)
+            _settings = chromadb.Settings(
+                is_persistent=True,
+                persist_directory=abs_path,
+                allow_reset=True,
+                anonymized_telemetry=False,
+            )
+        finally:
+            os.chdir(_orig_cwd)
     except RuntimeError:
         raise
     except Exception as e:
@@ -71,6 +80,8 @@ def _make_client(path):
         ) from e
     finally:
         os.environ.update(_saved_env)
+        # Best-effort cleanup — ignore errors (Windows may still hold a lock)
+        shutil.rmtree(_tmpdir, ignore_errors=True)
 
     try:
         return chromadb.Client(_settings)
@@ -82,6 +93,7 @@ def _make_client(path):
 
 
 # ── embedding ────────────────────────────────────────────────────────────────
+
 
 def _ollama_ok(model, url):
     try:
@@ -122,9 +134,7 @@ def _best_embedding_fn(chromadb_config):
         else:
             console.print(f"[yellow]'{m}' not available — run: ollama pull {m}[/yellow]")
     try:
-        fn = ef.SentenceTransformerEmbeddingFunction(
-            model_name=cfg.sentence_transformer_model
-        )
+        fn = ef.SentenceTransformerEmbeddingFunction(model_name=cfg.sentence_transformer_model)
         console.print(
             f"[green]Embedding:[/green] SentenceTransformer / {cfg.sentence_transformer_model}"
         )
@@ -153,8 +163,17 @@ _ELEM_RE = [
     r"\b([A-Z][a-zA-Z\s]{1,20})\s+(?:button|field|label|input|toggle|checkbox|dropdown|link|tab)\b",
 ]
 _SKIP_WORDS = {
-    "the", "this", "that", "each", "every", "any", "all",
-    "customer", "user", "system", "app",
+    "the",
+    "this",
+    "that",
+    "each",
+    "every",
+    "any",
+    "all",
+    "customer",
+    "user",
+    "system",
+    "app",
 }
 
 
@@ -187,6 +206,7 @@ def _extract_vocab(req):
 
 # ── TC example formatter ────────────────────────────────────────────────────
 
+
 def _tc_to_doc(tc):
     steps = ""
     for i, s in enumerate(tc.get("steps", []), 1):
@@ -212,7 +232,6 @@ def _tc_to_doc(tc):
 
 
 class RequirementsVectorStore:
-
     COLL_REQS = "requirements"
     COLL_TCS = "tc_examples"
     COLL_VOCAB = "domain_vocab"
@@ -224,9 +243,12 @@ class RequirementsVectorStore:
         self._ready = False
 
     def _get_config(self):
-        if self._config is not None:
+        # If config is a raw dict it cannot be used directly (attribute access will fail).
+        # Fall back to the global config_loader which always returns a proper config object.
+        if self._config is not None and not isinstance(self._config, dict):
             return self._config
         from stlc_platform.core.config_loader import config
+
         return config.chromadb
 
     def initialize(self):
@@ -245,7 +267,22 @@ class RequirementsVectorStore:
                     kw["embedding_function"] = self._embed_fn
                 try:
                     return self._client.get_or_create_collection(**kw)
-                except Exception:
+                except Exception as exc:
+                    err = str(exc).lower()
+                    if "embedding function" in err or "conflict" in err:
+                        # Persisted collection has a different embedding function.
+                        # Delete the stale collection and recreate with the current
+                        # embedding function so embeddings are consistent.
+                        logger.warning(
+                            "Embedding function conflict on collection '%s' — "
+                            "deleting stale collection and recreating with current embedding function.",
+                            name,
+                        )
+                        try:
+                            self._client.delete_collection(name)
+                        except Exception as del_exc:
+                            logger.debug("Could not delete stale collection '%s': %s", name, del_exc)
+                        return self._client.get_or_create_collection(**kw)
                     kw.pop("metadata", None)
                     return self._client.get_or_create_collection(**kw)
 
@@ -274,13 +311,15 @@ class RequirementsVectorStore:
         for req in requirements:
             ids.append(f"{req.req_id}_{uuid.uuid4().hex[:8]}")
             docs.append(req.to_chroma_document())
-            metas.append({
-                "req_id": req.req_id,
-                "title": req.title,
-                "priority": req.priority,
-                "category": getattr(req, "category", "Functional"),
-                "tags": ",".join(getattr(req, "tags", [])),
-            })
+            metas.append(
+                {
+                    "req_id": req.req_id,
+                    "title": req.title,
+                    "priority": req.priority,
+                    "category": getattr(req, "category", "Functional"),
+                    "tags": ",".join(getattr(req, "tags", [])),
+                }
+            )
         self._coll_reqs.add(documents=docs, metadatas=metas, ids=ids)
         console.print(f"[green]Added {len(requirements)} requirement(s)[/green]")
 
@@ -300,33 +339,34 @@ class RequirementsVectorStore:
         if not res["documents"] or not res["documents"][0]:
             return []
         results = []
-        for d, m, dist in zip(
-            res["documents"][0], res["metadatas"][0], res["distances"][0]
-        ):
+        for d, m, dist in zip(res["documents"][0], res["metadatas"][0], res["distances"][0]):
             score = round(1 - dist, 4)
             if score >= min_similarity:
-                results.append({
-                    "document": d,
-                    "metadata": m,
-                    "similarity_score": score,
-                })
+                results.append(
+                    {
+                        "document": d,
+                        "metadata": m,
+                        "similarity_score": score,
+                    }
+                )
             else:
                 logger.debug(
                     "search_similar: filtered out result (score=%.4f < threshold=%.2f)",
-                    score, min_similarity,
+                    score,
+                    min_similarity,
                 )
         return results
 
     def get_context_for_requirement(self, requirement):
         similar = self.search_similar(
-            requirement.to_chroma_document(), n_results=3, min_similarity=0.3,
+            requirement.to_chroma_document(),
+            n_results=3,
+            min_similarity=0.3,
         )
         lines = []
         for item in similar:
             m = item["metadata"]
-            lines.append(
-                f"- [{m['req_id']}] {m['title']} (similarity: {item['similarity_score']})"
-            )
+            lines.append(f"- [{m['req_id']}] {m['title']} (similarity: {item['similarity_score']})")
         return "\n".join(lines) if lines else ""
 
     # ── Collection 2: TC Examples ────────────────────────────────────────────
@@ -344,11 +384,35 @@ class RequirementsVectorStore:
             "component": tc_dict.get("component", ""),
             "tc_json": json.dumps(tc_dict, ensure_ascii=False)[:3000],
         }
-        self._coll_tcs.add(
-            documents=[_tc_to_doc(tc_dict)], metadatas=[meta], ids=[doc_id]
-        )
+        self._coll_tcs.add(documents=[_tc_to_doc(tc_dict)], metadatas=[meta], ids=[doc_id])
         console.print(f"[green]Stored example TC:[/green] {doc_id} ({ac_type}/{test_type})")
         return doc_id
+
+    @staticmethod
+    def _parse_query_results(res, min_similarity):
+        """Extract valid examples from a ChromaDB query result."""
+        if not res["documents"] or not res["documents"][0]:
+            return []
+        examples = []
+        for meta, dist in zip(res["metadatas"][0], res["distances"][0]):
+            tj = meta.get("tc_json", "")
+            if not tj:
+                continue
+            score = round(1 - dist, 4)
+            if score < min_similarity:
+                logger.debug(
+                    "retrieve_examples: filtered out example (score=%.4f < threshold=%.2f)",
+                    score,
+                    min_similarity,
+                )
+                continue
+            try:
+                tc = json.loads(tj)
+                tc["_similarity"] = score
+                examples.append(tc)
+            except json.JSONDecodeError:
+                continue
+        return examples
 
     def retrieve_examples(self, ac_text, ac_type, test_type, n=2, min_similarity=0.4):
         self.initialize()
@@ -372,27 +436,9 @@ class RequirementsVectorStore:
                 if where:
                     kw["where"] = where
                 res = self._coll_tcs.query(**kw)
-                if res["documents"] and res["documents"][0]:
-                    examples = []
-                    for meta, dist in zip(res["metadatas"][0], res["distances"][0]):
-                        tj = meta.get("tc_json", "")
-                        if not tj:
-                            continue
-                        score = round(1 - dist, 4)
-                        if score < min_similarity:
-                            logger.debug(
-                                "retrieve_examples: filtered out example (score=%.4f < threshold=%.2f)",
-                                score, min_similarity,
-                            )
-                            continue
-                        try:
-                            tc = json.loads(tj)
-                            tc["_similarity"] = score
-                            examples.append(tc)
-                        except json.JSONDecodeError:
-                            continue
-                    if examples:
-                        return examples
+                examples = self._parse_query_results(res, min_similarity)
+                if examples:
+                    return examples
             except Exception:
                 continue
 
@@ -432,12 +478,14 @@ class RequirementsVectorStore:
                     f"screen: {screen} | category: {vocab['category']} "
                     f"| {vocab['req_id']} {vocab['req_title']}"
                 )
-                metas.append({
-                    "vocab_type": "screen",
-                    "term": screen,
-                    "category": vocab["category"],
-                    "req_id": vocab["req_id"],
-                })
+                metas.append(
+                    {
+                        "vocab_type": "screen",
+                        "term": screen,
+                        "category": vocab["category"],
+                        "req_id": vocab["req_id"],
+                    }
+                )
             for elem in vocab["elements"]:
                 if elem in seen_elems:
                     continue
@@ -447,12 +495,14 @@ class RequirementsVectorStore:
                     f"element: {elem} | category: {vocab['category']} "
                     f"| {vocab['req_id']} {vocab['req_title']}"
                 )
-                metas.append({
-                    "vocab_type": "element",
-                    "term": elem,
-                    "category": vocab["category"],
-                    "req_id": vocab["req_id"],
-                })
+                metas.append(
+                    {
+                        "vocab_type": "element",
+                        "term": elem,
+                        "category": vocab["category"],
+                        "req_id": vocab["req_id"],
+                    }
+                )
 
         if docs:
             self._coll_vocab.add(documents=docs, metadatas=metas, ids=ids)
@@ -506,12 +556,14 @@ class RequirementsVectorStore:
             doc_id = f"vocab_auto_{safe}"
             ids.append(doc_id)
             docs.append(f"term: {term} | domain: {domain}")
-            metas.append({
-                "vocab_type": "auto_term",
-                "term": term,
-                "domain": domain,
-                "source": "auto_extracted",
-            })
+            metas.append(
+                {
+                    "vocab_type": "auto_term",
+                    "term": term,
+                    "domain": domain,
+                    "source": "auto_extracted",
+                }
+            )
         if not docs:
             return 0
         self._coll_vocab.upsert(documents=docs, metadatas=metas, ids=ids)
@@ -526,12 +578,8 @@ class RequirementsVectorStore:
             if category:
                 kw["where"] = {"category": category.lower()}
             res = self._coll_vocab.get(**kw)
-            screens = [
-                m["term"] for m in res["metadatas"] if m.get("vocab_type") == "screen"
-            ]
-            elements = [
-                m["term"] for m in res["metadatas"] if m.get("vocab_type") == "element"
-            ]
+            screens = [m["term"] for m in res["metadatas"] if m.get("vocab_type") == "screen"]
+            elements = [m["term"] for m in res["metadatas"] if m.get("vocab_type") == "element"]
             return {"screens": list(set(screens)), "elements": list(set(elements))}
         except Exception:
             return {"screens": [], "elements": []}
@@ -543,10 +591,7 @@ class RequirementsVectorStore:
         if self._coll_reqs.count() == 0:
             return []
         r = self._coll_reqs.get(include=["documents", "metadatas"])
-        return [
-            {"document": d, "metadata": m}
-            for d, m in zip(r["documents"], r["metadatas"])
-        ]
+        return [{"document": d, "metadata": m} for d, m in zip(r["documents"], r["metadatas"])]
 
     def clear(self):
         self.initialize()

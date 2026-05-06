@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from stlc_platform.agents.api_test_agent.openapi_parser import OpenAPIParser
 
 _FIXTURES = Path(__file__).resolve().parent.parent.parent.parent / "fixtures"

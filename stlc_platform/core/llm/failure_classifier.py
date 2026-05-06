@@ -19,8 +19,8 @@ Each failure type maps to a specific prompt adaptation strategy.
 from __future__ import annotations
 
 import re
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
 
@@ -85,8 +85,22 @@ _HOLLOW_PATTERN = re.compile("|".join(re.escape(p) for p in _HOLLOW_INDICATORS))
 
 # Stopwords for AC term extraction (module-level constant, not recreated per call)
 _STOPWORDS: Set[str] = {
-    "the", "and", "for", "that", "this", "with", "from", "will",
-    "shall", "must", "should", "when", "then", "given", "user", "system",
+    "the",
+    "and",
+    "for",
+    "that",
+    "this",
+    "with",
+    "from",
+    "will",
+    "shall",
+    "must",
+    "should",
+    "when",
+    "then",
+    "given",
+    "user",
+    "system",
 }
 
 # Text fields to check for content quality (shared across multiple checks)
@@ -197,7 +211,7 @@ class FailureClassifier:
             return (
                 original_prompt
                 + f"\n\nCRITICAL: Your response MUST verify this specific criterion:\n"
-                f"  \"{ac}\"\n"
+                f'  "{ac}"\n'
                 "Reference this criterion in your description, steps, and expected outcome. "
                 "Do NOT generate a test for a different requirement."
             )
@@ -212,7 +226,11 @@ class FailureClassifier:
     # ── Individual failure checks ───────────────────────────────────────────
 
     def _check_truncation(
-        self, raw: str, parsed: Optional[Dict], slot: Dict, req: Any,
+        self,
+        raw: str,
+        parsed: Optional[Dict],
+        slot: Dict,
+        req: Any,
     ) -> Optional[FailureClassification]:
         """Detect JSON truncation (unclosed brackets, cut-off strings)."""
         if not raw or not raw.strip():
@@ -245,7 +263,11 @@ class FailureClassifier:
         return None
 
     def _check_schema_violation(
-        self, raw: str, parsed: Optional[Dict], slot: Dict, req: Any,
+        self,
+        raw: str,
+        parsed: Optional[Dict],
+        slot: Dict,
+        req: Any,
     ) -> Optional[FailureClassification]:
         """Detect missing required fields in parsed output."""
         if parsed is None:
@@ -257,8 +279,14 @@ class FailureClassifier:
             )
 
         required = {
-            "title", "description", "preconditions", "steps",
-            "expected_outcome", "given", "when", "then",
+            "title",
+            "description",
+            "preconditions",
+            "steps",
+            "expected_outcome",
+            "given",
+            "when",
+            "then",
         }
         missing = required - set(parsed.keys())
         if missing:
@@ -282,7 +310,11 @@ class FailureClassifier:
         return None
 
     def _check_instruction_leakage(
-        self, raw: str, parsed: Optional[Dict], slot: Dict, req: Any,
+        self,
+        raw: str,
+        parsed: Optional[Dict],
+        slot: Dict,
+        req: Any,
     ) -> Optional[FailureClassification]:
         """Detect prompt instructions appearing in the response."""
         if parsed is None:
@@ -307,7 +339,11 @@ class FailureClassifier:
         return None
 
     def _check_hollow(
-        self, raw: str, parsed: Optional[Dict], slot: Dict, req: Any,
+        self,
+        raw: str,
+        parsed: Optional[Dict],
+        slot: Dict,
+        req: Any,
     ) -> Optional[FailureClassification]:
         """Detect schema-valid but semantically empty/generic output."""
         if parsed is None:
@@ -347,7 +383,11 @@ class FailureClassifier:
         return None
 
     def _check_off_topic(
-        self, raw: str, parsed: Optional[Dict], slot: Dict, req: Any,
+        self,
+        raw: str,
+        parsed: Optional[Dict],
+        slot: Dict,
+        req: Any,
     ) -> Optional[FailureClassification]:
         """Detect response that doesn't reference the target AC."""
         if parsed is None:
@@ -359,8 +399,7 @@ class FailureClassifier:
 
         # Extract key terms from AC (words > 3 chars, not stopwords)
         ac_terms: Set[str] = {
-            word for word in re.findall(r"[a-zA-Z]{4,}", ac.lower())
-            if word not in _STOPWORDS
+            word for word in re.findall(r"[a-zA-Z]{4,}", ac.lower()) if word not in _STOPWORDS
         }
 
         if len(ac_terms) < 3:
@@ -382,7 +421,11 @@ class FailureClassifier:
         return None
 
     def _check_repetitive(
-        self, raw: str, parsed: Optional[Dict], slot: Dict, req: Any,
+        self,
+        raw: str,
+        parsed: Optional[Dict],
+        slot: Dict,
+        req: Any,
     ) -> Optional[FailureClassification]:
         """Detect repeated steps or identical GWT clauses."""
         if parsed is None:
@@ -392,8 +435,7 @@ class FailureClassifier:
         steps = parsed.get("steps", [])
         if isinstance(steps, list) and len(steps) >= 3:
             actions = [
-                str(s.get("action", "")).strip().lower()
-                for s in steps if isinstance(s, dict)
+                str(s.get("action", "")).strip().lower() for s in steps if isinstance(s, dict)
             ]
             unique_actions = set(actions)
             if len(actions) > 0 and len(unique_actions) < len(actions) * 0.6:

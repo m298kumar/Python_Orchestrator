@@ -95,15 +95,11 @@ class MetricsCollector:
             tokens_used=token_count or getattr(run_artifact, "total_tokens_used", 0),
             estimated_cost_usd=round(estimated_cost, 6),
             cache_hit_rate=round(cache_hit_rate, 4),
-            generation_time_seconds=getattr(
-                run_artifact, "total_duration_seconds", 0.0
-            ),
+            generation_time_seconds=getattr(run_artifact, "total_duration_seconds", 0.0),
             per_stage_durations=getattr(run_artifact, "stage_durations", {}),
             per_ac_type_scores=per_ac_type_scores or {},
             coverage_pct=round(coverage_pct, 4),
-            stages_completed=len(
-                getattr(run_artifact, "stages_completed", [])
-            ),
+            stages_completed=len(getattr(run_artifact, "stages_completed", [])),
             stages_failed=len(getattr(run_artifact, "stages_failed", [])),
             stages_skipped=len(getattr(run_artifact, "stages_skipped", [])),
         )

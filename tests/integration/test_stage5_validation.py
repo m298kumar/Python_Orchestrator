@@ -4,10 +4,10 @@ Stage 5 Integration Tests
 Validates the complete Stage 5 (Frontend UI + Backend API) deliverables.
 """
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 # ===========================================================================
 # API Completeness
 # ===========================================================================
+
 
 class TestStage5APICompleteness:
     """Verify all API routes are registered and respond."""
@@ -87,6 +88,7 @@ class TestStage5APICompleteness:
 # Frontend Files
 # ===========================================================================
 
+
 class TestStage5FrontendFiles:
     """Verify all required frontend source files exist."""
 
@@ -107,8 +109,14 @@ class TestStage5FrontendFiles:
 
     def test_all_pages_exist(self):
         pages = [
-            "Dashboard", "Requirements", "TestCases", "BddCode",
-            "Crawler", "ApiTests", "Config", "History",
+            "Dashboard",
+            "Requirements",
+            "TestCases",
+            "BddCode",
+            "Crawler",
+            "ApiTests",
+            "Config",
+            "History",
         ]
         for page in pages:
             assert (ROOT / "frontend" / "src" / "pages" / f"{page}.tsx").exists(), (
@@ -117,8 +125,11 @@ class TestStage5FrontendFiles:
 
     def test_all_components_exist(self):
         components = [
-            "Layout", "StatusBadge", "CodeViewer",
-            "NotificationProvider", "ErrorBoundary",
+            "Layout",
+            "StatusBadge",
+            "CodeViewer",
+            "NotificationProvider",
+            "ErrorBoundary",
         ]
         for comp in components:
             assert (ROOT / "frontend" / "src" / "components" / f"{comp}.tsx").exists(), (
@@ -140,31 +151,51 @@ class TestStage5FrontendFiles:
 # Schema Completeness
 # ===========================================================================
 
+
 class TestStage5SchemaCompleteness:
     """Verify all API schema models are importable."""
 
     def test_schemas_importable(self):
         import stlc_platform.api.schemas as schemas
+
         names = [
-            "PipelineRunRequest", "PipelineRunStatus", "PipelineRunSummary",
-            "AgentInfo", "RequirementResponse", "TestCaseResponse",
-            "FeatureFileResponse", "SiteModelResponse", "APITestFileResponse",
-            "FeedbackRequest", "FeedbackResponse", "ConfigResponse",
-            "HealthResponse", "ErrorResponse", "WSMessage",
+            "PipelineRunRequest",
+            "PipelineRunStatus",
+            "PipelineRunSummary",
+            "AgentInfo",
+            "RequirementResponse",
+            "TestCaseResponse",
+            "FeatureFileResponse",
+            "SiteModelResponse",
+            "APITestFileResponse",
+            "FeedbackRequest",
+            "FeedbackResponse",
+            "ConfigResponse",
+            "HealthResponse",
+            "ErrorResponse",
+            "WSMessage",
         ]
         for name in names:
             assert hasattr(schemas, name), f"Missing schema: {name}"
 
     def test_deps_importable(self):
         import stlc_platform.api.deps as deps
-        for name in ["RunManager", "get_ws_manager", "get_run_manager",
-                      "get_agent_registry", "get_output_dir"]:
+
+        for name in [
+            "RunManager",
+            "get_ws_manager",
+            "get_run_manager",
+            "get_agent_registry",
+            "get_output_dir",
+        ]:
             assert hasattr(deps, name), f"Missing dep: {name}"
 
     def test_websocket_manager_importable(self):
         from stlc_platform.api.websocket import ConnectionManager
+
         assert ConnectionManager is not None
 
     def test_tasks_importable(self):
         from stlc_platform.api.tasks import submit_pipeline_run
+
         assert submit_pipeline_run is not None

@@ -3,8 +3,8 @@ Tests for the unified config loader.
 """
 
 import os
-import pytest
-from stlc_platform.core.config_loader import load_config, AppConfig
+
+from stlc_platform.core.config_loader import AppConfig, load_config
 
 
 class TestConfigLoader:
@@ -14,9 +14,7 @@ class TestConfigLoader:
 
     def test_default_values(self):
         cfg = load_config()
-        assert cfg.ollama.base_url == os.getenv(
-            "OLLAMA_BASE_URL", "http://localhost:11434"
-        )
+        assert cfg.ollama.base_url == os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         assert cfg.max_test_cases_per_requirement >= 1
 
     def test_config_has_ollama(self):

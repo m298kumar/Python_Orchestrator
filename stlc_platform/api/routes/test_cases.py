@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -36,6 +37,11 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/test-cases", tags=["test-cases"])
 
+# Guard so _load_all_runs only scans disk once per server lifetime.
+# Reset to False when a new run is populated so the next request picks it up.
+_all_runs_loaded: bool = False
+_load_all_lock = threading.Lock()
+
 
 # ── Population helpers ─────────────────────────────────────────────────────
 
@@ -43,15 +49,20 @@ router = APIRouter(prefix="/api/test-cases", tags=["test-cases"])
 def populate_test_cases(
     test_cases: List[Dict[str, Any]],
     store: Optional[TestCaseStore] = None,
+    run_id: str = "",
 ) -> int:
-    """Populate the store from a list of test-case dicts.
+    """Populate the store from a list of test-case dicts, tagging each with run_id.
 
     Called by the background task runner after a pipeline completes.
     Returns the number of test cases loaded.
     """
+    global _all_runs_loaded
     store = store or get_tc_store()
-    count = store.populate(test_cases)
-    logger.info("Populated %d test cases into API store", count)
+    count = store.populate(test_cases, run_id=run_id)
+    # A new run was just added directly — allow _load_all_runs to pick up any
+    # other runs it may have missed on the next request.
+    _all_runs_loaded = False
+    logger.info("Populated %d test cases into API store (run=%s)", count, run_id or "unknown")
     return count
 
 
@@ -59,38 +70,57 @@ def load_test_cases_from_run(
     run_id: str,
     store: Optional[TestCaseStore] = None,
 ) -> int:
-    """Load test cases from a completed pipeline run's disk artifacts."""
+    """Load test cases from a completed pipeline run's disk artifacts.
+
+    Tries enriched test cases first (enrich_test_cases stage), then falls back
+    to the raw parse_requirements output. Tags each test case with run_id.
+    """
     output_dir = get_output_dir()
-    stage_file = output_dir / ".stlc_runs" / run_id / "parse_requirements.json"
-    if not stage_file.exists():
-        return 0
-    try:
-        data = json.loads(stage_file.read_text(encoding="utf-8"))
-        tcs = data.get("artifacts", {}).get("test_cases", [])
-        return populate_test_cases(tcs, store=store)
-    except (json.JSONDecodeError, OSError, KeyError) as exc:
-        logger.exception("Failed to load test cases from run %s: %s", run_id, exc)
-        return 0
+    run_dir = output_dir / ".stlc_runs" / run_id
+
+    # Prefer enriched test cases; fall back to raw parse_requirements output
+    for stage in ("enrich_test_cases", "parse_requirements"):
+        stage_file = run_dir / f"{stage}.json"
+        if not stage_file.exists():
+            continue
+        try:
+            data = json.loads(stage_file.read_text(encoding="utf-8"))
+            tcs = data.get("artifacts", {}).get("test_cases", [])
+            if tcs:
+                return populate_test_cases(tcs, store=store, run_id=run_id)
+        except (json.JSONDecodeError, OSError, KeyError) as exc:
+            logger.exception("Failed to load test cases from %s/%s: %s", run_id, stage, exc)
+    return 0
 
 
-def _load_latest_run_if_empty(store: TestCaseStore) -> None:
-    """Auto-load from the most recent completed run if the store is empty."""
-    if store:
+def _load_all_runs(store: TestCaseStore) -> None:
+    """Load test cases from ALL completed runs on disk into the consolidated store.
+
+    Only scans disk once per server lifetime (guarded by _all_runs_loaded flag).
+    The flag is reset by populate_test_cases() when a new run is added directly,
+    so the next request picks up any runs that arrived after the last scan.
+    """
+    global _all_runs_loaded
+    if _all_runs_loaded:
         return
-    output_dir = get_output_dir()
-    runs_dir = output_dir / ".stlc_runs"
-    if not runs_dir.exists():
-        return
-    candidates = sorted(
-        runs_dir.glob("*/parse_requirements.json"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    if candidates:
-        run_id = candidates[0].parent.name
-        loaded = load_test_cases_from_run(run_id, store=store)
-        if loaded:
-            logger.info("Auto-loaded %d test cases from latest run '%s'", loaded, run_id)
+    with _load_all_lock:
+        if _all_runs_loaded:  # double-check under lock
+            return
+        output_dir = get_output_dir()
+        runs_dir = output_dir / ".stlc_runs"
+        if runs_dir.exists():
+            candidates = sorted(
+                runs_dir.glob("*/parse_requirements.json"),
+                key=lambda p: p.stat().st_mtime,
+            )
+            loaded_runs = {v.get("run_id") for v in store.get_all().values() if v.get("run_id")}
+            for candidate in candidates:
+                rid = candidate.parent.name
+                if rid not in loaded_runs:
+                    count = load_test_cases_from_run(rid, store=store)
+                    if count:
+                        logger.info("Auto-loaded %d test cases from run '%s'", count, rid)
+        _all_runs_loaded = True
 
 
 # ── Response helpers ───────────────────────────────────────────────────────
@@ -124,10 +154,40 @@ def _dict_to_response(d: Dict[str, Any]) -> TestCaseResponse:
         status=d.get("status", "generated"),
         test_level=d.get("test_level", ""),
         quality_score=float(d.get("quality_score", 0.0)),
+        run_id=d.get("run_id") or None,
     )
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
+
+
+def _matches_filters(
+    tc: Dict[str, Any],
+    req_id: Optional[str],
+    test_type: Optional[str],
+    priority: Optional[str],
+    status: Optional[str],
+) -> bool:
+    """Return True if a test case dict passes all active filters."""
+    if req_id and tc.get("req_id") != req_id:
+        return False
+    if test_type and tc.get("test_type") != test_type:
+        return False
+    if priority and tc.get("priority") != priority:
+        return False
+    if status and tc.get("status") != status:
+        return False
+    return True
+
+
+def _load_store_for_run(run_id: Optional[str], store: TestCaseStore) -> None:
+    """Ensure the store is populated for the given run_id (or all runs)."""
+    if run_id:
+        if not _RUN_ID_PATTERN.match(run_id):
+            raise HTTPException(status_code=400, detail="Invalid run_id format")
+        load_test_cases_from_run(run_id, store=store)
+    else:
+        _load_all_runs(store)
 
 
 @router.get("/", response_model=list[TestCaseResponse])
@@ -142,24 +202,14 @@ def list_test_cases(
 ) -> list[TestCaseResponse]:
     """List test cases with optional filters and pagination."""
     store = get_tc_store()
-    if run_id:
-        if not _RUN_ID_PATTERN.match(run_id):
-            raise HTTPException(status_code=400, detail="Invalid run_id format")
-        load_test_cases_from_run(run_id, store=store)
-    else:
-        _load_latest_run_if_empty(store)
+    _load_store_for_run(run_id, store)
 
-    results: List[TestCaseResponse] = []
-    for tc in store.get_all().values():
-        if req_id and tc.get("req_id") != req_id:
-            continue
-        if test_type and tc.get("test_type") != test_type:
-            continue
-        if priority and tc.get("priority") != priority:
-            continue
-        if status and tc.get("status") != status:
-            continue
-        results.append(_dict_to_response(tc))
+    source = store.get_by_run(run_id) if run_id else store.get_all()
+    results = [
+        _dict_to_response(tc)
+        for tc in source.values()
+        if _matches_filters(tc, req_id, test_type, priority, status)
+    ]
     return results[offset : offset + limit]
 
 

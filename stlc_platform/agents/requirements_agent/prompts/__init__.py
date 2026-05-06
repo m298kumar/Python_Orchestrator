@@ -24,10 +24,9 @@ import jinja2
 
 from stlc_platform.agents.requirements_agent.constants import COT_INSTRUCTION, TYPE_CONTEXT
 from stlc_platform.agents.requirements_agent.prompts._hints import (
-    get_hints,
     get_gwt_hint,
+    get_hints,
 )
-
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -116,9 +115,14 @@ class PromptRenderer:
         try:
             template = self._env.get_template(template_path)
             rendered = template.render(
-                ac=ac, feature=feature, nav_target=nav_target,
-                ac_short=ac[:90], ac_60=ac[:60], ac_70=ac[:70],
-                ac_80=ac[:80], ac_100=ac[:100],
+                ac=ac,
+                feature=feature,
+                nav_target=nav_target,
+                ac_short=ac[:90],
+                ac_60=ac[:60],
+                ac_70=ac[:70],
+                ac_80=ac[:80],
+                ac_100=ac[:100],
             )
             # Parse rendered template (expected format: key: value per line)
             return self._parse_hints(rendered)
@@ -197,8 +201,7 @@ class PromptRenderer:
         ac_type = slot.get("ac_type", "general")
         feature = getattr(requirement, "title", "")[:60]
         nav_target = (
-            getattr(requirement, "category", "")[:40]
-            or getattr(requirement, "title", "")[:40]
+            getattr(requirement, "category", "")[:40] or getattr(requirement, "title", "")[:40]
         )
 
         # Get type-specific hints
@@ -210,8 +213,9 @@ class PromptRenderer:
         # Build AC text
         acs = getattr(requirement, "acceptance_criteria", [])
         all_ac_text = (
-            "\n".join(f"  AC{i+1}: {a}" for i, a in enumerate(acs))
-            if acs else "  (none specified)"
+            "\n".join(f"  AC{i + 1}: {a}" for i, a in enumerate(acs))
+            if acs
+            else "  (none specified)"
         )
 
         # Few-shot block
@@ -225,23 +229,17 @@ class PromptRenderer:
 
         # AC type label
         ac_type_label = {
-            'eligibility':  'eligibility rule',
-            'ui_behaviour': 'UI behaviour',
-            'timing':       'timing/performance constraint',
-            'data_valid':   'data validation rule',
-            'security':     'security control',
-            'general':      'general requirement',
-        }.get(ac_type, 'requirement')
+            "eligibility": "eligibility rule",
+            "ui_behaviour": "UI behaviour",
+            "timing": "timing/performance constraint",
+            "data_valid": "data validation rule",
+            "security": "security control",
+            "general": "general requirement",
+        }.get(ac_type, "requirement")
 
         # Tags
-        cat_tag = (
-            getattr(requirement, "category", "").lower().replace(" ", "-")
-            or "general"
-        )
-        req_tag = re.sub(
-            r"[^a-z0-9-]", "-",
-            getattr(requirement, "req_id", "REQ-UNKNOWN").lower()
-        )
+        cat_tag = getattr(requirement, "category", "").lower().replace(" ", "-") or "general"
+        req_tag = re.sub(r"[^a-z0-9-]", "-", getattr(requirement, "req_id", "REQ-UNKNOWN").lower())
 
         # Gherkin section
         gherkin_section = ""
@@ -278,18 +276,24 @@ class PromptRenderer:
             if est_tokens > max_prompt_tokens:
                 # Build shared render params once; override only what changes
                 render_params: Dict[str, Any] = {
-                    "requirement": requirement, "slot": slot,
-                    "test_number": test_number, "total": total,
+                    "requirement": requirement,
+                    "slot": slot,
+                    "test_number": test_number,
+                    "total": total,
                     "all_ac_text": all_ac_text,
                     "context_block": context_block,
                     "feedback_block": feedback_block,
                     "few_shot_block": few_shot_block,
                     "cot_instruction": COT_INSTRUCTION,
                     "type_context": TYPE_CONTEXT.get(tt, ""),
-                    "hints": hints, "gwt_hint": gwt_hint,
+                    "hints": hints,
+                    "gwt_hint": gwt_hint,
                     "gherkin_section": gherkin_section,
-                    "ac": ac, "ac_type_label": ac_type_label,
-                    "cat_tag": cat_tag, "req_tag": req_tag, "tt": tt,
+                    "ac": ac,
+                    "ac_type_label": ac_type_label,
+                    "cat_tag": cat_tag,
+                    "req_tag": req_tag,
+                    "tt": tt,
                 }
 
                 # Trim 1: Remove few-shot block
@@ -324,7 +328,7 @@ class PromptRenderer:
                         result[current_key] = "\n".join(lines).strip()
                         lines = []
                     current_key = key
-                    lines.append(line[len(key) + 1:].strip())
+                    lines.append(line[len(key) + 1 :].strip())
                     break
             else:
                 if current_key:

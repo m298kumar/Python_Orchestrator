@@ -34,6 +34,7 @@ SELECTOR_TESTID_HTML = '<button data-testid="cancel-btn">Cancel</button>'
 SELECTOR_NAME_HTML = '<input name="search_query">'
 SELECTOR_CLASS_HTML = '<div class="action-btn clickable">Click</div>'
 
+
 class TestParseTitle:
     def test_extracts_title(self, parser: PageParser):
         result = parser.parse(TITLE_HTML, url="http://example.com")
@@ -116,7 +117,9 @@ class TestFullPageParsing:
         """Parse the login.html fixture and verify key elements."""
         from pathlib import Path
 
-        fixture_path = Path(__file__).resolve().parents[3] / "fixtures" / "html_pages" / "login.html"
+        fixture_path = (
+            Path(__file__).resolve().parents[3] / "fixtures" / "html_pages" / "login.html"
+        )
         html = fixture_path.read_text(encoding="utf-8")
         result = parser.parse(html, url="http://localhost/login")
 

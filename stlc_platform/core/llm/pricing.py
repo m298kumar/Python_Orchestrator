@@ -53,8 +53,5 @@ def estimate_cost(
     if model_prices is None:
         return 0.0
 
-    cost = (
-        (input_tokens / 1000) * model_prices["in"]
-        + (output_tokens / 1000) * model_prices["out"]
-    )
+    cost = (input_tokens / 1000) * model_prices["in"] + (output_tokens / 1000) * model_prices["out"]
     return round(cost, 6)

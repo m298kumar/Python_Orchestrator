@@ -45,18 +45,14 @@ class StepParser:
     """
 
     # Regex for Gherkin step keywords
-    _STEP_RE = re.compile(
-        r"^\s*(Given|When|Then|And|But)\s+(.+)$", re.MULTILINE
-    )
+    _STEP_RE = re.compile(r"^\s*(Given|When|Then|And|But)\s+(.+)$", re.MULTILINE)
 
     # Patterns for parameterizable values
     _QUOTED_SINGLE = re.compile(r"'([^']+)'")
     _QUOTED_DOUBLE = re.compile(r'"([^"]+)"')
     _BARE_NUMBER = re.compile(r"\b(\d+(?:\.\d+)?)\b")
 
-    def extract_steps(
-        self, features: List[FeatureFileArtifact]
-    ) -> List[ParsedStep]:
+    def extract_steps(self, features: List[FeatureFileArtifact]) -> List[ParsedStep]:
         """
         Parse all Given/When/Then/And/But steps from feature files.
 
@@ -103,9 +99,7 @@ class StepParser:
 
         return unique
 
-    def parameterize(
-        self, steps: List[ParsedStep]
-    ) -> List[ParameterizedStep]:
+    def parameterize(self, steps: List[ParsedStep]) -> List[ParameterizedStep]:
         """
         Group similar steps and replace variable parts with parameters.
 
@@ -123,9 +117,7 @@ class StepParser:
             pattern, params = self._extract_params(step.text)
             signature = (step.keyword, pattern)
             sig_key = f"{signature[0]}::{signature[1]}"
-            step_signatures.setdefault(sig_key, []).append(
-                (step, pattern, params)
-            )
+            step_signatures.setdefault(sig_key, []).append((step, pattern, params))
 
         result: List[ParameterizedStep] = []
         seen_patterns: set = set()
@@ -190,9 +182,7 @@ class StepParser:
                 counter += 1
                 param_name = f"param{counter}"
                 params.append(param_name)
-                result = result.replace(
-                    match.group(0), f"{{{param_name}}}", 1
-                )
+                result = result.replace(match.group(0), f"{{{param_name}}}", 1)
 
         return (result, params)
 

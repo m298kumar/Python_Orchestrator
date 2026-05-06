@@ -17,19 +17,14 @@ from typing import ClassVar, Dict, List, Optional, Set
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 
 from stlc_platform.core.contracts import (
-    CrawledPageArtifact,
     PageElementArtifact,
     TestCaseArtifact,
 )
 
-
 # -- Paths --
 _BUILTIN_TEMPLATES = Path(__file__).resolve().parent / "templates"
 _DEFAULT_OVERRIDES = (
-    Path(__file__).resolve().parent.parent.parent.parent
-    / "config"
-    / "prompt_overrides"
-    / "bdd"
+    Path(__file__).resolve().parent.parent.parent.parent / "config" / "prompt_overrides" / "bdd"
 )
 
 
@@ -52,6 +47,7 @@ class PageInfo:
 
     name: str
     class_name: str
+    page_url: str = ""
     elements: List[Dict[str, str]] = field(default_factory=list)
     actions: List[Dict[str, str]] = field(default_factory=list)
 
@@ -71,7 +67,7 @@ class POMGenerator:
       - Java (Selenium)
     """
 
-    SUPPORTED_LANGUAGES: ClassVar[List[str]] = ["python", "java"]
+    SUPPORTED_LANGUAGES: ClassVar[List[str]] = ["python", "java", "javascript"]
 
     def __init__(
         self,
@@ -82,8 +78,7 @@ class POMGenerator:
     ):
         if language not in self.SUPPORTED_LANGUAGES:
             raise ValueError(
-                f"Unsupported language: '{language}'. "
-                f"Supported: {self.SUPPORTED_LANGUAGES}"
+                f"Unsupported language: '{language}'. Supported: {self.SUPPORTED_LANGUAGES}"
             )
         self.language = language
         self.automation_lib = automation_lib
@@ -105,25 +100,18 @@ class POMGenerator:
     def generate(
         self,
         test_cases: List[TestCaseArtifact],
-        crawled_pages: Optional[List[CrawledPageArtifact]] = None,
+        crawled_pages=None,
     ) -> List[PageObjectStub]:
         """
         Generate POM stubs from test cases, optionally enriched with
-        crawled page selectors.
-
-        Args:
-            test_cases: Test case artifacts with component fields.
-            crawled_pages: Optional crawled pages for real selector data.
-
-        Returns:
-            List of PageObjectStub, one per discovered page/component.
+        crawled page selectors and URLs.
         """
         # Step 1: Extract pages from test case components
         pages = self._extract_pages(test_cases)
 
-        # Step 2: Merge crawled selectors if available
+        # Step 2: Merge crawled selectors + page URLs if available
         if crawled_pages:
-            self._merge_crawled_selectors(pages, crawled_pages)
+            self._merge_crawled_data(pages, crawled_pages)
 
         # Step 3: Render templates
         results = []
@@ -133,96 +121,144 @@ class POMGenerator:
 
         return results
 
-    def _extract_pages(
-        self, test_cases: List[TestCaseArtifact]
-    ) -> Dict[str, PageInfo]:
+    def _extract_pages(self, test_cases: List[TestCaseArtifact]) -> Dict[str, PageInfo]:
         """Extract page names and actions from test case components and steps."""
         pages: Dict[str, PageInfo] = {}
 
         for tc in test_cases:
-            # Get page name from component field
-            component = tc.component.strip() if tc.component else ""
-            if not component:
-                # Try to infer from title
-                component = self._infer_page_from_text(tc.title)
-            if not component:
-                component = "BasePage"
-
-            page_key = self._normalize_name(component)
-            if page_key not in pages:
-                class_name = self._to_class_name(component)
-                pages[page_key] = PageInfo(
-                    name=component,
-                    class_name=class_name,
-                )
-
-            page = pages[page_key]
-
-            # Extract actions from GWT steps
-            for step_text in [tc.given, tc.when, tc.then]:
-                if step_text:
-                    actions = self._extract_actions(step_text)
-                    for action in actions:
-                        if action not in [a["name"] for a in page.actions]:
-                            method_name = self._to_method_name(action)
-                            page.actions.append({
-                                "name": action,
-                                "method_name": method_name,
-                            })
-
-            # Extract elements from step text
-            for step_text in [tc.given, tc.when, tc.then]:
-                if step_text:
-                    elements = self._extract_elements(step_text)
-                    existing_names = {e["name"] for e in page.elements}
-                    for elem in elements:
-                        if elem["name"] not in existing_names:
-                            page.elements.append(elem)
-                            existing_names.add(elem["name"])
+            page = self._get_or_create_page(pages, tc)
+            self._collect_actions(page, tc)
+            self._collect_elements(page, tc)
 
         return pages
 
-    def _merge_crawled_selectors(
-        self,
-        pages: Dict[str, PageInfo],
-        crawled_pages: List[CrawledPageArtifact],
-    ) -> None:
-        """Merge real selectors from crawled pages into POM page info."""
-        # Build a lookup: element name/text -> selector from crawled data
-        selector_lookup: Dict[str, str] = {}
-        for cp in crawled_pages:
-            for elem in cp.elements:
-                if isinstance(elem, PageElementArtifact):
-                    key_name = elem.name.lower().strip() if elem.name else ""
-                    key_text = elem.text.lower().strip() if elem.text else ""
-                    selector = elem.selector or ""
-                    if key_name and selector:
-                        selector_lookup[key_name] = selector
-                    if key_text and selector:
-                        selector_lookup[key_text] = selector
-                elif isinstance(elem, dict):
-                    key_name = str(elem.get("name", "")).lower().strip()
-                    key_text = str(elem.get("text", "")).lower().strip()
-                    selector = str(elem.get("selector", ""))
-                    if key_name and selector:
-                        selector_lookup[key_name] = selector
-                    if key_text and selector:
-                        selector_lookup[key_text] = selector
+    def _get_or_create_page(self, pages: Dict[str, PageInfo], tc: TestCaseArtifact) -> PageInfo:
+        """Resolve the page for a test case, creating it if needed."""
+        component = tc.component.strip() if tc.component else ""
+        if not component:
+            component = self._infer_page_from_text(tc.title)
+        if not component:
+            component = "BasePage"
 
-        # Merge into page elements
+        page_key = self._normalize_name(component)
+        if page_key not in pages:
+            class_name = self._to_class_name(component)
+            pages[page_key] = PageInfo(name=component, class_name=class_name)
+        return pages[page_key]
+
+    def _collect_actions(self, page: PageInfo, tc: TestCaseArtifact) -> None:
+        """Extract and deduplicate actions from test case GWT steps."""
+        for step_text in [tc.given, tc.when, tc.then]:
+            if not step_text:
+                continue
+            existing = {a["name"] for a in page.actions}
+            for action in self._extract_actions(step_text):
+                if action not in existing:
+                    page.actions.append(
+                        {
+                            "name": action,
+                            "method_name": self._to_method_name(action),
+                        }
+                    )
+                    existing.add(action)
+
+    def _collect_elements(self, page: PageInfo, tc: TestCaseArtifact) -> None:
+        """Extract and deduplicate elements from test case GWT steps."""
+        for step_text in [tc.given, tc.when, tc.then]:
+            if not step_text:
+                continue
+            existing_names = {e["name"] for e in page.elements}
+            for elem in self._extract_elements(step_text):
+                if elem["name"] not in existing_names:
+                    page.elements.append(elem)
+                    existing_names.add(elem["name"])
+
+    def _merge_crawled_data(self, pages: Dict[str, "PageInfo"], crawled_pages) -> None:
+        """Merge real selectors, XPaths, and page URLs from crawled pages into POM stubs."""
+        selector_lookup: Dict[str, Dict[str, str]] = {}  # name → {selector, xpath}
+        url_lookup: Dict[str, str] = {}  # keyword → url
+
+        for cp in crawled_pages:
+            # Support both Pydantic objects and dicts
+            cp_url = getattr(cp, "url", None) or (cp.get("url", "") if isinstance(cp, dict) else "")
+            cp_elements = getattr(cp, "elements", None)
+            if cp_elements is None and isinstance(cp, dict):
+                cp_elements = cp.get("elements", [])
+
+            # Build keyword → URL map from page URL path segments
+            if cp_url:
+                path_parts = [p.lower() for p in cp_url.rstrip("/").split("/") if p]
+                for part in path_parts:
+                    if len(part) > 2 and part not in ("index", "html", "php", "asp"):
+                        url_lookup[part] = cp_url
+
+            for elem in (cp_elements or []):
+                self._index_element(selector_lookup, elem)
+
+        # Merge selectors into page elements
         for page in pages.values():
+            # Try to find a matching URL for this page
+            page_key = page.name.lower().replace(" ", "").replace("page", "").strip()
+            for keyword, url in url_lookup.items():
+                if keyword in page_key or page_key in keyword:
+                    page.page_url = url
+                    break
+
             for element in page.elements:
                 elem_name = element["name"].lower().strip()
                 if element.get("selector", "").startswith("TODO"):
-                    # Try to find a real selector
-                    if elem_name in selector_lookup:
-                        element["selector"] = selector_lookup[elem_name]
+                    locator_data = selector_lookup.get(elem_name)
+                    if locator_data:
+                        element["selector"] = locator_data.get("selector", element["selector"])
+                        element["xpath"] = locator_data.get("xpath", "")
+                elif not element.get("xpath"):
+                    # Element has a real CSS selector from test step text — try to find matching xpath
+                    locator_data = selector_lookup.get(elem_name)
+                    if locator_data:
+                        element["xpath"] = locator_data.get("xpath", "")
 
-    def _render_page(self, page_info: PageInfo) -> PageObjectStub:
+    def _build_selector_lookup(self, crawled_pages) -> Dict[str, str]:
+        """Legacy shim — internal logic moved to _merge_crawled_data."""
+        lookup: Dict[str, str] = {}
+        for cp in crawled_pages:
+            elements = getattr(cp, "elements", None)
+            if elements is None and isinstance(cp, dict):
+                elements = cp.get("elements", [])
+            for elem in (elements or []):
+                d: Dict[str, str] = {}
+                self._index_element(d, elem)  # type: ignore[arg-type]
+                lookup.update(d)
+        return lookup
+
+    def _index_element(self, lookup: Dict, elem) -> None:
+        """Add a single crawled element's name and text to the selector lookup."""
+        if isinstance(elem, PageElementArtifact):
+            key_name = elem.name.lower().strip() if elem.name else ""
+            key_text = elem.text.lower().strip() if elem.text else ""
+            selector = elem.selector or ""
+            xpath = getattr(elem, "xpath", "") or ""
+        elif isinstance(elem, dict):
+            key_name = str(elem.get("name", "")).lower().strip()
+            key_text = str(elem.get("text", "")).lower().strip()
+            selector = str(elem.get("selector", ""))
+            xpath = str(elem.get("xpath", ""))
+        else:
+            return
+
+        locator_data = {"selector": selector, "xpath": xpath}
+        if key_name and selector:
+            lookup[key_name] = locator_data
+        if key_text and selector and key_text != key_name:
+            lookup[key_text] = locator_data
+
+    def _render_page(self, page_info: "PageInfo") -> "PageObjectStub":
         """Render a single POM class from page info."""
         if self.language == "java":
             template_name = "pom_java.java.j2"
             ext = ".java"
+        elif self.language == "javascript":
+            template_name = "pom_typescript.ts.j2"
+            ext = ".ts"
         else:
             template_name = "pom_python.py.j2"
             ext = ".py"
@@ -231,6 +267,7 @@ class POMGenerator:
         content = template.render(
             page_name=page_info.name,
             class_name=page_info.class_name,
+            page_url=page_info.page_url or "TODO: set page URL",
             elements=page_info.elements,
             actions=page_info.actions,
             automation_lib=self.automation_lib,
@@ -275,7 +312,7 @@ class POMGenerator:
             if verb_match:
                 # Get the rest of the sentence after the verb
                 verb = verb_match.group(1).lower()
-                rest = sentence[verb_match.end():].strip()
+                rest = sentence[verb_match.end() :].strip()
                 # Take first few meaningful words
                 words = re.findall(r"[a-zA-Z]+", rest)[:3]
                 action = f"{verb}_{'_'.join(words)}" if words else verb
@@ -296,30 +333,36 @@ class POMGenerator:
             if name and name.lower() not in seen and len(name) < 50:
                 seen.add(name.lower())
                 const_name = self._to_constant_name(name)
-                elements.append({
-                    "name": name,
-                    "const_name": const_name,
-                    "selector": f'TODO: "{name}"',
-                    "element_type": "element",
-                })
+                elements.append(
+                    {
+                        "name": name,
+                        "const_name": const_name,
+                        "selector": f'TODO: "{name}"',
+                        "xpath": "",
+                        "element_type": "element",
+                    }
+                )
 
         # Look for element type + name patterns (e.g., "login button", "search field")
         for match in self._ELEMENT_PATTERNS.finditer(text):
             elem_type = match.group(1).lower()
             # Get preceding word(s) as the element name
-            before = text[:match.start()].strip().split()
+            before = text[: match.start()].strip().split()
             if before:
                 name_word = before[-1]
                 full_name = f"{name_word}_{elem_type}"
                 if full_name.lower() not in seen:
                     seen.add(full_name.lower())
                     const_name = self._to_constant_name(full_name)
-                    elements.append({
-                        "name": full_name,
-                        "const_name": const_name,
-                        "selector": f'TODO: "{full_name}"',
-                        "element_type": elem_type,
-                    })
+                    elements.append(
+                        {
+                            "name": full_name,
+                            "const_name": const_name,
+                            "selector": f'TODO: "{full_name}"',
+                            "xpath": "",
+                            "element_type": elem_type,
+                        }
+                    )
 
         return elements
 

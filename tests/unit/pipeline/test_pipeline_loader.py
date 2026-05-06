@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from stlc_platform.pipeline.pipeline_loader import (
     load_pipeline,
     load_pipeline_from_dict,
@@ -45,15 +44,19 @@ class TestLoadFromDict:
 
     def test_missing_id_raises(self):
         with pytest.raises(ValueError, match="missing required 'id'"):
-            load_pipeline_from_dict({
-                "stages": [{"agent": "a"}],
-            })
+            load_pipeline_from_dict(
+                {
+                    "stages": [{"agent": "a"}],
+                }
+            )
 
     def test_missing_agent_raises(self):
         with pytest.raises(ValueError, match="missing required 'agent'"):
-            load_pipeline_from_dict({
-                "stages": [{"id": "s1"}],
-            })
+            load_pipeline_from_dict(
+                {
+                    "stages": [{"id": "s1"}],
+                }
+            )
 
     def test_empty_stages_raises(self):
         with pytest.raises(ValueError, match="at least one stage"):

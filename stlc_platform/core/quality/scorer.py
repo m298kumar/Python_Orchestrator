@@ -431,6 +431,27 @@ class TestCaseScorer:
 
         return max(0.0, score)
 
+    def _max_jaccard_similarity(
+        self,
+        target_terms: set,
+        existing_tcs: List[TestCaseArtifact],
+        extract_text: callable,
+    ) -> float:
+        """Compute maximum Jaccard similarity between target terms and existing TCs."""
+        max_sim = 0.0
+        for other in existing_tcs:
+            other_text = extract_text(other)
+            if not other_text:
+                continue
+            other_terms = set(self._tokenize(other_text))
+            if not other_terms:
+                continue
+            intersection = target_terms & other_terms
+            union = target_terms | other_terms
+            jaccard = len(intersection) / len(union) if union else 0
+            max_sim = max(max_sim, jaccard)
+        return max_sim
+
     def _score_uniqueness(
         self,
         tc: TestCaseArtifact,
@@ -450,31 +471,21 @@ class TestCaseScorer:
         if not tc_terms:
             return 0.5
 
-        max_similarity = 0.0
-        for other in existing_tcs:
-            other_desc = other.description.lower().strip()
-            if not other_desc:
-                continue
-            other_terms = set(self._tokenize(other_desc))
-            if not other_terms:
-                continue
-            intersection = tc_terms & other_terms
-            union = tc_terms | other_terms
-            jaccard = len(intersection) / len(union) if union else 0
-            max_similarity = max(max_similarity, jaccard)
+        max_similarity = self._max_jaccard_similarity(
+            tc_terms, existing_tcs, lambda o: o.description.lower().strip()
+        )
 
         # Also check step-level similarity for near-duplicates
         tc_steps_text = " ".join(s.action.lower() for s in tc.steps)
         tc_step_terms = set(self._tokenize(tc_steps_text))
 
-        for other in existing_tcs:
-            other_steps_text = " ".join(s.action.lower() for s in other.steps)
-            other_step_terms = set(self._tokenize(other_steps_text))
-            if tc_step_terms and other_step_terms:
-                intersection = tc_step_terms & other_step_terms
-                union = tc_step_terms | other_step_terms
-                step_jaccard = len(intersection) / len(union) if union else 0
-                max_similarity = max(max_similarity, step_jaccard)
+        if tc_step_terms:
+            step_sim = self._max_jaccard_similarity(
+                tc_step_terms,
+                existing_tcs,
+                lambda o: " ".join(s.action.lower() for s in o.steps),
+            )
+            max_similarity = max(max_similarity, step_sim)
 
         if max_similarity > 0.85:
             issues.append(f"Near-duplicate of existing TC (similarity: {max_similarity:.0%})")

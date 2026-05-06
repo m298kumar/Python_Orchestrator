@@ -64,25 +64,27 @@ class CSVExporter:
 
             for tc in test_cases:
                 steps_text = self._format_steps(tc)
-                writer.writerow({
-                    "TC ID": tc.tc_id,
-                    "Requirement ID": tc.req_id,
-                    "Title": tc.title,
-                    "Description": tc.description,
-                    "Preconditions": tc.preconditions,
-                    "Test Type": tc.test_type,
-                    "Priority": tc.priority,
-                    "Category": tc.category,
-                    "Component": tc.component,
-                    "Steps": steps_text,
-                    "Expected Outcome": tc.expected_outcome,
-                    "Given": tc.given,
-                    "When": tc.when,
-                    "Then": tc.then,
-                    "Tags": ", ".join(tc.tags),
-                    "Estimated Duration (min)": tc.estimated_duration,
-                    "Generated At": datetime.now().isoformat(),
-                })
+                writer.writerow(
+                    {
+                        "TC ID": tc.tc_id,
+                        "Requirement ID": tc.req_id,
+                        "Title": tc.title,
+                        "Description": tc.description,
+                        "Preconditions": tc.preconditions,
+                        "Test Type": tc.test_type,
+                        "Priority": tc.priority,
+                        "Category": tc.category,
+                        "Component": tc.component,
+                        "Steps": steps_text,
+                        "Expected Outcome": tc.expected_outcome,
+                        "Given": tc.given,
+                        "When": tc.when,
+                        "Then": tc.then,
+                        "Tags": ", ".join(tc.tags),
+                        "Estimated Duration (min)": tc.estimated_duration,
+                        "Generated At": datetime.now().isoformat(),
+                    }
+                )
 
         console.print(f"[green]CSV exported:[/green] {output_path}")
         return output_path
@@ -131,9 +133,7 @@ class ZephyrScaleExporter:
         )
 
         with open(output_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(
-                f, fieldnames=self.HEADERS, quoting=csv.QUOTE_ALL
-            )
+            writer = csv.DictWriter(f, fieldnames=self.HEADERS, quoting=csv.QUOTE_ALL)
             writer.writeheader()
 
             for tc in test_cases:
@@ -158,9 +158,7 @@ class ZephyrScaleExporter:
         steps_formatted = "\n".join(step_lines)
 
         if tc.given or tc.when or tc.then:
-            plain_script = (
-                f"Given {tc.given}\nWhen {tc.when}\nThen {tc.then}"
-            ).strip()
+            plain_script = (f"Given {tc.given}\nWhen {tc.when}\nThen {tc.then}").strip()
         else:
             plain_script = tc.description
 
@@ -191,9 +189,7 @@ class JSONReportExporter:
 
     def export(self, test_cases: List, requirements_count: int) -> str:
         _ensure_output_dir()
-        output_path = os.path.join(
-            config.output.output_dir, config.output.report_filename
-        )
+        output_path = os.path.join(config.output.output_dir, config.output.report_filename)
 
         type_counts: Dict[str, int] = {}
         priority_counts: Dict[str, int] = {}
@@ -210,9 +206,7 @@ class JSONReportExporter:
             "summary": {
                 "total_requirements": requirements_count,
                 "total_test_cases": len(test_cases),
-                "avg_tests_per_requirement": round(
-                    len(test_cases) / max(requirements_count, 1), 2
-                ),
+                "avg_tests_per_requirement": round(len(test_cases) / max(requirements_count, 1), 2),
             },
             "breakdown_by_type": type_counts,
             "breakdown_by_priority": priority_counts,

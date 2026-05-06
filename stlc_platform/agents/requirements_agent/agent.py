@@ -118,6 +118,7 @@ class TestGenerationAgent(BaseAgent):
         if not getattr(llm_client, "_cache", None):
             try:
                 from stlc_platform.core.llm.cache import LLMResponseCache
+
                 cache = LLMResponseCache(max_size=500)
                 llm_client.set_cache(cache)
             except (ImportError, AttributeError):
@@ -125,9 +126,8 @@ class TestGenerationAgent(BaseAgent):
 
         # Build tech stack context
         tech_stack_config = config.get("tech_stack") or artifacts.get("tech_stack")
-        tech_stack = (
-            artifacts.get("tech_stack_context")
-            or TechStackContext.from_config(tech_stack_config)
+        tech_stack = artifacts.get("tech_stack_context") or TechStackContext.from_config(
+            tech_stack_config
         )
 
         # Load scorer config from pipeline config if available (Fix #6)
@@ -136,6 +136,7 @@ class TestGenerationAgent(BaseAgent):
         if quality_gate_cfg:
             try:
                 from stlc_platform.core.quality.scorer import ScorerConfig
+
                 scorer_config = ScorerConfig.from_config(config)
             except (ImportError, KeyError, TypeError, ValueError):
                 pass  # fall back to defaults
@@ -146,7 +147,8 @@ class TestGenerationAgent(BaseAgent):
             prompt_renderer=artifacts.get("prompt_renderer") or PromptRenderer(),
             classifier=artifacts.get("classifier") or ACClassifier(),
             sanitiser=artifacts.get("sanitiser") or TestCaseSanitiser(),
-            component_resolver=artifacts.get("component_resolver") or ComponentResolver(
+            component_resolver=artifacts.get("component_resolver")
+            or ComponentResolver(
                 vector_store=vector_store,
             ),
             domain_detector=artifacts.get("domain_detector") or DomainDetector(),

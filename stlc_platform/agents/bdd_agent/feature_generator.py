@@ -30,10 +30,7 @@ _NUMBER_RE = re.compile(r"(?<![a-zA-Z_])-?\d+(?:\.\d+)?(?![a-zA-Z0-9_])")
 # -- Paths --
 _BUILTIN_TEMPLATES = Path(__file__).resolve().parent / "templates"
 _DEFAULT_OVERRIDES = (
-    Path(__file__).resolve().parent.parent.parent.parent
-    / "config"
-    / "prompt_overrides"
-    / "bdd"
+    Path(__file__).resolve().parent.parent.parent.parent / "config" / "prompt_overrides" / "bdd"
 )
 
 
@@ -64,9 +61,7 @@ class FeatureFileGenerator:
             keep_trailing_newline=True,
         )
 
-    def generate(
-        self, test_cases: List[TestCaseArtifact]
-    ) -> List[FeatureFileArtifact]:
+    def generate(self, test_cases: List[TestCaseArtifact]) -> List[FeatureFileArtifact]:
         """Generate one FeatureFileArtifact per unique req_id."""
         groups = self._group_by_requirement(test_cases)
         features = []
@@ -84,9 +79,7 @@ class FeatureFileGenerator:
             groups.setdefault(tc.req_id, []).append(tc)
         return groups
 
-    def _build_feature(
-        self, req_id: str, cases: List[TestCaseArtifact]
-    ) -> FeatureFileArtifact:
+    def _build_feature(self, req_id: str, cases: List[TestCaseArtifact]) -> FeatureFileArtifact:
         """Build a complete feature file from grouped test cases."""
         # Feature-level info from first test case
         first = cases[0]
@@ -131,9 +124,7 @@ class FeatureFileGenerator:
             return tc.category
         return tc.req_id
 
-    def _extract_background(
-        self, cases: List[TestCaseArtifact]
-    ) -> Optional[str]:
+    def _extract_background(self, cases: List[TestCaseArtifact]) -> Optional[str]:
         """
         Extract a shared Background Given step if >50% of scenarios
         share the same Given text (after normalization).
@@ -217,9 +208,7 @@ class FeatureFileGenerator:
         """
         # Build per-TC metadata: skeleton key + extracted params
         KeyType = Tuple[str, str, str]
-        groups: Dict[KeyType, List[Tuple[TestCaseArtifact, List[Tuple[str, str]]]]] = (
-            OrderedDict()
-        )
+        groups: Dict[KeyType, List[Tuple[TestCaseArtifact, List[Tuple[str, str]]]]] = OrderedDict()
 
         for tc in cases:
             # Use a shared counter so param names are unique across G/W/T
@@ -238,15 +227,11 @@ class FeatureFileGenerator:
             has_params = any(len(params) > 0 for _, params in members)
             if len(members) >= 2 and has_params:
                 # Merge into a Scenario Outline
-                scenarios.append(
-                    self._build_outline(key, members, background_given)
-                )
+                scenarios.append(self._build_outline(key, members, background_given))
             else:
                 # Regular scenarios (either single or identical with no params)
                 for tc, _ in members:
-                    scenarios.append(
-                        self._build_scenario(tc, background_given=background_given)
-                    )
+                    scenarios.append(self._build_scenario(tc, background_given=background_given))
         return scenarios
 
     def _build_outline(

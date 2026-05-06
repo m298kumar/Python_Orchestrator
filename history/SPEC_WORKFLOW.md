@@ -1,13 +1,19 @@
 # STLC Automation Platform — Specification Workflow Model
 
-> Version: 1.1
+> Version: 1.2
 > Created: 2026-03-15
-> Updated: 2026-03-20
-> Status: DRAFT
+> Updated: 2026-04-05
+> Status: ACTIVE
 >
 > Changelog v1.1: Incorporated community insights from industry practitioners
 > (RAG retrieval, test pyramid guardrails, failure classification, domain
 > knowledge skill files, tiered model routing, execution profiles, CI hooks).
+>
+> Changelog v1.2: Code quality enforcement pass — all C901 cyclomatic complexity
+> violations reduced to ≤10 across platform and legacy code. Logging config
+> bootstrap fix. Dark mode applied to all frontend pages. TestCases page
+> redesigned to show test steps instead of BDD scenarios. Model dropdown
+> combobox filter fixed. All 1527 backend tests passing.
 
 ---
 
@@ -918,3 +924,74 @@ All contracts start at `1.0`. Rules for versioning:
 | **Total** | **~13 weeks** |
 
 > Note: Stages 2 and 3 can overlap (parallel development) reducing to ~10-11 weeks.
+
+---
+
+## Code Quality Standards (v1.2)
+
+### Cyclomatic Complexity Limit
+All functions must have cyclomatic complexity **≤ 10** (enforced via `ruff --select C901`).
+
+#### Refactoring Log — 2026-04-05
+The following functions exceeded the limit and were refactored by extracting helper functions:
+
+| File | Function | Before | After | Helpers Extracted |
+|------|----------|--------|-------|-------------------|
+| `stlc_platform/agents/crawler_agent/discrepancy_detector.py` | `_load_heuristics_config` | 11 | ≤10 | `_resolve_flags`, `_compile_page_keywords`, `_compile_element_patterns`, `_compile_field_patterns` |
+| `stlc_platform/agents/crawler_agent/dynamic_crawler.py` | `crawl` | 11 | ≤10 | `_visit_page` |
+| `stlc_platform/agents/requirements_agent/component_resolver.py` | `resolve` | 11 | ≤10 | `_match_suffix_map`, `_construct_fallback` |
+| `stlc_platform/core/llm/base_client.py` | `generate_test_case` | 11 | ≤10 | `_process_attempt` |
+| `stlc_platform/api/tasks.py` | `run_pipeline_background` | 17 | ≤10 | config loading, requirements injection, callbacks, result handling helpers |
+| `stlc_platform/cli.py` | `_run_pipeline` | 16 | ≤10 | config loading, profile loading, orchestrator setup, result display helpers |
+| `stlc_platform/agents/api_test_agent/agent.py` | `execute` | 14 | ≤10 | per-phase extraction helpers |
+| `stlc_platform/agents/bdd_agent/gherkin_validator.py` | `validate` | 13 | ≤10 | rule group helpers |
+| `stlc_platform/agents/bdd_agent/pom_generator.py` | `_extract_pages`, `_merge_crawled_selectors` | 13 | ≤10 | extraction sub-helpers |
+| `stlc_platform/agents/crawler_agent/agent.py` | `validate_input`, `execute` | 12/14 | ≤10 | phase helpers |
+| `stlc_platform/agents/requirements_agent/generator.py` | `generate_for_all` | 12 | ≤10 | batch helpers |
+| `stlc_platform/agents/requirements_agent/sanitiser.py` | `_gwt_is_bad` | 12 | ≤10 | `_gwt_has_content_issues`, `_gwt_has_syntax_issues` |
+| `stlc_platform/core/quality/scorer.py` | `_score_uniqueness` | 12 | ≤10 | scoring sub-helpers |
+| `stlc_platform/core/storage/chroma_store.py` | `retrieve_examples` | 11 | ≤10 | query builder helpers |
+| `stlc_platform/pipeline/coverage_tracker.py` | `analyze` | 12 | ≤10 | analysis sub-helpers |
+| `stlc_platform/pipeline/orchestrator.py` | `_fill_coverage_gaps` | 11 | ≤10 | gap detection helpers |
+| `scripts/validate_stage.py` | `check_stage_3` | 12 | ≤10 | check group helpers |
+| `llm_client.py` (legacy) | `_repair_truncated_json` | 14 | ≤10 | `_scan_json_state` |
+| `mcp_server.py` (legacy) | `_run_mcp_server` | 17 | ≤10 | `_register_query_tools`, `_register_mutation_tools`, `_parse_step_lines` |
+| `orchestrator.py` (legacy) | `run_orchestrator` | 19 | ≤10 | `_apply_overrides`, `_setup_llm`, `_setup_chroma`, `_export_results` |
+| `test_generator.py` (legacy) | `_resolve_component`, `_gwt_is_bad` | 11/12 | ≤10 | `_is_specific_llm_component`, `_match_suffix_map`, `_gwt_has_content_issues`, `_gwt_has_syntax_issues` |
+
+### Enforcement Rule
+The ruff config (`pyproject.toml`) enforces `max-complexity = 10` via `C901`. The CI pipeline runs `ruff check --select C901` on every push. Any PR introducing a function with complexity > 10 will fail CI.
+
+### Refactoring Pattern
+When a function's complexity exceeds 10, apply one of these strategies:
+1. **Extract helper** — group logically related branches into a named helper function
+2. **Replace if/elif chains** — use a dispatch dict or early returns instead of nested conditionals
+3. **Split by phase** — if a function does multiple phases (setup → execute → teardown), give each its own function
+4. **Guard clauses** — convert `if condition: do_lots_of_stuff` into `if not condition: return` to flatten nesting
+
+---
+
+## Post-Stage Enhancements Log
+
+### Phase D — Quality & UX (2026-04-05)
+
+Changes applied after all 6 stages were complete:
+
+#### Backend
+- **Logging config fix** (`stlc_platform/core/logging_config.py`): Create `logs/` directory before `dictConfig` is called; resolve relative handler filenames to absolute paths to prevent `Unable to configure handler 'file'` on startup.
+- **TestCaseResponse schema** (`stlc_platform/api/schemas.py`): Added `TestStepResponse` model; expanded `TestCaseResponse` with `steps`, `preconditions`, `test_level`, `quality_score`.
+- **test_cases route** (`stlc_platform/api/routes/test_cases.py`): `_dict_to_response` now maps `TestStepArtifact` → `TestStepResponse` so the frontend receives structured steps.
+
+#### Frontend
+- **Dark mode** — All pages now use Tailwind `dark:` utility classes (Dashboard, Requirements, TestCases, BddCode, Crawler, ApiTests, History, Metrics, Config).
+- **TestCases page redesign** — Now shows numbered steps table (# | Action | Expected Result) instead of Given/When/Then BDD scenario. Edit mode supports add/remove steps inline.
+- **Config page model dropdown** — Fixed combobox showing only 1 model by introducing separate `query` state (independent of the selected `value`); filter resets on focus so all models are visible.
+- **New pages** — Login, NotFound, Metrics added.
+- **New components** — ErrorBoundary, ProtectedRoute; AuthContext for JWT auth.
+- **Dead code removed** — `LiveProgress`, `usePipeline`, `useRequirements`, `useWebSocket` removed (functionality absorbed into page-level state).
+
+#### Infrastructure
+- **Docker hardening** — Multi-stage build updated; non-root user.
+- **Pre-commit config** — `.pre-commit-config.yaml` added with ruff + mypy hooks.
+- **CI pipeline** — `stlc_ci.yml` updated to run complexity check (`ruff --select C901`) as a separate job.
+- **Best practices** — `best-practices.md` added to project root; `memory/feedback_claude_code_best_practices.md` added to project memory.

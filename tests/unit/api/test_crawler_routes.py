@@ -1,29 +1,30 @@
 """
 Tests for /api/crawler/* endpoints.
 
-The crawler route uses module-level dicts ``_site_model`` and ``_crawled_pages``
+The crawler route uses module-level dicts ``_site_models`` and ``_crawled_pages``
 for storage. We clear them between tests to ensure isolation.
 """
 
 import pytest
-
 from fastapi.testclient import TestClient
 from stlc_platform.api.main import app
 from stlc_platform.api.routes import crawler as crawler_module
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _clear_crawler_data():
     """Clear the in-memory crawler stores between tests."""
-    crawler_module._site_model.clear()
+    crawler_module._site_models.clear()
     crawler_module._crawled_pages.clear()
+    crawler_module._run_order.clear()
     yield
-    crawler_module._site_model.clear()
+    crawler_module._site_models.clear()
     crawler_module._crawled_pages.clear()
+    crawler_module._run_order.clear()
 
 
 @pytest.fixture()
@@ -34,6 +35,7 @@ def client():
 # ---------------------------------------------------------------------------
 # GET /api/crawler/site-model
 # ---------------------------------------------------------------------------
+
 
 class TestGetSiteModel:
     """GET /api/crawler/site-model returns the site model or empty default."""
@@ -52,6 +54,7 @@ class TestGetSiteModel:
 # GET /api/crawler/pages
 # ---------------------------------------------------------------------------
 
+
 class TestListPages:
     """GET /api/crawler/pages returns crawled pages."""
 
@@ -68,12 +71,18 @@ class TestListPages:
         assert len(data) == 0
 
     def test_returns_seeded_pages(self, client: TestClient):
-        crawler_module._crawled_pages["http://example.com"] = {
-            "url": "http://example.com",
-            "title": "Example",
-            "element_count": 10,
-            "form_count": 1,
-            "link_count": 5,
+        # _crawled_pages is keyed run_id → {url → page_dict}; seed with a fake run
+        run_id = "test-run-001"
+        crawler_module._run_order.append(run_id)
+        crawler_module._crawled_pages[run_id] = {
+            "http://example.com": {
+                "url": "http://example.com",
+                "title": "Example",
+                "element_count": 10,
+                "form_count": 1,
+                "link_count": 5,
+                "run_id": run_id,
+            }
         }
         data = client.get("/api/crawler/pages").json()
         assert len(data) == 1

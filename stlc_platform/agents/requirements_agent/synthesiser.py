@@ -12,11 +12,11 @@ from __future__ import annotations
 import re
 from typing import Any, List, Tuple
 
-from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 from stlc_platform.agents.requirements_agent.constants import (
     GENERIC_STEP_FRAGMENTS,
     ac_to_title,
 )
+from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
 
 
 def _is_generic_step(action: str) -> bool:
@@ -24,14 +24,14 @@ def _is_generic_step(action: str) -> bool:
     t = action.strip().lower()
     if len(t) < 20:
         return True
-    if re.match(r'^[a-z]+(_[a-z]+)+$', t):
+    if re.match(r"^[a-z]+(_[a-z]+)+$", t):
         return True
     return any(t.startswith(frag) for frag in GENERIC_STEP_FRAGMENTS)
 
 
 def _has_loop(text: str, threshold: int = 3) -> bool:
     """Detect repeated sentences — hallucinated loops."""
-    parts = re.split(r'[.\n]', text)
+    parts = re.split(r"[.\n]", text)
     parts = [p.strip().lower()[:60] for p in parts if len(p.strip()) > 15]
     if not parts:
         return False
@@ -93,8 +93,8 @@ def make_gwt(
 def make_description(ac: str, test_type: str) -> str:
     """Generate a description from AC and test type."""
     labels = {
-        "positive":  "Positive test -- verifies that",
-        "negative":  "Negative test -- verifies correct rejection when",
+        "positive": "Positive test -- verifies that",
+        "negative": "Negative test -- verifies correct rejection when",
         "edge_case": "Boundary test -- verifies enforcement at the exact limit of",
     }
     return f"{labels.get(test_type, 'Test --')} {ac.strip()}"
@@ -152,69 +152,163 @@ def synthesise_steps(
         if ac_type == "timing":
             return [
                 _step("Log in and navigate to the relevant screen", "Screen loads correctly"),
-                _step(f"Trigger the timed event described in: {ac[:70]}", "System begins processing; timer started"),
-                _step("Measure elapsed time from trigger to completion", f"Event completes within the limit: {ac[:60]}"),
-                _step("Record the measured time in the test evidence", "Elapsed time is within the required limit"),
-                _step("Verify no timeout error is shown", "System shows the success state; no timeout message"),
+                _step(
+                    f"Trigger the timed event described in: {ac[:70]}",
+                    "System begins processing; timer started",
+                ),
+                _step(
+                    "Measure elapsed time from trigger to completion",
+                    f"Event completes within the limit: {ac[:60]}",
+                ),
+                _step(
+                    "Record the measured time in the test evidence",
+                    "Elapsed time is within the required limit",
+                ),
+                _step(
+                    "Verify no timeout error is shown",
+                    "System shows the success state; no timeout message",
+                ),
             ]
         elif ac_type == "data_valid":
             return [
-                _step("Log in and navigate to the relevant input form", "Form is displayed with the relevant fields"),
-                _step(f"Enter the valid boundary value for: {ac[:70]}", "System accepts the input without inline error"),
-                _step("Submit or trigger validation", "System processes the valid value successfully"),
-                _step(f"Clear the field and enter an invalid value for: {ac[:60]}", "System displays an inline validation error"),
-                _step("Verify the error message text is accurate", "Error message correctly describes the validation rule"),
+                _step(
+                    "Log in and navigate to the relevant input form",
+                    "Form is displayed with the relevant fields",
+                ),
+                _step(
+                    f"Enter the valid boundary value for: {ac[:70]}",
+                    "System accepts the input without inline error",
+                ),
+                _step(
+                    "Submit or trigger validation", "System processes the valid value successfully"
+                ),
+                _step(
+                    f"Clear the field and enter an invalid value for: {ac[:60]}",
+                    "System displays an inline validation error",
+                ),
+                _step(
+                    "Verify the error message text is accurate",
+                    "Error message correctly describes the validation rule",
+                ),
             ]
         else:
             return [
                 _step("Log in with valid credentials", "Home screen loads without errors"),
                 _step(f"Navigate to the section for {feature}", "Relevant screen is displayed"),
-                _step(f"Perform the action that exercises: {ac[:80]}", "System accepts the input correctly"),
-                _step("Verify the observable result matches the acceptance criterion", f"Result matches: {ac[:80]}"),
-                _step("Navigate away and return to confirm persistence", "State is saved; no error banners"),
+                _step(
+                    f"Perform the action that exercises: {ac[:80]}",
+                    "System accepts the input correctly",
+                ),
+                _step(
+                    "Verify the observable result matches the acceptance criterion",
+                    f"Result matches: {ac[:80]}",
+                ),
+                _step(
+                    "Navigate away and return to confirm persistence",
+                    "State is saved; no error banners",
+                ),
             ]
 
     elif test_type == "negative":
         if ac_type == "ui_behaviour":
             return [
-                _step("Log in with test account where the triggering condition is absent", "Home screen loads; condition is not active"),
+                _step(
+                    "Log in with test account where the triggering condition is absent",
+                    "Home screen loads; condition is not active",
+                ),
                 _step("Navigate to the relevant screen", "Screen loads"),
-                _step(f"Attempt to trigger the UI behaviour described in: {ac[:70]}", "System does not show the behaviour incorrectly"),
-                _step("Verify the fallback or error state is shown", "System shows the correct fallback message or state"),
-                _step("Attempt to proceed past the fallback state", "System handles the unhappy path cleanly"),
+                _step(
+                    f"Attempt to trigger the UI behaviour described in: {ac[:70]}",
+                    "System does not show the behaviour incorrectly",
+                ),
+                _step(
+                    "Verify the fallback or error state is shown",
+                    "System shows the correct fallback message or state",
+                ),
+                _step(
+                    "Attempt to proceed past the fallback state",
+                    "System handles the unhappy path cleanly",
+                ),
             ]
         elif ac_type == "timing":
             return [
-                _step("Configure test environment to simulate delay exceeding the time limit", "Delay condition is active"),
+                _step(
+                    "Configure test environment to simulate delay exceeding the time limit",
+                    "Delay condition is active",
+                ),
                 _step("Log in and navigate to the relevant screen", "Screen loads"),
-                _step(f"Trigger the timed event described in: {ac[:70]}", "Processing begins; timer running"),
-                _step("Allow the time limit to be exceeded without the expected event", "System detects the timeout"),
-                _step("Observe the timeout error or fallback state", "System displays the correct timeout message"),
+                _step(
+                    f"Trigger the timed event described in: {ac[:70]}",
+                    "Processing begins; timer running",
+                ),
+                _step(
+                    "Allow the time limit to be exceeded without the expected event",
+                    "System detects the timeout",
+                ),
+                _step(
+                    "Observe the timeout error or fallback state",
+                    "System displays the correct timeout message",
+                ),
             ]
         elif ac_type == "data_valid":
             return [
                 _step("Log in and navigate to the relevant form", "Form is displayed"),
-                _step(f"Enter an invalid value that violates: {ac[:70]}", "System detects the invalid input"),
+                _step(
+                    f"Enter an invalid value that violates: {ac[:70]}",
+                    "System detects the invalid input",
+                ),
                 _step("Submit or attempt to proceed", "System rejects the invalid value"),
-                _step("Read the validation error message shown", "Error message accurately describes the rule violation"),
-                _step("Attempt to bypass validation via back button or direct navigation", "System maintains the block; no invalid data saved"),
+                _step(
+                    "Read the validation error message shown",
+                    "Error message accurately describes the rule violation",
+                ),
+                _step(
+                    "Attempt to bypass validation via back button or direct navigation",
+                    "System maintains the block; no invalid data saved",
+                ),
             ]
         else:
             return [
-                _step("Log in with an ineligible test account", "Home screen loads; ineligibility condition is active"),
+                _step(
+                    "Log in with an ineligible test account",
+                    "Home screen loads; ineligibility condition is active",
+                ),
                 _step(f"Navigate to the section for {feature}", "Screen loads"),
-                _step(f"Attempt the action blocked by: {ac[:80]}", "System detects the ineligibility condition"),
-                _step("Read the rejection message displayed on screen", "Correct rejection message is shown"),
-                _step("Attempt to bypass the block via back button or direct navigation", "System maintains the block; no data saved"),
+                _step(
+                    f"Attempt the action blocked by: {ac[:80]}",
+                    "System detects the ineligibility condition",
+                ),
+                _step(
+                    "Read the rejection message displayed on screen",
+                    "Correct rejection message is shown",
+                ),
+                _step(
+                    "Attempt to bypass the block via back button or direct navigation",
+                    "System maintains the block; no data saved",
+                ),
             ]
 
     else:  # edge_case
         return [
-            _step(f"Set test data at exactly the boundary value for: {ac[:70]}", "Boundary test data is confirmed in the environment"),
-            _step("Log in and navigate to the relevant screen", "Screen loads; boundary test data is visible"),
-            _step("Execute the action at the exact boundary value", "System accepts the boundary value without error"),
-            _step("Record the outcome shown on screen", f"Outcome matches the requirement: {ac[:70]}"),
-            _step("Repeat the action with a value one unit beyond the boundary", "System rejects the out-of-bounds value with an error message"),
+            _step(
+                f"Set test data at exactly the boundary value for: {ac[:70]}",
+                "Boundary test data is confirmed in the environment",
+            ),
+            _step(
+                "Log in and navigate to the relevant screen",
+                "Screen loads; boundary test data is visible",
+            ),
+            _step(
+                "Execute the action at the exact boundary value",
+                "System accepts the boundary value without error",
+            ),
+            _step(
+                "Record the outcome shown on screen", f"Outcome matches the requirement: {ac[:70]}"
+            ),
+            _step(
+                "Repeat the action with a value one unit beyond the boundary",
+                "System rejects the out-of-bounds value with an error message",
+            ),
         ]
 
 

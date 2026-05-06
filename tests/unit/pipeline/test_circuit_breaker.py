@@ -6,7 +6,6 @@ from stlc_platform.pipeline.circuit_breaker import CircuitBreaker, CircuitState
 
 
 class TestCircuitBreaker:
-
     def test_initial_state_closed(self):
         breaker = CircuitBreaker(threshold=3)
         assert not breaker.is_open("stage_a")

@@ -31,43 +31,59 @@ def main() -> None:
 
 @main.command()
 @click.option(
-    "--config", "-c", default="config/stlc_config.yaml",
+    "--config",
+    "-c",
+    default="config/stlc_config.yaml",
     help="Config file path.",
 )
 @click.option(
-    "--pipeline", "-p", default=None,
+    "--pipeline",
+    "-p",
+    default=None,
     help="Pipeline YAML file to run.",
 )
 @click.option(
-    "--agent", default=None,
+    "--agent",
+    default=None,
     help="Run a single agent by ID.",
 )
 @click.option(
-    "--input", "-i", "input_file", default=None,
+    "--input",
+    "-i",
+    "input_file",
+    default=None,
     help="Input artifacts JSON file (for --agent mode).",
 )
 @click.option(
-    "--resume-from", default=None,
+    "--resume-from",
+    default=None,
     help="Stage ID to resume pipeline from.",
 )
 @click.option(
-    "--output", "-o", default="./output",
+    "--output",
+    "-o",
+    default="./output",
     help="Output directory.",
 )
 @click.option(
-    "--max-workers", default=4, type=int,
+    "--max-workers",
+    default=4,
+    type=int,
     help="Max parallel workers for pipeline.",
 )
 @click.option(
-    "--ci", is_flag=True,
+    "--ci",
+    is_flag=True,
     help="CI mode: JSON output, non-interactive.",
 )
 @click.option(
-    "--profile", default=None,
+    "--profile",
+    default=None,
     help="Execution profile (smoke, targeted, regression).",
 )
 @click.option(
-    "--config-profile", default=None,
+    "--config-profile",
+    default=None,
     help="Config profile overlay (web, api).",
 )
 def run(
@@ -87,8 +103,14 @@ def run(
         _run_single_agent(agent, input_file, config, output, ci)
     elif pipeline:
         _run_pipeline(
-            pipeline, config, resume_from, output, max_workers, ci,
-            profile=profile, config_profile=config_profile,
+            pipeline,
+            config,
+            resume_from,
+            output,
+            max_workers,
+            ci,
+            profile=profile,
+            config_profile=config_profile,
         )
     else:
         click.echo("Error: Specify --pipeline or --agent.", err=True)
@@ -144,6 +166,47 @@ def _run_single_agent(
     raise SystemExit(0 if result.success else 1)
 
 
+def _load_pipeline_config(config_profile: Optional[str]) -> dict:
+    """Load pipeline config, optionally applying a config profile overlay."""
+    if not config_profile:
+        return {}
+    try:
+        from stlc_platform.core.config_loader import load_config_yaml
+
+        return load_config_yaml(profile=config_profile)
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+
+def _load_execution_profile(profile: Optional[str]):
+    """Load an execution profile by name. Returns None if no profile specified."""
+    if not profile:
+        return None
+    from stlc_platform.pipeline.profile_loader import ProfileLoader
+
+    try:
+        loader = ProfileLoader()
+        return loader.load(profile)
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+
+def _display_pipeline_result(result, ci: bool) -> None:
+    """Display pipeline result to stdout in CI or human-friendly format."""
+    if ci:
+        click.echo(result.model_dump_json(indent=2))
+    else:
+        click.echo(f"\nPipeline: {result.status}")
+        click.echo(f"  Completed: {len(result.stages_completed)} stages")
+        if result.stages_failed:
+            click.echo(f"  Failed: {result.stages_failed}")
+        if result.stages_skipped:
+            click.echo(f"  Skipped: {result.stages_skipped}")
+        click.echo(f"  Duration: {result.total_duration_seconds:.1f}s")
+
+
 def _run_pipeline(
     pipeline_path: str,
     config_path: str,
@@ -158,37 +221,17 @@ def _run_pipeline(
     from stlc_platform.pipeline.agent_registry import AgentRegistry
     from stlc_platform.pipeline.orchestrator import PipelineOrchestrator, StageResult
     from stlc_platform.pipeline.pipeline_loader import load_pipeline
-    from stlc_platform.pipeline.profile_loader import ProfileLoader
     from stlc_platform.pipeline.skill_loader import SkillLoader
 
-    # Load pipeline
     try:
         dag = load_pipeline(pipeline_path)
     except (FileNotFoundError, ValueError) as e:
         click.echo(f"Error loading pipeline: {e}", err=True)
         raise SystemExit(1)
 
-    # Load config (with optional profile overlay)
-    pipeline_config: dict = {}
-    if config_profile:
-        try:
-            from stlc_platform.core.config_loader import load_config_yaml
-            pipeline_config = load_config_yaml(profile=config_profile)
-        except FileNotFoundError as e:
-            click.echo(f"Error: {e}", err=True)
-            raise SystemExit(1)
+    pipeline_config = _load_pipeline_config(config_profile)
+    execution_profile = _load_execution_profile(profile)
 
-    # Load execution profile
-    execution_profile = None
-    if profile:
-        try:
-            loader = ProfileLoader()
-            execution_profile = loader.load(profile)
-        except FileNotFoundError as e:
-            click.echo(f"Error: {e}", err=True)
-            raise SystemExit(1)
-
-    # Set up skill loader
     domain = pipeline_config.get("project", {}).get("domain", "")
     skill_loader = SkillLoader(domain=domain)
 
@@ -224,24 +267,16 @@ def _run_pipeline(
             click.echo(f"  Config: {config_profile}")
 
     result = orchestrator.run(resume_from=resume_from)
-
-    if ci:
-        click.echo(result.model_dump_json(indent=2))
-    else:
-        click.echo(f"\nPipeline: {result.status}")
-        click.echo(f"  Completed: {len(result.stages_completed)} stages")
-        if result.stages_failed:
-            click.echo(f"  Failed: {result.stages_failed}")
-        if result.stages_skipped:
-            click.echo(f"  Skipped: {result.stages_skipped}")
-        click.echo(f"  Duration: {result.total_duration_seconds:.1f}s")
-
+    _display_pipeline_result(result, ci)
     raise SystemExit(0 if result.status == "completed" else 1)
 
 
 @main.command()
 @click.option(
-    "--stage", "-s", type=int, required=True,
+    "--stage",
+    "-s",
+    type=int,
+    required=True,
     help="Stage number to validate (0-5).",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output.")
@@ -282,7 +317,10 @@ def feedback() -> None:
 @feedback.command("add")
 @click.option("--agent", "-a", required=True, help="Agent ID to add feedback for.")
 @click.option(
-    "--type", "-t", "feedback_type", default="correction",
+    "--type",
+    "-t",
+    "feedback_type",
+    default="correction",
     type=click.Choice(["correction", "preference", "constraint"]),
     help="Feedback type.",
 )
@@ -336,11 +374,18 @@ def metrics() -> None:
 
 @metrics.command("list")
 @click.option(
-    "--last", "-n", "last_n", default=20, type=int,
+    "--last",
+    "-n",
+    "last_n",
+    default=20,
+    type=int,
     help="Number of recent runs to show.",
 )
 @click.option(
-    "--dir", "-d", "metrics_dir", default="output/metrics",
+    "--dir",
+    "-d",
+    "metrics_dir",
+    default="output/metrics",
     help="Metrics directory.",
 )
 def metrics_list(last_n: int, metrics_dir: str) -> None:
@@ -371,11 +416,18 @@ def metrics_list(last_n: int, metrics_dir: str) -> None:
 
 @metrics.command("trends")
 @click.option(
-    "--last", "-n", "last_n", default=10, type=int,
+    "--last",
+    "-n",
+    "last_n",
+    default=10,
+    type=int,
     help="Number of runs for trend analysis.",
 )
 @click.option(
-    "--dir", "-d", "metrics_dir", default="output/metrics",
+    "--dir",
+    "-d",
+    "metrics_dir",
+    default="output/metrics",
     help="Metrics directory.",
 )
 def metrics_trends(last_n: int, metrics_dir: str) -> None:
@@ -410,7 +462,10 @@ def metrics_trends(last_n: int, metrics_dir: str) -> None:
 @metrics.command("run")
 @click.argument("run_id")
 @click.option(
-    "--dir", "-d", "metrics_dir", default="output/metrics",
+    "--dir",
+    "-d",
+    "metrics_dir",
+    default="output/metrics",
     help="Metrics directory.",
 )
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")

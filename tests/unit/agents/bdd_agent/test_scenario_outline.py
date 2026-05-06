@@ -7,14 +7,13 @@ test cases and merges them into Scenario Outline + Examples tables.
 
 from __future__ import annotations
 
-
 from stlc_platform.agents.bdd_agent.feature_generator import FeatureFileGenerator
 from stlc_platform.core.contracts import TestCaseArtifact
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _tc(
     tc_id: str,
@@ -44,25 +43,35 @@ def _tc(
 # 1. Two TCs with same structure but different quoted values -> Outline
 # ---------------------------------------------------------------------------
 
+
 class TestQuotedValueOutline:
     """Quoted string differences should produce a Scenario Outline."""
 
     def test_two_cases_become_outline(self):
         gen = FeatureFileGenerator()
         cases = [
-            _tc("TC-1", given='user "admin" is on login page',
-                 when='enters password "Pass123"',
-                 then='sees the "dashboard" page'),
-            _tc("TC-2", given='user "guest" is on login page',
-                 when='enters password "Guest456"',
-                 then='sees the "welcome" page'),
+            _tc(
+                "TC-1",
+                given='user "admin" is on login page',
+                when='enters password "Pass123"',
+                then='sees the "dashboard" page',
+            ),
+            _tc(
+                "TC-2",
+                given='user "guest" is on login page',
+                when='enters password "Guest456"',
+                then='sees the "welcome" page',
+            ),
         ]
         features = gen.generate(cases)
         assert len(features) == 1
         content = features[0].content
 
         assert "Scenario Outline:" in content
-        assert "Scenario:" not in content or "Scenario Outline:" in content.split("Scenario:")[0] is not None
+        assert (
+            "Scenario:" not in content
+            or "Scenario Outline:" in content.split("Scenario:")[0] is not None
+        )
         # Placeholders in steps
         assert "<param_1>" in content
         assert "<param_2>" in content
@@ -78,18 +87,25 @@ class TestQuotedValueOutline:
 # 2. TCs with different structures stay as separate Scenarios
 # ---------------------------------------------------------------------------
 
+
 class TestDifferentStructuresStaySeparate:
     """Test cases with non-matching skeletons remain individual Scenarios."""
 
     def test_different_steps_no_outline(self):
         gen = FeatureFileGenerator()
         cases = [
-            _tc("TC-1", given='user is on login page',
-                 when='enters valid credentials',
-                 then='sees the dashboard'),
-            _tc("TC-2", given='user is on settings page',
-                 when='clicks save button',
-                 then='sees success message'),
+            _tc(
+                "TC-1",
+                given="user is on login page",
+                when="enters valid credentials",
+                then="sees the dashboard",
+            ),
+            _tc(
+                "TC-2",
+                given="user is on settings page",
+                when="clicks save button",
+                then="sees success message",
+            ),
         ]
         features = gen.generate(cases)
         assert len(features) == 1
@@ -103,21 +119,31 @@ class TestDifferentStructuresStaySeparate:
 # 3. Examples table has correct header and rows
 # ---------------------------------------------------------------------------
 
+
 class TestExamplesTable:
     """The rendered Examples table must have correct header + data rows."""
 
     def test_examples_header_and_rows(self):
         gen = FeatureFileGenerator()
         cases = [
-            _tc("TC-1", given='user "admin" is on login page',
-                 when='enters password "Pass123"',
-                 then='sees message "Welcome admin"'),
-            _tc("TC-2", given='user "editor" is on login page',
-                 when='enters password "Edit789"',
-                 then='sees message "Welcome editor"'),
-            _tc("TC-3", given='user "viewer" is on login page',
-                 when='enters password "View000"',
-                 then='sees message "Welcome viewer"'),
+            _tc(
+                "TC-1",
+                given='user "admin" is on login page',
+                when='enters password "Pass123"',
+                then='sees message "Welcome admin"',
+            ),
+            _tc(
+                "TC-2",
+                given='user "editor" is on login page',
+                when='enters password "Edit789"',
+                then='sees message "Welcome editor"',
+            ),
+            _tc(
+                "TC-3",
+                given='user "viewer" is on login page',
+                when='enters password "View000"',
+                then='sees message "Welcome viewer"',
+            ),
         ]
         features = gen.generate(cases)
         content = features[0].content
@@ -134,9 +160,7 @@ class TestExamplesTable:
         # 3 data rows (excluding header)
         examples_section = content.split("Examples:")[1]
         pipe_rows = [
-            line.strip()
-            for line in examples_section.splitlines()
-            if line.strip().startswith("|")
+            line.strip() for line in examples_section.splitlines() if line.strip().startswith("|")
         ]
         # 1 header + 3 data rows = 4
         assert len(pipe_rows) == 4
@@ -146,25 +170,32 @@ class TestExamplesTable:
 # 4. GWT steps use <param> placeholders
 # ---------------------------------------------------------------------------
 
+
 class TestPlaceholdersInSteps:
     """Scenario Outline steps must contain angle-bracket placeholders."""
 
     def test_placeholders_replace_quoted(self):
         gen = FeatureFileGenerator()
         cases = [
-            _tc("TC-1", given='user "admin" is on login page',
-                 when='enters password "Pass123"',
-                 then='sees the dashboard'),
-            _tc("TC-2", given='user "guest" is on login page',
-                 when='enters password "Guest456"',
-                 then='sees the dashboard'),
+            _tc(
+                "TC-1",
+                given='user "admin" is on login page',
+                when='enters password "Pass123"',
+                then="sees the dashboard",
+            ),
+            _tc(
+                "TC-2",
+                given='user "guest" is on login page',
+                when='enters password "Guest456"',
+                then="sees the dashboard",
+            ),
         ]
         features = gen.generate(cases)
         content = features[0].content
 
         # Steps should use placeholders, not literal values
-        assert 'user <param_1> is on login page' in content
-        assert 'enters password <param_2>' in content
+        assert "user <param_1> is on login page" in content
+        assert "enters password <param_2>" in content
         # Literal quoted values should NOT appear in steps (only in Examples)
         lines_before_examples = content.split("Examples:")[0]
         assert '"admin"' not in lines_before_examples
@@ -175,15 +206,19 @@ class TestPlaceholdersInSteps:
 # 5. Single TC stays a regular Scenario (no outline)
 # ---------------------------------------------------------------------------
 
+
 class TestSingleCaseNoOutline:
     """A lone test case must remain a plain Scenario."""
 
     def test_single_tc_not_outline(self):
         gen = FeatureFileGenerator()
         cases = [
-            _tc("TC-1", given='user "admin" is on login page',
-                 when='enters password "Pass123"',
-                 then='sees the dashboard'),
+            _tc(
+                "TC-1",
+                given='user "admin" is on login page',
+                when='enters password "Pass123"',
+                then="sees the dashboard",
+            ),
         ]
         features = gen.generate(cases)
         content = features[0].content
@@ -197,18 +232,25 @@ class TestSingleCaseNoOutline:
 # 6. Numeric parameterization
 # ---------------------------------------------------------------------------
 
+
 class TestNumericParameterization:
     """Standalone numbers should be parameterized into <value_N>."""
 
     def test_numeric_values_become_outline(self):
         gen = FeatureFileGenerator()
         cases = [
-            _tc("TC-1", given='the cart has 3 items',
-                 when='user removes 1 item',
-                 then='cart shows 2 items'),
-            _tc("TC-2", given='the cart has 5 items',
-                 when='user removes 2 item',
-                 then='cart shows 3 items'),
+            _tc(
+                "TC-1",
+                given="the cart has 3 items",
+                when="user removes 1 item",
+                then="cart shows 2 items",
+            ),
+            _tc(
+                "TC-2",
+                given="the cart has 5 items",
+                when="user removes 2 item",
+                then="cart shows 3 items",
+            ),
         ]
         features = gen.generate(cases)
         content = features[0].content
@@ -234,6 +276,7 @@ class TestNumericParameterization:
 # 7. Mixed — some outlineable, some not
 # ---------------------------------------------------------------------------
 
+
 class TestMixedOutlineAndRegular:
     """A mix of matching and non-matching TCs under the same req_id."""
 
@@ -241,16 +284,25 @@ class TestMixedOutlineAndRegular:
         gen = FeatureFileGenerator()
         cases = [
             # These two share a skeleton -> Outline
-            _tc("TC-1", given='user "admin" is on login page',
-                 when='enters password "Pass123"',
-                 then='sees the dashboard'),
-            _tc("TC-2", given='user "guest" is on login page',
-                 when='enters password "Guest456"',
-                 then='sees the dashboard'),
+            _tc(
+                "TC-1",
+                given='user "admin" is on login page',
+                when='enters password "Pass123"',
+                then="sees the dashboard",
+            ),
+            _tc(
+                "TC-2",
+                given='user "guest" is on login page',
+                when='enters password "Guest456"',
+                then="sees the dashboard",
+            ),
             # This one has a different structure -> regular Scenario
-            _tc("TC-3", given='user is on the registration page',
-                 when='fills in all required fields',
-                 then='account is created successfully'),
+            _tc(
+                "TC-3",
+                given="user is on the registration page",
+                when="fills in all required fields",
+                then="account is created successfully",
+            ),
         ]
         features = gen.generate(cases)
         content = features[0].content
@@ -265,6 +317,7 @@ class TestMixedOutlineAndRegular:
 # ---------------------------------------------------------------------------
 # Edge-case tests
 # ---------------------------------------------------------------------------
+
 
 class TestNormalizeStepMethod:
     """Unit tests for the _normalize_step helper."""

@@ -121,8 +121,12 @@ class TestDeduplicatorDuplicates:
             description="Test that a user can login with valid username and password",
             steps=[
                 TestStepArtifact(action="Open login page", expected_result="Login page displayed"),
-                TestStepArtifact(action="Enter username and password", expected_result="Credentials entered"),
-                TestStepArtifact(action="Click login button", expected_result="Logged in successfully"),
+                TestStepArtifact(
+                    action="Enter username and password", expected_result="Credentials entered"
+                ),
+                TestStepArtifact(
+                    action="Click login button", expected_result="Logged in successfully"
+                ),
             ],
             given="User is on the login page",
             when="User enters valid credentials",
@@ -133,9 +137,15 @@ class TestDeduplicatorDuplicates:
             title="Verify product search returns results",
             description="Test that searching for a product returns matching items from catalog",
             steps=[
-                TestStepArtifact(action="Navigate to product catalog", expected_result="Catalog page shown"),
-                TestStepArtifact(action="Enter search term in search bar", expected_result="Search term accepted"),
-                TestStepArtifact(action="Click search button", expected_result="Matching products displayed"),
+                TestStepArtifact(
+                    action="Navigate to product catalog", expected_result="Catalog page shown"
+                ),
+                TestStepArtifact(
+                    action="Enter search term in search bar", expected_result="Search term accepted"
+                ),
+                TestStepArtifact(
+                    action="Click search button", expected_result="Matching products displayed"
+                ),
             ],
             given="User is on the product catalog page",
             when="User searches for a specific product by name",

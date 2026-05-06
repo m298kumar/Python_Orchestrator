@@ -3,10 +3,8 @@
 Tests Click commands using CliRunner with mocked dependencies.
 """
 
-
 import pytest
 from click.testing import CliRunner
-
 from stlc_platform.cli import main
 
 
@@ -39,17 +37,28 @@ class TestRunCommand:
         assert "Error" in result.output
 
     def test_run_agent_missing_input_file(self, runner, tmp_path):
-        result = runner.invoke(main, [
-            "run", "--agent", "bdd_agent",
-            "--input", str(tmp_path / "no_such_file.json"),
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "run",
+                "--agent",
+                "bdd_agent",
+                "--input",
+                str(tmp_path / "no_such_file.json"),
+            ],
+        )
         assert result.exit_code != 0
         assert "not found" in result.output
 
     def test_run_pipeline_not_found(self, runner):
-        result = runner.invoke(main, [
-            "run", "--pipeline", "no_such_pipeline.yaml",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "run",
+                "--pipeline",
+                "no_such_pipeline.yaml",
+            ],
+        )
         assert result.exit_code != 0
         assert "Error" in result.output
 
@@ -77,49 +86,84 @@ class TestAgentsCommand:
 
 class TestFeedbackCommand:
     def test_feedback_add(self, runner, tmp_path):
-        result = runner.invoke(main, [
-            "feedback", "add",
-            "--agent", "bdd_agent",
-            "--type", "correction",
-            "--message", "Use page objects for all selectors",
-            "--output", str(tmp_path / "feedback"),
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "feedback",
+                "add",
+                "--agent",
+                "bdd_agent",
+                "--type",
+                "correction",
+                "--message",
+                "Use page objects for all selectors",
+                "--output",
+                str(tmp_path / "feedback"),
+            ],
+        )
         assert result.exit_code == 0
         assert "Feedback stored" in result.output
 
     def test_feedback_list_empty(self, runner, tmp_path):
-        result = runner.invoke(main, [
-            "feedback", "list",
-            "--output", str(tmp_path / "feedback"),
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "feedback",
+                "list",
+                "--output",
+                str(tmp_path / "feedback"),
+            ],
+        )
         assert result.exit_code == 0
         assert "No feedback entries found" in result.output
 
     def test_feedback_add_then_list(self, runner, tmp_path):
         fb_dir = str(tmp_path / "feedback")
         # Add
-        runner.invoke(main, [
-            "feedback", "add",
-            "--agent", "bdd_agent",
-            "--type", "preference",
-            "--message", "Prefer Playwright over Selenium",
-            "--output", fb_dir,
-        ])
+        runner.invoke(
+            main,
+            [
+                "feedback",
+                "add",
+                "--agent",
+                "bdd_agent",
+                "--type",
+                "preference",
+                "--message",
+                "Prefer Playwright over Selenium",
+                "--output",
+                fb_dir,
+            ],
+        )
         # List
-        result = runner.invoke(main, [
-            "feedback", "list",
-            "--agent", "bdd_agent",
-            "--output", fb_dir,
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "feedback",
+                "list",
+                "--agent",
+                "bdd_agent",
+                "--output",
+                fb_dir,
+            ],
+        )
         assert result.exit_code == 0
         assert "Playwright" in result.output
 
     def test_feedback_invalid_type(self, runner, tmp_path):
-        result = runner.invoke(main, [
-            "feedback", "add",
-            "--agent", "bdd_agent",
-            "--type", "invalid_type",
-            "--message", "test",
-            "--output", str(tmp_path / "feedback"),
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "feedback",
+                "add",
+                "--agent",
+                "bdd_agent",
+                "--type",
+                "invalid_type",
+                "--message",
+                "test",
+                "--output",
+                str(tmp_path / "feedback"),
+            ],
+        )
         assert result.exit_code != 0

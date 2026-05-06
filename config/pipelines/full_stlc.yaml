@@ -4,6 +4,9 @@
 #
 # Usage:
 #   stlc run --pipeline config/pipelines/full_stlc.yaml --config config/stlc_config.yaml
+#
+# Optional-reference syntax ($?stage.key) returns None instead of raising KeyError
+# when a preceding optional stage was skipped. This prevents cascading skips.
 
 pipeline: full_stlc
 
@@ -19,32 +22,32 @@ stages:
   - id: crawl_application
     agent: crawler_agent
     input:
-      html_pages: "$config.html_pages"
+      base_url: "$?config.crawler.base_url"
+      html_pages: "$?config.crawler.html_pages"
     output: [site_model, discrepancy_report]
     optional: true
 
   - id: enrich_test_cases
     agent: enrich_test_cases
-    depends_on: [parse_requirements, crawl_application]
+    depends_on: [parse_requirements]
     input:
       test_cases: "$parse_requirements.test_cases"
-      discrepancy_report: "$crawl_application.discrepancy_report"
+      discrepancy_report: "$?crawl_application.discrepancy_report"
     output: [test_cases]
     optional: true
 
   - id: generate_bdd_code
     agent: bdd_agent
-    depends_on: [enrich_test_cases, crawl_application]
+    depends_on: [enrich_test_cases]
     input:
       test_cases: "$enrich_test_cases.test_cases"
-      site_model: "$crawl_application.site_model"
+      site_model: "$?crawl_application.site_model"
     output: [feature_files, step_definitions]
 
   - id: discover_apis
     agent: api_test_agent
-    depends_on: [crawl_application]
     input:
-      openapi_spec: "$config.openapi_spec"
+      openapi_spec: "$?config.api_testing.openapi_spec"
     output: [api_model, test_files]
     optional: true
 

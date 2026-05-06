@@ -28,10 +28,7 @@ from stlc_platform.core.contracts import (
 # -- Paths --
 _BUILTIN_TEMPLATES = Path(__file__).resolve().parent / "templates"
 _DEFAULT_OVERRIDES = (
-    Path(__file__).resolve().parent.parent.parent.parent
-    / "config"
-    / "prompt_overrides"
-    / "bdd"
+    Path(__file__).resolve().parent.parent.parent.parent / "config" / "prompt_overrides" / "bdd"
 )
 
 
@@ -128,20 +125,12 @@ class StepDefinitionGenerator:
 
         return artifacts
 
-    def _generate_behave(
-        self, steps: List[ParameterizedStep]
-    ) -> List[StepDefinitionArtifact]:
+    def _generate_behave(self, steps: List[ParameterizedStep]) -> List[StepDefinitionArtifact]:
         """Generate Behave step definition file."""
         seen_names: set = set()
-        given_steps = self._prepare_steps(
-            [s for s in steps if s.keyword == "given"], seen_names
-        )
-        when_steps = self._prepare_steps(
-            [s for s in steps if s.keyword == "when"], seen_names
-        )
-        then_steps = self._prepare_steps(
-            [s for s in steps if s.keyword == "then"], seen_names
-        )
+        given_steps = self._prepare_steps([s for s in steps if s.keyword == "given"], seen_names)
+        when_steps = self._prepare_steps([s for s in steps if s.keyword == "when"], seen_names)
+        then_steps = self._prepare_steps([s for s in steps if s.keyword == "then"], seen_names)
 
         template = self._env.get_template("behave_steps.py.j2")
         content = template.render(
@@ -170,15 +159,9 @@ class StepDefinitionGenerator:
     ) -> List[StepDefinitionArtifact]:
         """Generate Pytest-BDD step definition file."""
         seen_names: set = set()
-        given_steps = self._prepare_steps(
-            [s for s in steps if s.keyword == "given"], seen_names
-        )
-        when_steps = self._prepare_steps(
-            [s for s in steps if s.keyword == "when"], seen_names
-        )
-        then_steps = self._prepare_steps(
-            [s for s in steps if s.keyword == "then"], seen_names
-        )
+        given_steps = self._prepare_steps([s for s in steps if s.keyword == "given"], seen_names)
+        when_steps = self._prepare_steps([s for s in steps if s.keyword == "when"], seen_names)
+        then_steps = self._prepare_steps([s for s in steps if s.keyword == "then"], seen_names)
 
         # Prepare feature references for @scenario decorators
         feature_refs = []
@@ -186,14 +169,14 @@ class StepDefinitionGenerator:
             # Use forward slash paths (cross-platform)
             fname = f.filename.replace("\\", "/")
             # Derive a test function name from the filename
-            func_name = self._make_function_name(
-                f.filename.replace(".feature", ""), prefix="test_"
+            func_name = self._make_function_name(f.filename.replace(".feature", ""), prefix="test_")
+            feature_refs.append(
+                {
+                    "filename": fname,
+                    "func_name": func_name,
+                    "first_scenario": "",  # Pytest-BDD scenario decorator
+                }
             )
-            feature_refs.append({
-                "filename": fname,
-                "func_name": func_name,
-                "first_scenario": "",  # Pytest-BDD scenario decorator
-            })
 
         template = self._env.get_template("pytest_bdd_steps.py.j2")
         content = template.render(
@@ -216,20 +199,12 @@ class StepDefinitionGenerator:
             )
         ]
 
-    def _generate_generic(
-        self, steps: List[ParameterizedStep]
-    ) -> List[StepDefinitionArtifact]:
+    def _generate_generic(self, steps: List[ParameterizedStep]) -> List[StepDefinitionArtifact]:
         """Generate step definitions for Java Cucumber or Cucumber.js."""
         seen_names: set = set()
-        given_steps = self._prepare_steps(
-            [s for s in steps if s.keyword == "given"], seen_names
-        )
-        when_steps = self._prepare_steps(
-            [s for s in steps if s.keyword == "when"], seen_names
-        )
-        then_steps = self._prepare_steps(
-            [s for s in steps if s.keyword == "then"], seen_names
-        )
+        given_steps = self._prepare_steps([s for s in steps if s.keyword == "given"], seen_names)
+        when_steps = self._prepare_steps([s for s in steps if s.keyword == "when"], seen_names)
+        then_steps = self._prepare_steps([s for s in steps if s.keyword == "then"], seen_names)
 
         # Java/JS templates need {param} → {string} for Cucumber expressions
         # and also pass param names list for method/function signatures
@@ -239,12 +214,11 @@ class StepDefinitionGenerator:
                 param_names = []
                 if step["has_params"]:
                     import re as _re
+
                     params_found = _re.findall(r"\{([^}]+)\}", step["pattern"])
                     param_names = params_found
                     # Replace {paramN} with {string} for Cucumber expression
-                    step["cucumber_pattern"] = _re.sub(
-                        r"\{[^}]+\}", "{string}", step["pattern"]
-                    )
+                    step["cucumber_pattern"] = _re.sub(r"\{[^}]+\}", "{string}", step["pattern"])
                 else:
                     step["cucumber_pattern"] = step["pattern"]
                 step["param_names"] = param_names
@@ -302,26 +276,24 @@ class StepDefinitionGenerator:
             seen_names.add(func_name)
 
             param_list = ", ".join(step.params) if step.params else ""
-            param_signature = (
-                ", " + param_list if param_list else ""
-            )
+            param_signature = ", " + param_list if param_list else ""
 
             # Escape single quotes in the pattern for Python string literals
             safe_pattern = step.pattern.replace("'", "\\'")
 
-            prepared.append({
-                "pattern": safe_pattern,
-                "func_name": func_name,
-                "param_signature": param_signature,
-                "param_list": param_list,
-                "has_params": bool(step.params),
-            })
+            prepared.append(
+                {
+                    "pattern": safe_pattern,
+                    "func_name": func_name,
+                    "param_signature": param_signature,
+                    "param_list": param_list,
+                    "has_params": bool(step.params),
+                }
+            )
 
         return prepared
 
-    def _make_function_name(
-        self, text: str, prefix: str = "step_"
-    ) -> str:
+    def _make_function_name(self, text: str, prefix: str = "step_") -> str:
         """
         Generate a valid Python function name from step text.
 
@@ -368,9 +340,7 @@ class StepDefinitionGenerator:
         """
         result = []
         for artifact in artifacts:
-            new_content = self._replace_todos_with_selectors(
-                artifact.content, selector_map
-            )
+            new_content = self._replace_todos_with_selectors(artifact.content, selector_map)
             result.append(
                 StepDefinitionArtifact(
                     language=artifact.language,
@@ -412,9 +382,7 @@ class StepDefinitionGenerator:
 
             if selector:
                 # Replace the TODO with a selector comment + the original raise
-                out.append(
-                    f'{indent}# Selector: "{selector}"'
-                )
+                out.append(f'{indent}# Selector: "{selector}"')
                 out.append(line)
             else:
                 out.append(line)

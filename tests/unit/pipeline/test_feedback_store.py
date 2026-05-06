@@ -2,11 +2,8 @@
 Tests for FeedbackStore — agent feedback persistence and retrieval.
 """
 
-import pytest
-from pathlib import Path
-
-from stlc_platform.pipeline.feedback_store import FeedbackStore
 from stlc_platform.core.contracts import AgentFeedbackArtifact
+from stlc_platform.pipeline.feedback_store import FeedbackStore
 
 
 class TestFeedbackStoreBasic:
@@ -26,12 +23,8 @@ class TestFeedbackStoreBasic:
 
     def test_retrieve_filters_by_agent(self, tmp_path):
         store = FeedbackStore(persist_path=tmp_path)
-        store.store(AgentFeedbackArtifact(
-            agent_id="bdd_agent", message="BDD feedback"
-        ))
-        store.store(AgentFeedbackArtifact(
-            agent_id="api_test_agent", message="API feedback"
-        ))
+        store.store(AgentFeedbackArtifact(agent_id="bdd_agent", message="BDD feedback"))
+        store.store(AgentFeedbackArtifact(agent_id="api_test_agent", message="API feedback"))
 
         bdd = store.retrieve("bdd_agent")
         assert len(bdd) == 1
@@ -44,18 +37,14 @@ class TestFeedbackStoreBasic:
     def test_retrieve_respects_limit(self, tmp_path):
         store = FeedbackStore(persist_path=tmp_path)
         for i in range(10):
-            store.store(AgentFeedbackArtifact(
-                agent_id="test_agent", message=f"Feedback {i}"
-            ))
+            store.store(AgentFeedbackArtifact(agent_id="test_agent", message=f"Feedback {i}"))
 
         results = store.retrieve("test_agent", limit=3)
         assert len(results) == 3
 
     def test_applied_count_incremented(self, tmp_path):
         store = FeedbackStore(persist_path=tmp_path)
-        store.store(AgentFeedbackArtifact(
-            agent_id="test_agent", message="Test"
-        ))
+        store.store(AgentFeedbackArtifact(agent_id="test_agent", message="Test"))
 
         store.retrieve("test_agent")
         store.retrieve("test_agent")
@@ -65,9 +54,7 @@ class TestFeedbackStoreBasic:
 
     def test_created_at_set_automatically(self, tmp_path):
         store = FeedbackStore(persist_path=tmp_path)
-        store.store(AgentFeedbackArtifact(
-            agent_id="test_agent", message="Test"
-        ))
+        store.store(AgentFeedbackArtifact(agent_id="test_agent", message="Test"))
         entries = store.list_all()
         assert entries[0].created_at != ""
 
@@ -75,9 +62,7 @@ class TestFeedbackStoreBasic:
 class TestFeedbackStorePersistence:
     def test_persists_to_disk_and_reloads(self, tmp_path):
         store1 = FeedbackStore(persist_path=tmp_path)
-        store1.store(AgentFeedbackArtifact(
-            agent_id="bdd_agent", message="Persist me"
-        ))
+        store1.store(AgentFeedbackArtifact(agent_id="bdd_agent", message="Persist me"))
 
         # New store from same path should load existing feedback
         store2 = FeedbackStore(persist_path=tmp_path)

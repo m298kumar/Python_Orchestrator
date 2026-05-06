@@ -15,9 +15,9 @@ chroma_store which expect the dataclass interface.
 import csv
 import json
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
-from dataclasses import dataclass, field
 
 from rich.console import Console
 
@@ -76,9 +76,7 @@ class RequirementsReader:
 
         ext = path.suffix.lower()
         if ext not in self.SUPPORTED_FORMATS:
-            raise ValueError(
-                f"Unsupported format: {ext}. Supported: {self.SUPPORTED_FORMATS}"
-            )
+            raise ValueError(f"Unsupported format: {ext}. Supported: {self.SUPPORTED_FORMATS}")
 
         console.print(f"[cyan]Reading requirements from:[/cyan] {path.name}")
 
@@ -172,18 +170,10 @@ class RequirementsReader:
                     or ""
                 )
                 priority = row_lower.get("priority", "Medium")
-                category = row_lower.get("category") or row_lower.get(
-                    "type", "Functional"
-                )
-                ac_raw = (
-                    row_lower.get("acceptance_criteria")
-                    or row_lower.get("ac")
-                    or ""
-                )
+                category = row_lower.get("category") or row_lower.get("type", "Functional")
+                ac_raw = row_lower.get("acceptance_criteria") or row_lower.get("ac") or ""
                 acceptance_criteria = (
-                    [ac.strip() for ac in ac_raw.split(";") if ac.strip()]
-                    if ac_raw
-                    else []
+                    [ac.strip() for ac in ac_raw.split(";") if ac.strip()] if ac_raw else []
                 )
 
                 requirements.append(

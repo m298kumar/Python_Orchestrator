@@ -30,9 +30,15 @@ def _make_base_tc(tc_id: str = "TC-0001", req_id: str = "REQ-001") -> TestCaseAr
         test_type="positive",
         priority="High",
         steps=[
-            TestStepArtifact(action="Navigate to login page", expected_result="Login page displayed"),
-            TestStepArtifact(action="Enter valid username and password", expected_result="Fields populated"),
-            TestStepArtifact(action="Click Login button", expected_result="User logged in, dashboard shown"),
+            TestStepArtifact(
+                action="Navigate to login page", expected_result="Login page displayed"
+            ),
+            TestStepArtifact(
+                action="Enter valid username and password", expected_result="Fields populated"
+            ),
+            TestStepArtifact(
+                action="Click Login button", expected_result="User logged in, dashboard shown"
+            ),
         ],
         expected_outcome="User is redirected to dashboard after successful login",
         tags=["login", "auth"],
@@ -126,9 +132,7 @@ class TestEnrichmentBddFlow:
         enrich_result = enrichment.execute(
             artifacts={
                 "test_cases": base_tcs,
-                "discrepancy_report": DiscrepancyReportArtifact(
-                    total_discrepancies=0, items=[]
-                ),
+                "discrepancy_report": DiscrepancyReportArtifact(total_discrepancies=0, items=[]),
             },
             config={},
         )

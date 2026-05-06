@@ -3,6 +3,7 @@ Authentication module for STLC Platform API.
 Supports JWT tokens and API key authentication.
 Disabled by default — enable via STLC_AUTH_ENABLED=true.
 """
+
 from __future__ import annotations
 
 import os
@@ -29,9 +30,7 @@ def _ensure_jwt():
 
                     _jwt = jwt
                 except ImportError:
-                    raise ImportError(
-                        "PyJWT required when auth is enabled: pip install PyJWT"
-                    )
+                    raise ImportError("PyJWT required when auth is enabled: pip install PyJWT")
     return _jwt
 
 
@@ -53,9 +52,7 @@ def _ensure_passlib():
 
 # Configuration
 AUTH_ENABLED = os.environ.get("STLC_AUTH_ENABLED", "false").lower() == "true"
-JWT_SECRET = os.environ.get(
-    "STLC_JWT_SECRET", "stlc-dev-secret-change-in-production"
-)
+JWT_SECRET = os.environ.get("STLC_JWT_SECRET", "stlc-dev-secret-change-in-production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_SECONDS = int(os.environ.get("STLC_JWT_EXPIRE_SECONDS", "3600"))
 API_KEYS = set(filter(None, os.environ.get("STLC_API_KEYS", "").split(",")))
@@ -110,17 +107,11 @@ def verify_token(token: str) -> AuthUser:
     jwt_mod = _ensure_jwt()
     try:
         payload = jwt_mod.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return AuthUser(
-            username=payload["sub"], role=payload.get("role", "user")
-        )
+        return AuthUser(username=payload["sub"], role=payload.get("role", "user"))
     except jwt_mod.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
     except jwt_mod.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
 def verify_password(plain: str, username: str) -> bool:

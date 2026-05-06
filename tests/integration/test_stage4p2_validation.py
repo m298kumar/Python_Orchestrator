@@ -89,9 +89,7 @@ class TestSkillInjection:
         registry = AgentRegistry()
         registry.register("skill_aware", SkillAwareAgent)
 
-        skill_loader = SkillLoader(
-            skills_dir=Path("config/skills"), domain=""
-        )
+        skill_loader = SkillLoader(skills_dir=Path("config/skills"), domain="")
 
         orchestrator = PipelineOrchestrator(
             dag=dag,
@@ -108,20 +106,24 @@ class TestSkillInjection:
         """Domain-specific skills should overlay common skills."""
         dag = PipelineDAG(
             pipeline_name="domain_skill_test",
-            stages=[StageNode(
-                stage_id="s1",
-                agent_id="skill_aware",
-            )],
+            stages=[
+                StageNode(
+                    stage_id="s1",
+                    agent_id="skill_aware",
+                )
+            ],
         )
         registry = AgentRegistry()
         registry.register("skill_aware", SkillAwareAgent)
 
         # Override capabilities to include data_catalog
         original_caps = SkillAwareAgent.get_capabilities
+
         def caps_with_data_catalog(self):
             c = original_caps(self)
             c.required_skills = ["data_catalog"]
             return c
+
         SkillAwareAgent.get_capabilities = caps_with_data_catalog
 
         try:
@@ -199,16 +201,20 @@ class TestFeedbackIntegration:
     def test_feedback_roundtrip(self, tmp_path):
         """Store feedback, create new store from disk, retrieve."""
         store = FeedbackStore(persist_path=tmp_path)
-        store.store(AgentFeedbackArtifact(
-            agent_id="bdd_agent",
-            feedback_type="correction",
-            message="Use data-testid selectors",
-        ))
-        store.store(AgentFeedbackArtifact(
-            agent_id="api_test_agent",
-            feedback_type="preference",
-            message="Prefer pytest over unittest",
-        ))
+        store.store(
+            AgentFeedbackArtifact(
+                agent_id="bdd_agent",
+                feedback_type="correction",
+                message="Use data-testid selectors",
+            )
+        )
+        store.store(
+            AgentFeedbackArtifact(
+                agent_id="api_test_agent",
+                feedback_type="preference",
+                message="Prefer pytest over unittest",
+            )
+        )
 
         # Reload from disk
         store2 = FeedbackStore(persist_path=tmp_path)
@@ -223,12 +229,14 @@ class TestFeedbackIntegration:
 class TestConfigProfileIntegration:
     def test_web_profile_changes_crawler_config(self):
         from stlc_platform.core.config_loader import load_config_yaml
+
         base = load_config_yaml()
         web = load_config_yaml(profile="web")
         assert web["crawler"]["max_depth"] > base["crawler"]["max_depth"]
 
     def test_api_profile_disables_crawler(self):
         from stlc_platform.core.config_loader import load_config_yaml
+
         api = load_config_yaml(profile="api")
         assert api["crawler"]["max_depth"] == 0
 
@@ -280,7 +288,8 @@ class MockReqAgent(BaseAgent):
 
     def get_capabilities(self):
         return AgentCapabilities(
-            agent_id=self.agent_id, agent_version=self.agent_version,
+            agent_id=self.agent_id,
+            agent_version=self.agent_version,
             required_skills=["test_design_principles"],
             default_model_tier="advanced",
         )
@@ -302,7 +311,8 @@ class MockBDDAgent(BaseAgent):
 
     def get_capabilities(self):
         return AgentCapabilities(
-            agent_id=self.agent_id, agent_version=self.agent_version,
+            agent_id=self.agent_id,
+            agent_version=self.agent_version,
             required_skills=["coding_standards"],
             default_model_tier="lightweight",
         )
@@ -327,7 +337,8 @@ class MockCrawlerAgent(BaseAgent):
 
     def get_capabilities(self):
         return AgentCapabilities(
-            agent_id=self.agent_id, agent_version=self.agent_version,
+            agent_id=self.agent_id,
+            agent_version=self.agent_version,
             required_skills=["coding_standards"],
             default_model_tier="lightweight",
         )
@@ -349,7 +360,8 @@ class MockAPITestAgent(BaseAgent):
 
     def get_capabilities(self):
         return AgentCapabilities(
-            agent_id=self.agent_id, agent_version=self.agent_version,
+            agent_id=self.agent_id,
+            agent_version=self.agent_version,
             required_skills=["coding_standards", "data_catalog"],
             default_model_tier="standard",
         )
@@ -373,7 +385,8 @@ class MockEnrichAgent(BaseAgent):
 
     def get_capabilities(self):
         return AgentCapabilities(
-            agent_id=self.agent_id, agent_version=self.agent_version,
+            agent_id=self.agent_id,
+            agent_version=self.agent_version,
             default_model_tier="lightweight",
         )
 
@@ -469,7 +482,9 @@ class TestFullPipelineE2E:
         }
 
         orchestrator = PipelineOrchestrator(
-            dag=dag, registry=registry, run_dir=tmp_path,
+            dag=dag,
+            registry=registry,
+            run_dir=tmp_path,
             config=pipeline_config,
         )
         result = orchestrator.run()

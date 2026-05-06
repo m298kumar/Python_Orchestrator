@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from stlc_platform.agents.requirements_agent.tech_stack import TechStackContext
 
 
@@ -130,13 +128,15 @@ class TestFromConfig:
         assert ctx.get_verb("click") == "send request"
 
     def test_with_full_tech_stack(self):
-        ctx = TechStackContext.from_config({
-            "platform": "web",
-            "frontend": "vue",
-            "backend": "graphql",
-            "database": "mongo",
-            "auth": "oauth2",
-        })
+        ctx = TechStackContext.from_config(
+            {
+                "platform": "web",
+                "frontend": "vue",
+                "backend": "graphql",
+                "database": "mongo",
+                "auth": "oauth2",
+            }
+        )
         assert ctx.frontend == "vue"
         assert ctx.backend == "graphql"
         assert ctx.database == "mongo"

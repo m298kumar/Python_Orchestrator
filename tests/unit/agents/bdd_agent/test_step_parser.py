@@ -1,8 +1,8 @@
 """Tests for StepParser."""
 
 import pytest
+from stlc_platform.agents.bdd_agent.step_parser import ParsedStep, StepParser
 from stlc_platform.core.contracts import FeatureFileArtifact
-from stlc_platform.agents.bdd_agent.step_parser import StepParser, ParsedStep
 
 
 @pytest.fixture
@@ -60,14 +60,17 @@ class TestExtractSteps:
 
     def test_extracts_from_multiple_features(self, parser):
         f1 = _make_feature(SAMPLE_FEATURE, "f1.feature")
-        f2 = _make_feature("""\
+        f2 = _make_feature(
+            """\
 Feature: Another
 
   Scenario: Simple
     Given A different context
     When Action taken
     Then Expected result
-""", "f2.feature")
+""",
+            "f2.feature",
+        )
         steps = parser.extract_steps([f1, f2])
         sources = {s.source_file for s in steps}
         assert "f1.feature" in sources

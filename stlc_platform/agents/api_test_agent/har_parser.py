@@ -19,10 +19,9 @@ from __future__ import annotations
 import json
 import re
 from typing import Any, Dict, List, Optional, Union
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from stlc_platform.core.contracts import APIEndpointArtifact, APIModelArtifact
-
 
 # MIME types that indicate API calls
 _API_MIME_TYPES = {
@@ -34,8 +33,21 @@ _API_MIME_TYPES = {
 
 # Static asset extensions to exclude
 _STATIC_EXTENSIONS = {
-    ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
-    ".woff", ".woff2", ".ttf", ".eot", ".map", ".html", ".htm",
+    ".js",
+    ".css",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".ico",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".eot",
+    ".map",
+    ".html",
+    ".htm",
 }
 
 # HTTP methods to include
@@ -79,9 +91,7 @@ class HARParser:
                 raise ValueError(f"Invalid HAR JSON: {e}")
 
         if not isinstance(har, dict) or "log" not in har:
-            raise ValueError(
-                "Invalid HAR format: expected object with 'log' key."
-            )
+            raise ValueError("Invalid HAR format: expected object with 'log' key.")
 
         log = har["log"]
         entries = log.get("entries", [])
@@ -190,19 +200,23 @@ class HARParser:
             # Extract query params
             query_params = []
             for name, values in parse_qs(parsed.query).items():
-                query_params.append({
-                    "name": name,
-                    "type": "string",
-                    "example": values[0] if values else "",
-                })
+                query_params.append(
+                    {
+                        "name": name,
+                        "type": "string",
+                        "example": values[0] if values else "",
+                    }
+                )
 
             # Extract path params
             path_params = []
             for match in re.finditer(r"\{(\w+)\}", path):
-                path_params.append({
-                    "name": match.group(1),
-                    "type": "string",
-                })
+                path_params.append(
+                    {
+                        "name": match.group(1),
+                        "type": "string",
+                    }
+                )
 
             # Extract request body schema (basic)
             request_body = self._extract_request_body(request)
@@ -240,7 +254,11 @@ class HARParser:
         for part in parts:
             if re.match(r"^\d+$", part):
                 result.append("{id}")
-            elif re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", part, re.IGNORECASE):
+            elif re.match(
+                r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                part,
+                re.IGNORECASE,
+            ):
                 result.append("{uuid}")
             else:
                 result.append(part)

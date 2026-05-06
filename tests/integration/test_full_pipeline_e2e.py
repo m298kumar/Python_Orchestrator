@@ -31,6 +31,7 @@ from stlc_platform.pipeline.pipeline_loader import load_pipeline_from_dict
 # Mock Agents
 # ---------------------------------------------------------------------------
 
+
 class MockRequirementsAgent(BaseAgent):
     """Produces test_cases from requirements input."""
 
@@ -47,15 +48,15 @@ class MockRequirementsAgent(BaseAgent):
             return ValidationResult(valid=False, errors=["Missing requirements"])
         return ValidationResult(valid=True)
 
-    def execute(
-        self, artifacts: Dict[str, Any], config: Dict[str, Any]
-    ) -> AgentResult:
+    def execute(self, artifacts: Dict[str, Any], config: Dict[str, Any]) -> AgentResult:
         reqs = artifacts.get("requirements", [])
         test_cases = [
             {
-                "tc_id": f"TC-{i+1:03d}",
-                "req_id": r.get("req_id", f"REQ-{i+1}") if isinstance(r, dict) else f"REQ-{i+1}",
-                "title": f"Test for requirement {i+1}",
+                "tc_id": f"TC-{i + 1:03d}",
+                "req_id": r.get("req_id", f"REQ-{i + 1}")
+                if isinstance(r, dict)
+                else f"REQ-{i + 1}",
+                "title": f"Test for requirement {i + 1}",
                 "test_type": "positive",
                 "quality_score": 0.85,
             }
@@ -84,9 +85,7 @@ class MockBDDAgent(BaseAgent):
             return ValidationResult(valid=False, errors=["Missing test_cases"])
         return ValidationResult(valid=True)
 
-    def execute(
-        self, artifacts: Dict[str, Any], config: Dict[str, Any]
-    ) -> AgentResult:
+    def execute(self, artifacts: Dict[str, Any], config: Dict[str, Any]) -> AgentResult:
         tcs = artifacts.get("test_cases", [])
         features = [
             {
@@ -118,9 +117,7 @@ class MockFailingAgent(BaseAgent):
     def validate_input(self, artifacts: Dict[str, Any]) -> ValidationResult:
         return ValidationResult(valid=True)
 
-    def execute(
-        self, artifacts: Dict[str, Any], config: Dict[str, Any]
-    ) -> AgentResult:
+    def execute(self, artifacts: Dict[str, Any], config: Dict[str, Any]) -> AgentResult:
         return AgentResult(
             success=False,
             artifacts={},
@@ -142,10 +139,9 @@ class MockSlowAgent(BaseAgent):
     def validate_input(self, artifacts: Dict[str, Any]) -> ValidationResult:
         return ValidationResult(valid=True)
 
-    def execute(
-        self, artifacts: Dict[str, Any], config: Dict[str, Any]
-    ) -> AgentResult:
+    def execute(self, artifacts: Dict[str, Any], config: Dict[str, Any]) -> AgentResult:
         import time
+
         time.sleep(10)
         return AgentResult(success=True, artifacts={"result": "done"})
 
@@ -153,6 +149,7 @@ class MockSlowAgent(BaseAgent):
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def registry():
@@ -199,6 +196,7 @@ def sample_requirements():
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestFullPipelineE2E:
     """End-to-end pipeline execution tests."""
@@ -272,9 +270,7 @@ class TestFullPipelineE2E:
         assert len(features) == 3
         assert features[0]["req_id"] == "REQ-001"
 
-    def test_stage_callbacks_fire(
-        self, registry, two_stage_dag, sample_requirements, tmp_path
-    ):
+    def test_stage_callbacks_fire(self, registry, two_stage_dag, sample_requirements, tmp_path):
         """on_stage_start and on_stage_complete callbacks are invoked."""
         starts: List[str] = []
         completes: List[str] = []
@@ -294,9 +290,7 @@ class TestFullPipelineE2E:
         assert "parse_requirements" in completes
         assert "generate_bdd_code" in completes
 
-    def test_csv_export_generated(
-        self, registry, two_stage_dag, sample_requirements, tmp_path
-    ):
+    def test_csv_export_generated(self, registry, two_stage_dag, sample_requirements, tmp_path):
         """Test cases CSV is exported after pipeline completes."""
         run_dir = tmp_path / "run5"
         orch = PipelineOrchestrator(
@@ -375,9 +369,7 @@ class TestPipelineFailure:
         assert "step1" in result.stages_failed
         assert "step2" in result.stages_skipped
 
-    def test_optional_stage_missing_input_skipped(
-        self, registry, sample_requirements, tmp_path
-    ):
+    def test_optional_stage_missing_input_skipped(self, registry, sample_requirements, tmp_path):
         """Optional stages with missing inputs are skipped, not failed."""
         dag = PipelineDAG(
             stages=[
@@ -435,8 +427,8 @@ class TestPipelineTimeout:
         assert "slow_step" in result.stages_failed
         # Verify the error message mentions timeout
         assert any(
-            "timed out" in (orch._stage_results.get("slow_step")
-                            or MagicMock(error="")).error.lower()
+            "timed out"
+            in (orch._stage_results.get("slow_step") or MagicMock(error="")).error.lower()
             for _ in [1]
         )
 
@@ -444,9 +436,7 @@ class TestPipelineTimeout:
 class TestPipelineFromYAML:
     """Pipeline loaded from YAML dict."""
 
-    def test_load_and_run_from_yaml_dict(
-        self, registry, sample_requirements, tmp_path
-    ):
+    def test_load_and_run_from_yaml_dict(self, registry, sample_requirements, tmp_path):
         """Pipeline loaded from YAML dict runs correctly."""
         yaml_dict = {
             "pipeline": "yaml_test",

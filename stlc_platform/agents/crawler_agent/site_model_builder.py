@@ -51,9 +51,7 @@ class SiteModelBuilder:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _deduplicate_pages(
-        self, pages: List[CrawledPageArtifact]
-    ) -> List[CrawledPageArtifact]:
+    def _deduplicate_pages(self, pages: List[CrawledPageArtifact]) -> List[CrawledPageArtifact]:
         """Remove duplicate pages by URL (keeps first occurrence)."""
         seen: set = set()
         result: List[CrawledPageArtifact] = []
@@ -64,9 +62,7 @@ class SiteModelBuilder:
                 result.append(page)
         return result
 
-    def _build_navigation_graph(
-        self, pages: List[CrawledPageArtifact]
-    ) -> Dict[str, List[str]]:
+    def _build_navigation_graph(self, pages: List[CrawledPageArtifact]) -> Dict[str, List[str]]:
         """
         Build an adjacency list of internal page links.
 

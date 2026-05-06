@@ -13,15 +13,38 @@ from typing import Dict, List, Set
 # -- Title generation ----------------------------------------------------------
 
 TYPE_VERB: Dict[str, str] = {
-    "positive":  "Verify",
-    "negative":  "Validate rejection when",
+    "positive": "Verify",
+    "negative": "Validate rejection when",
     "edge_case": "Confirm boundary for",
 }
 
 STOPWORDS: Set[str] = {
-    "the", "a", "an", "is", "are", "should", "must", "will", "that",
-    "which", "when", "where", "and", "or", "of", "to", "in", "on",
-    "for", "with", "be", "has", "have", "by", "from", "as",
+    "the",
+    "a",
+    "an",
+    "is",
+    "are",
+    "should",
+    "must",
+    "will",
+    "that",
+    "which",
+    "when",
+    "where",
+    "and",
+    "or",
+    "of",
+    "to",
+    "in",
+    "on",
+    "for",
+    "with",
+    "be",
+    "has",
+    "have",
+    "by",
+    "from",
+    "as",
 }
 
 
@@ -76,9 +99,20 @@ INSTRUCTION_PHRASES: List[str] = [
 ]
 
 TRIVIAL_OUTCOMES: Set[str] = {
-    "true", "false", "pass", "fail", "passed", "failed",
-    "valid rejection", "valid", "success", "n/a", "none",
-    "expected outcome", "the test passes", "the test fails",
+    "true",
+    "false",
+    "pass",
+    "fail",
+    "passed",
+    "failed",
+    "valid rejection",
+    "valid",
+    "success",
+    "n/a",
+    "none",
+    "expected outcome",
+    "the test passes",
+    "the test fails",
     "success confirmation screen is displayed",
     "system accepts the input and processes the action without error",
     "correct boundary behaviour confirmed",
@@ -108,65 +142,71 @@ GENERIC_STEP_FRAGMENTS: List[str] = [
 
 DEFAULT_COMPONENT_SUFFIX_MAP: Dict[str, str] = {
     # Navigation / layout patterns
-    "home":          "Home Screen",
-    "dashboard":     "Dashboard",
-    "landing":       "Landing Screen",
-    "menu":          "Navigation Menu",
+    "home": "Home Screen",
+    "dashboard": "Dashboard",
+    "landing": "Landing Screen",
+    "menu": "Navigation Menu",
     # Interaction patterns
-    "form":          "Entry Form",
-    "entry":         "Entry Form",
-    "input":         "Input Form",
-    "search":        "Search Screen",
-    "filter":        "Filter Screen",
-    "upload":        "Upload Screen",
+    "form": "Entry Form",
+    "entry": "Entry Form",
+    "input": "Input Form",
+    "search": "Search Screen",
+    "filter": "Filter Screen",
+    "upload": "Upload Screen",
     # Auth / access
-    "login":         "Login Screen",
-    "auth":          "Authentication Screen",
-    "verification":  "Verification Screen",
-    "onboarding":    "Onboarding Screen",
-    "registration":  "Registration Screen",
-    "enrollment":    "Enrollment Screen",
+    "login": "Login Screen",
+    "auth": "Authentication Screen",
+    "verification": "Verification Screen",
+    "onboarding": "Onboarding Screen",
+    "registration": "Registration Screen",
+    "enrollment": "Enrollment Screen",
     # Data views
-    "history":       "History Screen",
-    "list":          "List Screen",
-    "detail":        "Detail Screen",
-    "summary":       "Summary Screen",
-    "report":        "Report Screen",
-    "review":        "Review Screen",
+    "history": "History Screen",
+    "list": "List Screen",
+    "detail": "Detail Screen",
+    "summary": "Summary Screen",
+    "report": "Report Screen",
+    "review": "Review Screen",
     # Transactional
-    "confirmation":  "Confirmation Screen",
-    "payment":       "Payment Screen",
-    "checkout":      "Checkout Screen",
-    "submission":    "Submission Screen",
+    "confirmation": "Confirmation Screen",
+    "payment": "Payment Screen",
+    "checkout": "Checkout Screen",
+    "submission": "Submission Screen",
     # Support
-    "notification":  "Notification Centre",
-    "alert":         "Alert Screen",
-    "settings":      "Settings Screen",
-    "profile":       "Profile Screen",
-    "support":       "Help & Support Screen",
-    "dispute":       "Dispute Screen",
+    "notification": "Notification Centre",
+    "alert": "Alert Screen",
+    "settings": "Settings Screen",
+    "profile": "Profile Screen",
+    "support": "Help & Support Screen",
+    "dispute": "Dispute Screen",
     # Processing
-    "processing":    "Processing Screen",
-    "capture":       "Capture Screen",
-    "camera":        "Camera Screen",
-    "scan":          "Scan Screen",
+    "processing": "Processing Screen",
+    "capture": "Capture Screen",
+    "camera": "Camera Screen",
+    "scan": "Scan Screen",
     # Compliance / risk
-    "compliance":    "Compliance Screen",
-    "regulatory":    "Compliance Screen",
-    "risk":          "Risk Management Screen",
-    "security":      "Security Settings Screen",
-    "audit":         "Audit Log Screen",
+    "compliance": "Compliance Screen",
+    "regulatory": "Compliance Screen",
+    "risk": "Risk Management Screen",
+    "security": "Security Settings Screen",
+    "audit": "Audit Log Screen",
 }
 
 # Configurable generic app names for component resolution
 DEFAULT_GENERIC_APP_NAMES: Set[str] = {
-    "the application", "this application",
-    "the app", "the system", "the platform", "the software",
-    "generic app", "the product",
+    "the application",
+    "this application",
+    "the app",
+    "the system",
+    "the platform",
+    "the software",
+    "generic app",
+    "the product",
 }
 
 
 # -- Utility helpers used by multiple modules -----------------------------------
+
 
 def ac_to_title(ac: str, test_type: str) -> str:
     """Generate a test case title from an acceptance criterion.

@@ -38,6 +38,7 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
         return {}
     try:
         import yaml
+
         with open(path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except ImportError:
@@ -145,9 +146,20 @@ class AppConfig:
 
 
 _KNOWN_TOP_LEVEL_KEYS = {
-    "project", "llm", "chromadb", "test_generation", "bdd", "crawler",
-    "api_testing", "export", "quality_gate", "coverage", "circuit_breaker",
-    "metrics", "output", "stage_timeout_seconds",
+    "project",
+    "llm",
+    "chromadb",
+    "test_generation",
+    "bdd",
+    "crawler",
+    "api_testing",
+    "export",
+    "quality_gate",
+    "coverage",
+    "circuit_breaker",
+    "metrics",
+    "output",
+    "stage_timeout_seconds",
 }
 
 
@@ -157,8 +169,7 @@ def _validate_yaml_keys(yaml_cfg: Dict[str, Any]) -> None:
     if unknown:
         _logger = logging.getLogger(__name__)
         _logger.warning(
-            "Unknown keys in stlc_config.yaml (possible typos): %s. "
-            "Known keys: %s",
+            "Unknown keys in stlc_config.yaml (possible typos): %s. Known keys: %s",
             ", ".join(sorted(unknown)),
             ", ".join(sorted(_KNOWN_TOP_LEVEL_KEYS)),
         )
@@ -184,12 +195,8 @@ def load_config() -> AppConfig:
 
     # -- LLM --
     llm = yaml_cfg.get("llm", {})
-    cfg.ollama.base_url = _env_override(
-        llm.get("base_url", cfg.ollama.base_url), "OLLAMA_BASE_URL"
-    )
-    cfg.ollama.model = _env_override(
-        llm.get("model", cfg.ollama.model), "OLLAMA_MODEL"
-    )
+    cfg.ollama.base_url = _env_override(llm.get("base_url", cfg.ollama.base_url), "OLLAMA_BASE_URL")
+    cfg.ollama.model = _env_override(llm.get("model", cfg.ollama.model), "OLLAMA_MODEL")
     cfg.ollama.temperature = _env_override(
         llm.get("temperature", cfg.ollama.temperature), "OLLAMA_TEMPERATURE", float
     )
@@ -202,9 +209,7 @@ def load_config() -> AppConfig:
     cfg.ollama.num_predict = _env_override(
         llm.get("num_predict", cfg.ollama.num_predict), "OLLAMA_NUM_PREDICT", int
     )
-    cfg.llm_provider = _env_override(
-        llm.get("provider", cfg.llm_provider), "STLC_LLM_PROVIDER"
-    )
+    cfg.llm_provider = _env_override(llm.get("provider", cfg.llm_provider), "STLC_LLM_PROVIDER")
 
     # -- ChromaDB --
     chroma = yaml_cfg.get("chromadb", {})
@@ -250,9 +255,7 @@ def load_config() -> AppConfig:
         "INCLUDE_EDGE",
         bool,
     )
-    cfg.test_case_format = _env_override(
-        tg.get("format", cfg.test_case_format), "TC_FORMAT"
-    )
+    cfg.test_case_format = _env_override(tg.get("format", cfg.test_case_format), "TC_FORMAT")
 
     # -- Output --
     export = yaml_cfg.get("export", {})
@@ -267,15 +270,9 @@ def load_config() -> AppConfig:
             zephyr.get("project_key", cfg.zephyr.project_key),
             "ZEPHYR_PROJECT_KEY",
         )
-        cfg.zephyr.folder_prefix = zephyr.get(
-            "folder_prefix", cfg.zephyr.folder_prefix
-        )
-        cfg.zephyr.default_status = zephyr.get(
-            "default_status", cfg.zephyr.default_status
-        )
-        cfg.zephyr.default_labels = zephyr.get(
-            "default_labels", cfg.zephyr.default_labels
-        )
+        cfg.zephyr.folder_prefix = zephyr.get("folder_prefix", cfg.zephyr.folder_prefix)
+        cfg.zephyr.default_status = zephyr.get("default_status", cfg.zephyr.default_status)
+        cfg.zephyr.default_labels = zephyr.get("default_labels", cfg.zephyr.default_labels)
 
     # -- Project --
     project = yaml_cfg.get("project", {})
@@ -334,9 +331,7 @@ def load_config_yaml(profile: str = "") -> Dict[str, Any]:
     if profile:
         overlay_path = root / "config" / f"stlc_config.{profile}.yaml"
         if not overlay_path.exists():
-            raise FileNotFoundError(
-                f"Config profile '{profile}' not found at {overlay_path}"
-            )
+            raise FileNotFoundError(f"Config profile '{profile}' not found at {overlay_path}")
         overlay = _load_yaml(overlay_path)
         base = deep_merge(base, overlay)
 

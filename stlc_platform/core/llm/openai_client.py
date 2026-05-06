@@ -120,10 +120,13 @@ class OpenAIClient(BaseLLMClient):
                         "\n\nIMPORTANT: You must respond with valid JSON only."
                     )
             else:
-                messages.insert(0, {
-                    "role": "system",
-                    "content": "You must respond with valid JSON only.",
-                })
+                messages.insert(
+                    0,
+                    {
+                        "role": "system",
+                        "content": "You must respond with valid JSON only.",
+                    },
+                )
 
         if self.debug:
             console.print(

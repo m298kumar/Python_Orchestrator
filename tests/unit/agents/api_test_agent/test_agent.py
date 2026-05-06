@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from stlc_platform.agents.api_test_agent import APITestAgent
 from stlc_platform.core.contracts import APIEndpointArtifact, APIModelArtifact
 

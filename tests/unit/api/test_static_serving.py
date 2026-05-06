@@ -3,11 +3,9 @@ Tests for production static file serving behaviour.
 """
 
 import os
-import textwrap
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock
-
 from fastapi.testclient import TestClient
 
 
@@ -41,15 +39,9 @@ def client_with_frontend(tmp_path):
 
     env = {**os.environ, "STLC_SERVE_FRONTEND": "true"}
     with patch.dict(os.environ, env, clear=False):
-        with patch(
-            "stlc_platform.api.main._frontend_dist", dist_dir
-        ):
-            with patch(
-                "stlc_platform.api.main._serve_frontend", "true"
-            ):
-                with patch(
-                    "stlc_platform.api.deps._agent_registry", fake_registry
-                ):
+        with patch("stlc_platform.api.main._frontend_dist", dist_dir):
+            with patch("stlc_platform.api.main._serve_frontend", "true"):
+                with patch("stlc_platform.api.deps._agent_registry", fake_registry):
                     from stlc_platform.api.main import app
 
                     yield TestClient(app)

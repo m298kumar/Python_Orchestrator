@@ -30,7 +30,17 @@ _config_lock = threading.Lock()
 _config: Dict[str, Any] = {
     "project": {},
     "llm": {},
+    "crawler": {},
+    "api_testing": {},
+    "test_generation": {},
+    "bdd": {},
+    "quality_gate": {},
+    "coverage": {},
     "output": {},
+    "chromadb": {},
+    "export": {},
+    "circuit_breaker": {},
+    "metrics": {},
 }
 
 # Fields that should be masked in responses
@@ -76,10 +86,21 @@ def _load_initial_config() -> None:
             return
         try:
             from stlc_platform.core.config_loader import _find_project_root, _load_yaml
+
             yaml_cfg = _load_yaml(_find_project_root() / "config" / "stlc_config.yaml")
             _config["project"] = yaml_cfg.get("project", {})
             _config["llm"] = yaml_cfg.get("llm", {})
+            _config["crawler"] = yaml_cfg.get("crawler", {})
+            _config["api_testing"] = yaml_cfg.get("api_testing", {})
+            _config["test_generation"] = yaml_cfg.get("test_generation", {})
+            _config["bdd"] = yaml_cfg.get("bdd", {})
+            _config["quality_gate"] = yaml_cfg.get("quality_gate", {})
+            _config["coverage"] = yaml_cfg.get("coverage", {})
             _config["output"] = yaml_cfg.get("output", yaml_cfg.get("export", {}))
+            _config["chromadb"] = yaml_cfg.get("chromadb", {})
+            _config["export"] = yaml_cfg.get("export", {})
+            _config["circuit_breaker"] = yaml_cfg.get("circuit_breaker", {})
+            _config["metrics"] = yaml_cfg.get("metrics", {})
         except (ImportError, OSError, ValueError):
             pass
         _config["_loaded"] = True
@@ -130,6 +151,7 @@ def _persist_to_yaml(nested_updates: Dict[str, Any]) -> None:
     """Persist updates to the YAML config file (best-effort)."""
     try:
         from stlc_platform.core.config_loader import save_config_yaml
+
         clean = _strip_masked(nested_updates)
         if clean:
             save_config_yaml(clean)
@@ -141,6 +163,7 @@ def _persist_to_yaml(nested_updates: Dict[str, Any]) -> None:
 # GET /api/config/
 # ---------------------------------------------------------------------------
 
+
 @router.get("/", response_model=ConfigResponse)
 def get_config() -> ConfigResponse:
     """Return the current configuration with sensitive fields masked."""
@@ -149,13 +172,24 @@ def get_config() -> ConfigResponse:
         return ConfigResponse(
             project=_sanitize(_config.get("project", {})),
             llm=_sanitize(_config.get("llm", {})),
+            crawler=_sanitize(_config.get("crawler", {})),
+            api_testing=_sanitize(_config.get("api_testing", {})),
+            test_generation=_sanitize(_config.get("test_generation", {})),
+            bdd=_sanitize(_config.get("bdd", {})),
+            quality_gate=_sanitize(_config.get("quality_gate", {})),
+            coverage=_sanitize(_config.get("coverage", {})),
             output=_sanitize(_config.get("output", {})),
+            chromadb=_sanitize(_config.get("chromadb", {})),
+            export=_sanitize(_config.get("export", {})),
+            circuit_breaker=_sanitize(_config.get("circuit_breaker", {})),
+            metrics=_sanitize(_config.get("metrics", {})),
         )
 
 
 # ---------------------------------------------------------------------------
 # PUT /api/config/
 # ---------------------------------------------------------------------------
+
 
 @router.put("/", response_model=ConfigResponse)
 def update_config(update: ConfigUpdate) -> ConfigResponse:
@@ -176,11 +210,25 @@ def update_config(update: ConfigUpdate) -> ConfigResponse:
         for key, value in update.updates.items():
             # Map ollama.* -> llm.* for backward compatibility
             if key.startswith("ollama."):
-                key = "llm." + key[len("ollama."):]
+                key = "llm." + key[len("ollama.") :]
             all_flat[key] = value
 
     # 2. Structured section updates -> flatten to dot-notation
-    for section_name in ("project", "llm", "output"):
+    for section_name in (
+        "project",
+        "llm",
+        "crawler",
+        "api_testing",
+        "test_generation",
+        "bdd",
+        "quality_gate",
+        "coverage",
+        "output",
+        "chromadb",
+        "export",
+        "circuit_breaker",
+        "metrics",
+    ):
         section_data = getattr(update, section_name, None)
         if section_data:
             for k, v in section_data.items():
@@ -197,13 +245,24 @@ def update_config(update: ConfigUpdate) -> ConfigResponse:
         return ConfigResponse(
             project=_sanitize(_config.get("project", {})),
             llm=_sanitize(_config.get("llm", {})),
+            crawler=_sanitize(_config.get("crawler", {})),
+            api_testing=_sanitize(_config.get("api_testing", {})),
+            test_generation=_sanitize(_config.get("test_generation", {})),
+            bdd=_sanitize(_config.get("bdd", {})),
+            quality_gate=_sanitize(_config.get("quality_gate", {})),
+            coverage=_sanitize(_config.get("coverage", {})),
             output=_sanitize(_config.get("output", {})),
+            chromadb=_sanitize(_config.get("chromadb", {})),
+            export=_sanitize(_config.get("export", {})),
+            circuit_breaker=_sanitize(_config.get("circuit_breaker", {})),
+            metrics=_sanitize(_config.get("metrics", {})),
         )
 
 
 # ---------------------------------------------------------------------------
 # POST /api/config/test-llm
 # ---------------------------------------------------------------------------
+
 
 @router.post("/test-llm", response_model=LLMTestResponse)
 def test_llm_connection(req: LLMTestRequest) -> LLMTestResponse:

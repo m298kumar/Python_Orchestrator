@@ -8,9 +8,9 @@ connections or pytest-asyncio needed.
 
 import asyncio
 import json
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from stlc_platform.api.websocket import ConnectionManager
 
 

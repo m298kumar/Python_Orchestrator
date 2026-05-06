@@ -11,20 +11,17 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import pytest
-
-from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
-from stlc_platform.core.llm import create_llm_client, OllamaClient
-from stlc_platform.core.llm.base_client import BaseLLMClient
 from stlc_platform.agents.requirements_agent.agent import TestGenerationAgent
 from stlc_platform.agents.requirements_agent.classifier import ACClassifier
 from stlc_platform.agents.requirements_agent.domain_detector import DomainDetector
-from stlc_platform.agents.requirements_agent.generator import TestCaseGenerator
 from stlc_platform.agents.requirements_agent.prompts import PromptRenderer
 from stlc_platform.agents.requirements_agent.sanitiser import TestCaseSanitiser
-from stlc_platform.agents.requirements_agent.tech_stack import TechStackContext
+from stlc_platform.core.contracts import TestCaseArtifact, TestStepArtifact
+from stlc_platform.core.llm import OllamaClient, create_llm_client
+from stlc_platform.core.llm.base_client import BaseLLMClient
 
 _FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
@@ -51,30 +48,42 @@ class MockLLMClient(BaseLLMClient):
         temperature: Optional[float] = None,
         json_schema: Optional[dict] = None,
     ) -> str:
-        return json.dumps({
-            "title": "Mock Test Case",
-            "description": "This verifies the feature works as expected",
-            "preconditions": "User is logged in with valid account",
-            "steps": [
-                {"action": "Navigate to the relevant screen", "expected_result": "Screen loads successfully"},
-                {"action": "Enter valid test data in the input field", "expected_result": "Data is accepted"},
-                {"action": "Click the submit button", "expected_result": "Form is submitted"},
-                {"action": "Verify confirmation is displayed", "expected_result": "Confirmation message shown"},
-            ],
-            "expected_outcome": "Feature completes successfully",
-            "component": "Test Screen",
-            "given": "A valid user is logged in",
-            "when": "The user performs the action",
-            "then": "The system responds correctly",
-            "priority": "High",
-            "tags": ["integration", "positive"],
-            "estimated_duration": "5",
-        })
+        return json.dumps(
+            {
+                "title": "Mock Test Case",
+                "description": "This verifies the feature works as expected",
+                "preconditions": "User is logged in with valid account",
+                "steps": [
+                    {
+                        "action": "Navigate to the relevant screen",
+                        "expected_result": "Screen loads successfully",
+                    },
+                    {
+                        "action": "Enter valid test data in the input field",
+                        "expected_result": "Data is accepted",
+                    },
+                    {"action": "Click the submit button", "expected_result": "Form is submitted"},
+                    {
+                        "action": "Verify confirmation is displayed",
+                        "expected_result": "Confirmation message shown",
+                    },
+                ],
+                "expected_outcome": "Feature completes successfully",
+                "component": "Test Screen",
+                "given": "A valid user is logged in",
+                "when": "The user performs the action",
+                "then": "The system responds correctly",
+                "priority": "High",
+                "tags": ["integration", "positive"],
+                "estimated_duration": "5",
+            }
+        )
 
 
 @dataclass
 class SimpleRequirement:
     """Lightweight requirement for integration tests."""
+
     req_id: str
     title: str
     description: str
@@ -153,11 +162,13 @@ class TestMultiProviderFactory:
 
     def test_openai_factory_class_check(self):
         from stlc_platform.core.llm import OpenAIClient
+
         if OpenAIClient is not None:
             assert issubclass(OpenAIClient, BaseLLMClient)
 
     def test_anthropic_factory_class_check(self):
         from stlc_platform.core.llm import AnthropicClient
+
         if AnthropicClient is not None:
             assert issubclass(AnthropicClient, BaseLLMClient)
 
@@ -186,9 +197,17 @@ class TestTemplateRendering:
             assert "RULE 1" in result
 
     @pytest.mark.parametrize("test_type", ["positive", "negative", "edge_case"])
-    @pytest.mark.parametrize("ac_type", [
-        "eligibility", "ui_behaviour", "timing", "data_valid", "security", "general",
-    ])
+    @pytest.mark.parametrize(
+        "ac_type",
+        [
+            "eligibility",
+            "ui_behaviour",
+            "timing",
+            "data_valid",
+            "security",
+            "general",
+        ],
+    )
     def test_all_hint_combinations(self, renderer, test_type, ac_type):
         hints = renderer.render_type_hints(
             test_type=test_type,
@@ -207,9 +226,18 @@ class TestTemplateRendering:
             description="Test description",
             acceptance_criteria=["AC1 text"],
         )
-        slot = {"test_type": "positive", "target_ac": "AC1 text", "title": "Test", "ac_type": "general"}
+        slot = {
+            "test_type": "positive",
+            "target_ac": "AC1 text",
+            "title": "Test",
+            "ac_type": "general",
+        }
         result = renderer.render_user_prompt(
-            requirement=req, slot=slot, test_number=1, total=1, tc_format="gherkin",
+            requirement=req,
+            slot=slot,
+            test_number=1,
+            total=1,
+            tc_format="gherkin",
         )
         assert "GIVEN / WHEN / THEN" in result
 
@@ -302,7 +330,8 @@ class TestSanitiserIntegration:
     def test_sanitise_instruction_text_in_description(self):
         sanitiser = TestCaseSanitiser()
         tc = TestCaseArtifact(
-            tc_id="TC-001", req_id="REQ-001",
+            tc_id="TC-001",
+            req_id="REQ-001",
             title="Test Title",
             description="one sentence explaining what this test verifies and why it matters",
             preconditions="Valid preconditions for testing",
@@ -310,23 +339,38 @@ class TestSanitiserIntegration:
             priority="High",
             steps=[
                 TestStepArtifact(action="Navigate to login page", expected_result="Page loads"),
-                TestStepArtifact(action="Enter valid credentials", expected_result="Fields populated"),
+                TestStepArtifact(
+                    action="Enter valid credentials", expected_result="Fields populated"
+                ),
                 TestStepArtifact(action="Click submit", expected_result="Dashboard shown"),
             ],
             expected_outcome="User logged in successfully",
             category="Authentication",
         )
-        slot = {"test_type": "positive", "target_ac": "User can login", "title": "Test", "ac_type": "general"}
-        result = sanitiser.sanitise(tc, slot, SimpleRequirement(
-            req_id="REQ-001", title="Login", description="D", category="Auth",
-        ))
+        slot = {
+            "test_type": "positive",
+            "target_ac": "User can login",
+            "title": "Test",
+            "ac_type": "general",
+        }
+        result = sanitiser.sanitise(
+            tc,
+            slot,
+            SimpleRequirement(
+                req_id="REQ-001",
+                title="Login",
+                description="D",
+                category="Auth",
+            ),
+        )
         # Description should be replaced since it contains instruction text
         assert "one sentence explaining" not in result.description.lower()
 
     def test_sanitise_trivial_outcome(self):
         sanitiser = TestCaseSanitiser()
         tc = TestCaseArtifact(
-            tc_id="TC-001", req_id="REQ-001",
+            tc_id="TC-001",
+            req_id="REQ-001",
             title="Test Title",
             description="Valid description for the test case verification",
             preconditions="User is logged in",
@@ -340,17 +384,30 @@ class TestSanitiserIntegration:
             expected_outcome="pass",
             category="General",
         )
-        slot = {"test_type": "positive", "target_ac": "Feature works correctly", "title": "Test", "ac_type": "general"}
-        result = sanitiser.sanitise(tc, slot, SimpleRequirement(
-            req_id="REQ-001", title="Feature", description="D", category="General",
-        ))
+        slot = {
+            "test_type": "positive",
+            "target_ac": "Feature works correctly",
+            "title": "Test",
+            "ac_type": "general",
+        }
+        result = sanitiser.sanitise(
+            tc,
+            slot,
+            SimpleRequirement(
+                req_id="REQ-001",
+                title="Feature",
+                description="D",
+                category="General",
+            ),
+        )
         # Trivial outcome "pass" should be replaced
         assert result.expected_outcome.lower() != "pass"
 
     def test_sanitise_generic_steps(self):
         sanitiser = TestCaseSanitiser()
         tc = TestCaseArtifact(
-            tc_id="TC-001", req_id="REQ-001",
+            tc_id="TC-001",
+            req_id="REQ-001",
             title="Test Title",
             description="Valid description for testing purposes",
             preconditions="Preconditions are set",
@@ -363,10 +420,22 @@ class TestSanitiserIntegration:
             expected_outcome="Feature works",
             category="General",
         )
-        slot = {"test_type": "positive", "target_ac": "Feature works", "title": "Test", "ac_type": "general"}
-        result = sanitiser.sanitise(tc, slot, SimpleRequirement(
-            req_id="REQ-001", title="Feature", description="D", category="General",
-        ))
+        slot = {
+            "test_type": "positive",
+            "target_ac": "Feature works",
+            "title": "Test",
+            "ac_type": "general",
+        }
+        result = sanitiser.sanitise(
+            tc,
+            slot,
+            SimpleRequirement(
+                req_id="REQ-001",
+                title="Feature",
+                description="D",
+                category="General",
+            ),
+        )
         # Generic steps should be replaced with synthesised steps (at least 3 steps)
         assert len(result.steps) >= 3  # synthesised always produces 4-5 steps
         # At least one step should reference the actual requirement context

@@ -4,9 +4,9 @@ Tests for BaseAgent ABC.
 
 import pytest
 from stlc_platform.core.base_agent import (
-    BaseAgent,
     AgentCapabilities,
     AgentResult,
+    BaseAgent,
     ValidationResult,
 )
 

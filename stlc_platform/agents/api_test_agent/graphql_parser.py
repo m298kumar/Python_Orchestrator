@@ -75,9 +75,7 @@ class GraphQLParser:
         query_type = self._find_type(schema, query_type_name)
         if query_type:
             for field in query_type.get("fields", []):
-                ep = self._field_to_endpoint(
-                    field, "query", endpoint_url, schema
-                )
+                ep = self._field_to_endpoint(field, "query", endpoint_url, schema)
                 endpoints.append(ep)
 
         # Parse Mutation type
@@ -85,9 +83,7 @@ class GraphQLParser:
         mutation_type = self._find_type(schema, mutation_type_name)
         if mutation_type:
             for field in mutation_type.get("fields", []):
-                ep = self._field_to_endpoint(
-                    field, "mutation", endpoint_url, schema
-                )
+                ep = self._field_to_endpoint(field, "mutation", endpoint_url, schema)
                 endpoints.append(ep)
 
         return APIModelArtifact(
@@ -144,9 +140,7 @@ class GraphQLParser:
             return dict(data["__schema"])
         if "data" in data and "__schema" in data.get("data", {}):
             return dict(data["data"]["__schema"])
-        raise ValueError(
-            "Invalid introspection result: expected '__schema' key."
-        )
+        raise ValueError("Invalid introspection result: expected '__schema' key.")
 
     def _find_type(self, schema: dict, type_name: str) -> Optional[dict]:
         """Find a type definition by name in the schema."""
@@ -178,11 +172,13 @@ class GraphQLParser:
             arg_type = self._resolve_type(arg.get("type", {}))
             is_required = self._is_non_null(arg.get("type", {}))
 
-            query_params.append({
-                "name": arg_name,
-                "type": arg_type,
-                "required": str(is_required).lower(),
-            })
+            query_params.append(
+                {
+                    "name": arg_name,
+                    "type": arg_type,
+                    "required": str(is_required).lower(),
+                }
+            )
             request_body["variables"][arg_name] = f"<{arg_type}>"
 
         # Extract return type
@@ -239,10 +235,12 @@ class GraphQLParser:
             args = []
             if args_str:
                 for arg_match in re.finditer(r"(\w+)\s*:\s*(\S+)", args_str):
-                    args.append({
-                        "name": arg_match.group(1),
-                        "type": arg_match.group(2),
-                    })
+                    args.append(
+                        {
+                            "name": arg_match.group(1),
+                            "type": arg_match.group(2),
+                        }
+                    )
 
             fields.append((field_name, args, return_type))
         return fields
@@ -256,10 +254,7 @@ class GraphQLParser:
         endpoint_url: str,
     ) -> APIEndpointArtifact:
         """Convert an SDL field to an APIEndpointArtifact."""
-        query_params = [
-            {"name": a["name"], "type": a["type"]}
-            for a in args
-        ]
+        query_params = [{"name": a["name"], "type": a["type"]} for a in args]
 
         request_body = {
             "query": f"{operation} {{ {field_name} }}",

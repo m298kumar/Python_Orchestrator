@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from stlc_platform.core.contracts import APIEndpointArtifact, APIModelArtifact
 
-
 # HTTP methods we care about
 _HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options"}
 
@@ -58,8 +57,7 @@ class OpenAPIParser:
             return self._parse_swagger_2(spec)
         else:
             raise ValueError(
-                f"Unknown spec format: {version}. "
-                "Expected 'openapi' or 'swagger' key in spec."
+                f"Unknown spec format: {version}. Expected 'openapi' or 'swagger' key in spec."
             )
 
     # ------------------------------------------------------------------
@@ -77,6 +75,7 @@ class OpenAPIParser:
         # Fall back to YAML
         try:
             import yaml
+
             return dict(yaml.safe_load(raw))
         except Exception:
             raise ValueError("Spec is not valid JSON or YAML.")
@@ -102,9 +101,7 @@ class OpenAPIParser:
 
         # Global security schemes
         global_security = spec.get("security", [])
-        global_auth = self._detect_auth_from_security(
-            global_security, spec, version=3
-        )
+        global_auth = self._detect_auth_from_security(global_security, spec, version=3)
 
         endpoints: List[APIEndpointArtifact] = []
         paths = spec.get("paths", {})
@@ -151,9 +148,7 @@ class OpenAPIParser:
 
         # Global security
         global_security = spec.get("security", [])
-        global_auth = self._detect_auth_from_security(
-            global_security, spec, version=2
-        )
+        global_auth = self._detect_auth_from_security(global_security, spec, version=2)
 
         endpoints: List[APIEndpointArtifact] = []
         paths = spec.get("paths", {})
@@ -224,9 +219,7 @@ class OpenAPIParser:
             method=method,
             path_params=self._extract_path_params(all_params),
             query_params=self._extract_query_params(all_params),
-            request_body_schema=self._extract_request_body(
-                operation, root, version, all_params
-            ),
+            request_body_schema=self._extract_request_body(operation, root, version, all_params),
             response_schema=self._extract_response_schema(
                 operation.get("responses", {}), root, version
             ),
@@ -235,9 +228,7 @@ class OpenAPIParser:
             operation_id=operation.get("operationId", ""),
             summary=operation.get("summary", ""),
             tags=operation.get("tags", []),
-            status_codes=self._extract_status_codes(
-                operation.get("responses", {})
-            ),
+            status_codes=self._extract_status_codes(operation.get("responses", {})),
             examples=self._extract_examples(operation, version),
         )
 
@@ -245,9 +236,7 @@ class OpenAPIParser:
     # Parameter extraction
     # ------------------------------------------------------------------
 
-    def _merge_params(
-        self, path_params: List[dict], op_params: List[dict]
-    ) -> List[dict]:
+    def _merge_params(self, path_params: List[dict], op_params: List[dict]) -> List[dict]:
         """Merge path-level and operation-level params (op overrides path)."""
         merged: Dict[tuple, dict] = {}
         for p in path_params:
@@ -264,10 +253,12 @@ class OpenAPIParser:
         for p in params:
             if p.get("in") == "path":
                 schema = p.get("schema", {})
-                result.append({
-                    "name": p.get("name", ""),
-                    "type": schema.get("type", p.get("type", "string")),
-                })
+                result.append(
+                    {
+                        "name": p.get("name", ""),
+                        "type": schema.get("type", p.get("type", "string")),
+                    }
+                )
         return result
 
     def _extract_query_params(self, params: List[dict]) -> List[Dict[str, str]]:
@@ -276,11 +267,13 @@ class OpenAPIParser:
         for p in params:
             if p.get("in") == "query":
                 schema = p.get("schema", {})
-                result.append({
-                    "name": p.get("name", ""),
-                    "type": schema.get("type", p.get("type", "string")),
-                    "required": str(p.get("required", False)).lower(),
-                })
+                result.append(
+                    {
+                        "name": p.get("name", ""),
+                        "type": schema.get("type", p.get("type", "string")),
+                        "required": str(p.get("required", False)).lower(),
+                    }
+                )
         return result
 
     # ------------------------------------------------------------------
@@ -421,10 +414,7 @@ class OpenAPIParser:
             resolved = {}
             for key, value in schema.items():
                 if key == "properties" and isinstance(value, dict):
-                    resolved[key] = {
-                        k: self._resolve_ref(v, root)
-                        for k, v in value.items()
-                    }
+                    resolved[key] = {k: self._resolve_ref(v, root) for k, v in value.items()}
                 elif key == "items" and isinstance(value, dict):
                     resolved[key] = self._resolve_ref(value, root)
                 else:

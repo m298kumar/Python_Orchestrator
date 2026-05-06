@@ -11,10 +11,11 @@ the public interface.
 
 from __future__ import annotations
 
-import re
-from typing import Dict, List, Set, Tuple
-import yaml
 import os
+import re
+from typing import Dict, List, Set
+
+import yaml
 
 from stlc_platform.core.contracts import (
     DiscrepancyArtifact,
@@ -22,6 +23,59 @@ from stlc_platform.core.contracts import (
     RequirementArtifact,
     SiteModelArtifact,
 )
+
+
+def _resolve_flags(flag_str):
+    """Convert a flag string to re flags value."""
+    if flag_str == "IGNORECASE":
+        return re.IGNORECASE
+    return 0
+
+
+def _compile_page_keywords(config):
+    """Compile page keywords from config into a regex pattern."""
+    page_keywords_list = config.get(
+        "page_keywords",
+        [
+            "page",
+            "screen",
+            "view",
+            "dashboard",
+            "form",
+            "panel",
+            "dialog",
+            "modal",
+            "popup",
+            "window",
+            "tab",
+        ],
+    )
+    pattern = r"\b(" + "|".join(page_keywords_list) + r")\b"
+    return re.compile(pattern, re.IGNORECASE)
+
+
+def _compile_element_patterns(config):
+    """Compile element patterns from config into a list of (type, regex) tuples."""
+    patterns = []
+    for elem_type, items in config.get("element_patterns", {}).items():
+        for pc in items:
+            pattern_str = pc.get("pattern", "")
+            if pattern_str:
+                flags = _resolve_flags(pc.get("flags", "IGNORECASE"))
+                patterns.append((elem_type, re.compile(pattern_str, flags)))
+    return patterns
+
+
+def _compile_field_patterns(config):
+    """Compile field patterns from config into a single regex."""
+    parts = []
+    for pc in config.get("field_patterns", []):
+        pattern_str = pc.get("pattern", "")
+        if pattern_str:
+            parts.append(pattern_str)
+    fallback = r"username|password|email|phone|address|city|zip|card.?number|expiry|cvv|first.?name|last.?name|name|search|date|amount"
+    combined = "|".join(parts) if parts else fallback
+    return re.compile(rf"\b({combined})\s*(?:field|input|textbox|box)?\b", re.IGNORECASE)
 
 
 def _load_heuristics_config():
@@ -33,68 +87,10 @@ def _load_heuristics_config():
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
 
-        # Compile page keywords regex
-        page_keywords_list = config.get(
-            "page_keywords",
-            [
-                "page",
-                "screen",
-                "view",
-                "dashboard",
-                "form",
-                "panel",
-                "dialog",
-                "modal",
-                "popup",
-                "window",
-                "tab",
-            ],
-        )
-        page_keywords_pattern = r"\b(" + "|".join(page_keywords_list) + r")\b"
-        page_keywords = re.compile(page_keywords_pattern, re.IGNORECASE)
-
-        # Compile element patterns
-        element_patterns = []
-        element_configs = config.get("element_patterns", {})
-        for elem_type, patterns in element_configs.items():
-            for pattern_config in patterns:
-                pattern_str = pattern_config.get("pattern", "")
-                flags = 0
-                flag_str = pattern_config.get("flags", "IGNORECASE")
-                if flag_str == "IGNORECASE":
-                    flags = re.IGNORECASE
-                elif flag_str == 0:
-                    flags = 0
-                if pattern_str:
-                    element_patterns.append((elem_type, re.compile(pattern_str, flags)))
-
-        # Compile field patterns
-        field_patterns_list = config.get("field_patterns", [])
-        field_patterns_parts = []
-        for pattern_config in field_patterns_list:
-            pattern_str = pattern_config.get("pattern", "")
-            flags = 0
-            flag_str = pattern_config.get("flags", "IGNORECASE")
-            if flag_str == "IGNORECASE":
-                flags = re.IGNORECASE
-            elif flag_str == 0:
-                flags = 0
-            if pattern_str:
-                field_patterns_parts.append(pattern_str)
-
-        field_patterns_str = (
-            "|".join(field_patterns_parts)
-            if field_patterns_parts
-            else r"username|password|email|phone|address|city|zip|card.?number|expiry|cvv|first.?name|last.?name|name|search|date|amount"
-        )
-        field_patterns = re.compile(
-            rf"\b({field_patterns_str})\s*(?:field|input|textbox|box)?\b", re.IGNORECASE
-        )
-
         return {
-            "page_keywords": page_keywords,
-            "element_patterns": element_patterns,
-            "field_pattern": field_patterns,
+            "page_keywords": _compile_page_keywords(config),
+            "element_patterns": _compile_element_patterns(config),
+            "field_pattern": _compile_field_patterns(config),
         }
     except Exception as e:
         # Fallback to hardcoded values if config loading fails

@@ -35,7 +35,6 @@ _EXTRA_SELECTORS = [
 # Link schemes to exclude
 
 
-
 class PageParser:
     """Parse raw HTML into structured page artifacts."""
 
@@ -104,9 +103,7 @@ class PageParser:
 
         return elements
 
-    def _tag_to_element(
-        self, tag: Tag, element_type: str
-    ) -> Optional[PageElementArtifact]:
+    def _tag_to_element(self, tag: Tag, element_type: str) -> Optional[PageElementArtifact]:
         """Convert a BS4 Tag to a PageElementArtifact."""
         if not isinstance(tag, Tag):
             return None
@@ -117,17 +114,29 @@ class PageParser:
 
         # Collect interesting attributes
         attrs: Dict[str, str] = {}
-        for attr_name in ("type", "placeholder", "value", "href", "src",
-                          "action", "method", "role", "aria-label",
-                          "data-testid", "required"):
+        for attr_name in (
+            "type",
+            "placeholder",
+            "value",
+            "href",
+            "src",
+            "action",
+            "method",
+            "role",
+            "aria-label",
+            "data-testid",
+            "required",
+        ):
             val = tag.get(attr_name)
             if val:
                 attrs[attr_name] = str(val) if not isinstance(val, list) else " ".join(val)
 
+        xpath = self._build_xpath(tag)
         return PageElementArtifact(
             element_type=element_type,
             name=name,
             selector=selector,
+            xpath=xpath,
             text=text,
             attributes=attrs,
         )
@@ -169,6 +178,49 @@ class PageParser:
         # 5. Fallback: tag name
         return tag.name or "unknown"
 
+    def _build_xpath(self, tag: Tag) -> str:
+        """
+        Build an XPath locator for a tag.
+
+        Priority: @id > @data-testid > @name > @aria-label > text() > @class > tag
+        """
+        # 1. id
+        tag_id = tag.get("id")
+        if tag_id:
+            return f'//*[@id="{tag_id}"]'
+
+        # 2. data-testid
+        testid = tag.get("data-testid")
+        if testid:
+            return f'//*[@data-testid="{testid}"]'
+
+        # 3. name attribute
+        name = tag.get("name")
+        tag_name = tag.name or "*"
+        if name:
+            return f'//{tag_name}[@name="{name}"]'
+
+        # 4. aria-label
+        aria = tag.get("aria-label")
+        if aria:
+            return f'//*[@aria-label="{aria}"]'
+
+        # 5. visible text (buttons, links only — avoid matching on long text)
+        text = tag.get_text(strip=True)
+        if text and len(text) <= 40 and tag_name in ("button", "a", "label"):
+            safe = text.replace('"', "'")
+            return f'//{tag_name}[normalize-space(.)="{safe}"]'
+
+        # 6. class fallback
+        classes = tag.get("class")
+        if classes and isinstance(classes, list):
+            non_empty = [c for c in classes if c.strip()]
+            if non_empty:
+                return f'//{tag_name}[contains(@class,"{non_empty[0]}")]'
+
+        # 7. bare tag
+        return f"//{tag_name}"
+
     # ------------------------------------------------------------------
     # Form extraction
     # ------------------------------------------------------------------
@@ -196,17 +248,21 @@ class PageParser:
                 if field_type in ("hidden", "submit"):
                     continue
 
-                fields.append({
-                    "name": field_name,
-                    "type": field_type,
-                    "required": str(required).lower(),
-                })
+                fields.append(
+                    {
+                        "name": field_name,
+                        "type": field_type,
+                        "required": str(required).lower(),
+                    }
+                )
 
-            forms.append({
-                "action": str(action),
-                "method": method,
-                "fields": fields,
-            })
+            forms.append(
+                {
+                    "action": str(action),
+                    "method": method,
+                    "fields": fields,
+                }
+            )
 
         return forms
 

@@ -11,8 +11,7 @@ import json
 from pathlib import Path
 
 import pytest
-
-from stlc_platform.agents.api_test_agent import APITestAgent, APITestGenerator
+from stlc_platform.agents.api_test_agent import APITestAgent
 from stlc_platform.agents.api_test_agent.openapi_parser import OpenAPIParser
 from stlc_platform.agents.api_test_agent.test_generator import SUPPORTED_FRAMEWORKS
 from stlc_platform.agents.crawler_agent import CrawlerAgent
@@ -40,7 +39,7 @@ def simple_html():
         "http://localhost/login": (
             "<html><head><title>Login</title></head>"
             '<body><form><input name="user" type="text">'
-            "<button type=\"submit\">Login</button></form></body></html>"
+            '<button type="submit">Login</button></form></body></html>'
         )
     }
 
@@ -117,9 +116,7 @@ class TestCrossStageIntegration:
 class TestMultiFrameworkEndToEnd:
     def test_rest_assured_full_pipeline(self, petstore_v3):
         agent = APITestAgent()
-        result = agent.execute(
-            {"openapi_spec": petstore_v3}, {"framework": "rest_assured"}
-        )
+        result = agent.execute({"openapi_spec": petstore_v3}, {"framework": "rest_assured"})
         assert result.success is True
         assert result.metadata["framework"] == "rest_assured"
         # Heuristic syntax check
@@ -130,9 +127,7 @@ class TestMultiFrameworkEndToEnd:
 
     def test_karate_full_pipeline(self, petstore_v3):
         agent = APITestAgent()
-        result = agent.execute(
-            {"openapi_spec": petstore_v3}, {"framework": "karate"}
-        )
+        result = agent.execute({"openapi_spec": petstore_v3}, {"framework": "karate"})
         assert result.success is True
         assert result.metadata["framework"] == "karate"
         # Heuristic syntax check

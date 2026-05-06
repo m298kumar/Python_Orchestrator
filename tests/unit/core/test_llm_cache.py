@@ -3,9 +3,8 @@ Tests for LLMResponseCache — Phase C response caching.
 """
 
 import json
-import pytest
-from pathlib import Path
 
+import pytest
 from stlc_platform.core.llm.cache import LLMResponseCache
 
 
@@ -108,7 +107,7 @@ class TestHitTracking:
 
     def test_hit_rate_calculation(self, cache):
         cache.put("k", "v")
-        cache.get("k")       # hit
+        cache.get("k")  # hit
         cache.get("missing")  # miss
         assert cache.hit_rate == pytest.approx(0.5)
 

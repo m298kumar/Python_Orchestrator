@@ -1,16 +1,14 @@
 """Tests for Project Scaffolder."""
 
 import pytest
-from pathlib import Path
-
-from stlc_platform.core.contracts import (
-    FeatureFileArtifact,
-    StepDefinitionArtifact,
-)
 from stlc_platform.agents.bdd_agent.pom_generator import PageObjectStub
 from stlc_platform.agents.bdd_agent.scaffolder import (
     ProjectScaffolder,
     ScaffoldedProject,
+)
+from stlc_platform.core.contracts import (
+    FeatureFileArtifact,
+    StepDefinitionArtifact,
 )
 
 
@@ -106,9 +104,7 @@ class TestBehaveScaffold:
 
     def test_includes_pom_stubs(self, features, step_defs, pom_stubs):
         scaffolder = ProjectScaffolder(framework="behave")
-        project = scaffolder.scaffold(
-            "my_tests", features, step_defs, pom_stubs=pom_stubs
-        )
+        project = scaffolder.scaffold("my_tests", features, step_defs, pom_stubs=pom_stubs)
         assert "pages/login_page.py" in project.files
         assert "pages/__init__.py" in project.files
 
@@ -220,8 +216,7 @@ class TestEdgeCases:
     def test_custom_base_url(self, features, step_defs):
         scaffolder = ProjectScaffolder(framework="behave")
         project = scaffolder.scaffold(
-            "my_tests", features, step_defs,
-            base_url="https://app.example.com"
+            "my_tests", features, step_defs, base_url="https://app.example.com"
         )
         env_content = project.files["features/environment.py"]
         assert "https://app.example.com" in env_content

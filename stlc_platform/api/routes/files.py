@@ -33,6 +33,7 @@ async def upload_file(file: UploadFile = File(...)) -> Dict[str, Any]:
 
     # Reject path traversal attempts
     from pathlib import PurePosixPath
+
     safe_name = PurePosixPath(file.filename).name
     if safe_name != file.filename or ".." in file.filename:
         raise HTTPException(status_code=400, detail="Invalid filename")

@@ -13,16 +13,13 @@ from stlc_platform.api.main import app
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _isolated_store(tmp_path, monkeypatch):
     """Inject a fresh TestCaseStore and redirect output_dir per test."""
     store = TestCaseStore()
-    monkeypatch.setattr(
-        "stlc_platform.api.routes.test_cases.get_output_dir", lambda: tmp_path
-    )
-    monkeypatch.setattr(
-        "stlc_platform.api.routes.test_cases.get_tc_store", lambda: store
-    )
+    monkeypatch.setattr("stlc_platform.api.routes.test_cases.get_output_dir", lambda: tmp_path)
+    monkeypatch.setattr("stlc_platform.api.routes.test_cases.get_tc_store", lambda: store)
     # Also patch the deps-level singleton so endpoints pick it up
     monkeypatch.setattr("stlc_platform.api.deps._tc_store", store)
     yield store
@@ -60,6 +57,7 @@ def _seed_test_case(store_fixture, tc_id="TC-001", **overrides):
 # GET /api/test-cases/
 # ---------------------------------------------------------------------------
 
+
 class TestListTestCases:
     """GET /api/test-cases/ returns stored test cases."""
 
@@ -72,9 +70,7 @@ class TestListTestCases:
         assert isinstance(data, list)
         assert len(data) == 0
 
-    def test_returns_seeded_test_cases(
-        self, client: TestClient, _isolated_store
-    ):
+    def test_returns_seeded_test_cases(self, client: TestClient, _isolated_store):
         _seed_test_case(_isolated_store, "TC-001")
         _seed_test_case(_isolated_store, "TC-002", title="Verify logout")
         data = client.get("/api/test-cases/").json()
@@ -83,9 +79,7 @@ class TestListTestCases:
     def test_filter_by_priority(self, client: TestClient, _isolated_store):
         _seed_test_case(_isolated_store, "TC-001", priority="High")
         _seed_test_case(_isolated_store, "TC-002", priority="Low")
-        data = client.get(
-            "/api/test-cases/", params={"priority": "High"}
-        ).json()
+        data = client.get("/api/test-cases/", params={"priority": "High"}).json()
         assert len(data) == 1
         assert data[0]["tc_id"] == "TC-001"
 
@@ -93,6 +87,7 @@ class TestListTestCases:
 # ---------------------------------------------------------------------------
 # GET /api/test-cases/{tc_id}
 # ---------------------------------------------------------------------------
+
 
 class TestGetTestCase:
     """GET /api/test-cases/{tc_id} returns a single test case."""
@@ -116,20 +111,17 @@ class TestGetTestCase:
 # PUT /api/test-cases/{tc_id}
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateTestCase:
     """PUT /api/test-cases/{tc_id} edits a test case."""
 
     def test_nonexistent_returns_404(self, client: TestClient):
-        resp = client.put(
-            "/api/test-cases/nonexistent", json={"title": "New"}
-        )
+        resp = client.put("/api/test-cases/nonexistent", json={"title": "New"})
         assert resp.status_code == 404
 
     def test_update_title(self, client: TestClient, _isolated_store):
         _seed_test_case(_isolated_store, "TC-020")
-        resp = client.put(
-            "/api/test-cases/TC-020", json={"title": "Updated title"}
-        )
+        resp = client.put("/api/test-cases/TC-020", json={"title": "Updated title"})
         assert resp.status_code == 200
         assert resp.json()["title"] == "Updated title"
 
@@ -137,6 +129,7 @@ class TestUpdateTestCase:
 # ---------------------------------------------------------------------------
 # POST /api/test-cases/{tc_id}/approve
 # ---------------------------------------------------------------------------
+
 
 class TestApproveTestCase:
     """POST /api/test-cases/{tc_id}/approve marks a test case approved."""
@@ -155,6 +148,7 @@ class TestApproveTestCase:
 # ---------------------------------------------------------------------------
 # POST /api/test-cases/{tc_id}/reject
 # ---------------------------------------------------------------------------
+
 
 class TestRejectTestCase:
     """POST /api/test-cases/{tc_id}/reject marks a test case rejected."""

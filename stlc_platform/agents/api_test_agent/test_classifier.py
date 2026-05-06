@@ -15,7 +15,6 @@ from typing import Any, Dict, List
 
 from stlc_platform.core.contracts import APITestArtifact
 
-
 # Test types → test levels
 _LEVEL_MAP: Dict[str, str] = {
     "happy_path": "api",
@@ -60,9 +59,7 @@ class TestClassifier:
         """
         return _FAILURE_TYPE_MAP.get(test_type, "app_bug")
 
-    def validate_pyramid(
-        self, tests: List[APITestArtifact]
-    ) -> Dict[str, Any]:
+    def validate_pyramid(self, tests: List[APITestArtifact]) -> Dict[str, Any]:
         """
         Validate that the test distribution respects the test pyramid.
 
@@ -82,10 +79,7 @@ class TestClassifier:
 
         counts = Counter(t.test_level for t in tests)
         total = len(tests)
-        percentages = {
-            level: round(count / total * 100, 1)
-            for level, count in counts.items()
-        }
+        percentages = {level: round(count / total * 100, 1) for level, count in counts.items()}
 
         warnings: List[str] = []
         e2e_pct = percentages.get("e2e", 0.0)

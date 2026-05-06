@@ -2,7 +2,6 @@
 Tests for ModelRouter — tiered model selection.
 """
 
-
 from stlc_platform.core.base_agent import AgentCapabilities
 from stlc_platform.pipeline.model_router import (
     ComplexitySignals,
@@ -24,7 +23,8 @@ class TestTierSelection:
     def test_selects_agent_default_tier(self):
         router = ModelRouter.default()
         caps = AgentCapabilities(
-            agent_id="test", agent_version="1.0",
+            agent_id="test",
+            agent_version="1.0",
             default_model_tier="advanced",
         )
         tier = router.select_tier(caps)
@@ -33,7 +33,8 @@ class TestTierSelection:
     def test_selects_lightweight_for_bdd(self):
         router = ModelRouter.default()
         caps = AgentCapabilities(
-            agent_id="bdd", agent_version="1.0",
+            agent_id="bdd",
+            agent_version="1.0",
             default_model_tier="lightweight",
         )
         tier = router.select_tier(caps)
@@ -42,7 +43,8 @@ class TestTierSelection:
     def test_promotes_lightweight_on_high_complexity(self):
         router = ModelRouter.default()
         caps = AgentCapabilities(
-            agent_id="bdd", agent_version="1.0",
+            agent_id="bdd",
+            agent_version="1.0",
             default_model_tier="lightweight",
         )
         # Large input context (~10000+ tokens via word-based estimation)
@@ -56,7 +58,8 @@ class TestTierSelection:
             fallback_tier="standard",
         )
         caps = AgentCapabilities(
-            agent_id="test", agent_version="1.0",
+            agent_id="test",
+            agent_version="1.0",
             default_model_tier="advanced",  # not available
         )
         tier = router.select_tier(caps)

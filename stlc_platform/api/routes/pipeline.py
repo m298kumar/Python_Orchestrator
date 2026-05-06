@@ -91,6 +91,8 @@ def list_runs(
                 started_at=r["started_at"],
                 stages_completed_count=len(r["stages_completed"]),
                 total_duration_seconds=r["total_duration_seconds"],
+                archived=r.get("archived", False),
+                archived_at=r.get("archived_at"),
             )
         )
     return result[offset : offset + limit]
@@ -115,6 +117,8 @@ def get_run(run_id: str) -> PipelineRunStatus:
         current_stage=r["current_stage"],
         total_duration_seconds=r["total_duration_seconds"],
         error_message=r["error_message"],
+        archived=r.get("archived", False),
+        archived_at=r.get("archived_at"),
     )
 
 
@@ -201,3 +205,92 @@ async def resume_run(run_id: str, resume_from: str | None = None) -> PipelineRun
         total_duration_seconds=updated["total_duration_seconds"],
         error_message=updated["error_message"],
     )
+
+
+@router.post("/runs/{run_id}/archive", response_model=PipelineRunSummary, status_code=200)
+def archive_run_endpoint(run_id: str) -> PipelineRunSummary:
+    """Soft-archive a pipeline run so it is hidden from active views."""
+    mgr = get_run_manager()
+    if not mgr.archive_run(run_id):
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    r = mgr.get_run(run_id)
+    return PipelineRunSummary(
+        run_id=r["run_id"],
+        pipeline_name=r["pipeline_name"],
+        status=r["status"],
+        started_at=r["started_at"],
+        stages_completed_count=len(r["stages_completed"]),
+        total_duration_seconds=r["total_duration_seconds"],
+        archived=r.get("archived", True),
+        archived_at=r.get("archived_at"),
+    )
+
+
+@router.post("/runs/{run_id}/restore", response_model=PipelineRunSummary, status_code=200)
+def restore_run_endpoint(run_id: str) -> PipelineRunSummary:
+    """Restore a soft-archived pipeline run back to active."""
+    mgr = get_run_manager()
+    if not mgr.restore_run(run_id):
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    r = mgr.get_run(run_id)
+    return PipelineRunSummary(
+        run_id=r["run_id"],
+        pipeline_name=r["pipeline_name"],
+        status=r["status"],
+        started_at=r["started_at"],
+        stages_completed_count=len(r["stages_completed"]),
+        total_duration_seconds=r["total_duration_seconds"],
+        archived=r.get("archived", False),
+        archived_at=r.get("archived_at"),
+    )
+
+
+@router.delete("/runs/{run_id}", status_code=200)
+def delete_run_endpoint(run_id: str) -> dict:
+    """Hard-delete a single pipeline run and all its artifacts from disk."""
+    mgr = get_run_manager()
+    r = mgr.get_run(run_id)
+    if r is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    if r.get("status") in ("pending", "running"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Run '{run_id}' is currently {r['status']}. Cancel it first.",
+        )
+    # Clear associated in-memory stores
+    _clear_run_from_stores(run_id)
+    mgr.delete_run(run_id)
+    return {"deleted": run_id}
+
+
+@router.delete("/runs", status_code=200)
+def clear_all_runs_endpoint() -> dict:
+    """Hard-delete ALL terminal pipeline runs and their artifacts."""
+    mgr = get_run_manager()
+    # Gather run_ids that will be deleted (terminal ones)
+    all_runs = mgr.list_runs()
+    terminal_ids = [r["run_id"] for r in all_runs if r.get("status") not in ("pending", "running")]
+    for rid in terminal_ids:
+        _clear_run_from_stores(rid)
+    deleted = mgr.clear_all_runs()
+    return {"deleted": deleted}
+
+
+def _clear_run_from_stores(run_id: str) -> None:
+    """Clear a single run's data from all in-memory route-level stores."""
+    try:
+        from stlc_platform.api.deps import get_ff_store, get_tc_store
+        get_tc_store().clear_run(run_id)
+        get_ff_store().clear_run(run_id)
+    except Exception:
+        pass
+    try:
+        from stlc_platform.api.routes.api_tests import clear_run as clear_api_tests_run
+        clear_api_tests_run(run_id)
+    except Exception:
+        pass
+    try:
+        from stlc_platform.api.routes.crawler import clear_run as clear_crawler_run
+        clear_crawler_run(run_id)
+    except Exception:
+        pass

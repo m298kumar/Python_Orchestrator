@@ -74,162 +74,221 @@ class BDDAgent(BaseAgent):
             warnings=warnings,
         )
 
-    def execute(
-        self, artifacts: Dict[str, Any], config: Dict[str, Any]
-    ) -> AgentResult:
-        """
-        Generate BDD feature files and step definitions.
-
-        Args:
-            artifacts: Must contain "test_cases" (List[TestCaseArtifact]).
-            config: Optional overrides (framework, language, automation_lib).
-
-        Returns:
-            AgentResult with feature_files and step_definitions.
-        """
-        # Validate
+    def execute(self, artifacts: Dict[str, Any], config: Dict[str, Any]) -> AgentResult:
         validation = self.validate_input(artifacts)
         if not validation.valid:
-            return AgentResult(
-                success=False,
-                errors=validation.errors,
-            )
+            return AgentResult(success=False, errors=validation.errors)
 
         test_cases = artifacts["test_cases"]
         framework = config.get("framework", "behave")
-        # Auto-detect language from framework if not explicitly set
         language = config.get(
             "language",
             StepDefinitionGenerator.SUPPORTED_FRAMEWORKS.get(framework, "python"),
         )
         automation_lib = config.get("automation_lib", "playwright")
-
-        # Build CSS selector lookup from optional crawler site model
-        site_model = artifacts.get("site_model")
-        selector_map: Dict[str, str] = {}
-        if site_model:
-            for page in getattr(site_model, "pages", []):
-                for element in getattr(page, "elements", []):
-                    name = (
-                        getattr(element, "name", "")
-                        or getattr(element, "text", "")
-                        or ""
-                    )
-                    selector = (
-                        getattr(element, "selector", "")
-                        or getattr(element, "css_selector", "")
-                        or ""
-                    )
-                    if name and selector:
-                        selector_map[name.lower().strip()] = selector
+        selector_map = self._build_selector_map(artifacts.get("site_model"))
 
         try:
-            # Step 1: Generate feature files
-            feature_gen = FeatureFileGenerator(
-                template_dir=config.get("template_dir"),
-                override_dir=config.get("override_dir"),
+            feature_files, validation_warnings = self._generate_and_validate_features(
+                test_cases,
+                config,
             )
-            feature_files = feature_gen.generate(test_cases)
-
-            # Step 2: Validate generated Gherkin
-            validator = GherkinValidator()
-            validation_warnings: List[str] = []
-            for ff in feature_files:
-                vresult = validator.validate(ff.content)
-                if not vresult.valid:
-                    validation_warnings.extend(
-                        f"[{ff.filename}] {e}" for e in vresult.errors
-                    )
-                validation_warnings.extend(
-                    f"[{ff.filename}] WARNING: {w}"
-                    for w in vresult.warnings
-                )
-
-            # Step 3: Parse steps from feature files
-            parser = StepParser()
-            raw_steps = parser.extract_steps(feature_files)
-            unique_steps = parser.deduplicate(raw_steps)
-            parameterized_steps = parser.parameterize(unique_steps)
-
-            # Step 4: Generate step definitions
-            step_gen = StepDefinitionGenerator(
-                framework=framework,
-                language=language,
-                automation_lib=automation_lib,
-                template_dir=config.get("template_dir"),
-                override_dir=config.get("override_dir"),
-            )
-            step_defs = step_gen.generate(
+            parameterized_steps = self._parse_and_parameterize_steps(feature_files)
+            step_defs = self._generate_step_defs(
                 parameterized_steps,
                 feature_files,
-                selector_map=selector_map or None,
+                framework,
+                language,
+                automation_lib,
+                config,
+                selector_map,
+            )
+            pom_stubs = self._generate_pom_stubs(
+                test_cases,
+                language,
+                automation_lib,
+                config,
+                artifacts,
+            )
+            project = self._scaffold_project_if_requested(
+                framework,
+                config,
+                feature_files,
+                step_defs,
+                pom_stubs,
             )
 
-            # Step 5: Generate POM stubs (optional, for web/mobile)
-            pom_stubs = []
-            generate_pom = config.get("generate_pom", True)
-            if generate_pom and language in POMGenerator.SUPPORTED_LANGUAGES:
-                pom_gen = POMGenerator(
-                    language=language,
-                    automation_lib=automation_lib,
-                    template_dir=config.get("template_dir"),
-                    override_dir=config.get("override_dir"),
-                )
-                crawled_pages = artifacts.get("crawled_pages")
-                pom_stubs = pom_gen.generate(
-                    test_cases,
-                    crawled_pages=crawled_pages,
-                )
-
-            # Step 6: Scaffold complete project (optional)
-            project = None
-            generate_project = config.get("generate_project", False)
-            if generate_project:
-                scaffolder = ProjectScaffolder(framework=framework)
-                project_name = config.get("project_name", "bdd_tests")
-                base_url = config.get("base_url", "http://localhost:8080")
-                project = scaffolder.scaffold(
-                    project_name=project_name,
-                    features=feature_files,
-                    step_defs=step_defs,
-                    pom_stubs=pom_stubs or None,
-                    base_url=base_url,
-                )
-
-            total_scenarios = sum(ff.scenario_count for ff in feature_files)
-            total_step_defs = sum(sd.step_count for sd in step_defs)
-
-            result_artifacts = {
-                "feature_files": feature_files,
-                "step_definitions": step_defs,
-            }
-            if pom_stubs:
-                result_artifacts["pom_stubs"] = pom_stubs
-            if project:
-                result_artifacts["project"] = project
-
-            return AgentResult(
-                success=True,
-                artifacts=result_artifacts,
-                metadata={
-                    "total_features": len(feature_files),
-                    "total_scenarios": total_scenarios,
-                    "total_step_defs": total_step_defs,
-                    "total_pom_stubs": len(pom_stubs),
-                    "project_generated": project is not None,
-                    "framework": framework,
-                    "language": language,
-                    "automation_lib": automation_lib,
-                    "selectors_injected": len(selector_map) if selector_map else 0,
-                    "validation_warnings": validation_warnings,
-                },
+            return self._build_success_result(
+                feature_files,
+                step_defs,
+                pom_stubs,
+                project,
+                framework,
+                language,
+                automation_lib,
+                selector_map,
+                validation_warnings,
             )
-
         except Exception as e:
-            return AgentResult(
-                success=False,
-                errors=[f"BDD generation failed: {e}"],
-            )
+            return AgentResult(success=False, errors=[f"BDD generation failed: {e}"])
+
+    def _build_selector_map(self, site_model) -> Dict[str, str]:
+        selector_map: Dict[str, str] = {}
+        if not site_model:
+            return selector_map
+        pages = getattr(site_model, "pages", None)
+        if pages is None and isinstance(site_model, dict):
+            pages = site_model.get("pages", [])
+        for page in (pages or []):
+            elements = getattr(page, "elements", None)
+            if elements is None and isinstance(page, dict):
+                elements = page.get("elements", [])
+            for element in (elements or []):
+                name = (
+                    getattr(element, "name", "")
+                    or (element.get("name", "") if isinstance(element, dict) else "")
+                    or getattr(element, "text", "")
+                    or (element.get("text", "") if isinstance(element, dict) else "")
+                )
+                selector = (
+                    getattr(element, "selector", "")
+                    or (element.get("selector", "") if isinstance(element, dict) else "")
+                )
+                if name and selector:
+                    selector_map[name.lower().strip()] = selector
+        return selector_map
+
+    def _generate_and_validate_features(self, test_cases, config):
+        feature_gen = FeatureFileGenerator(
+            template_dir=config.get("template_dir"),
+            override_dir=config.get("override_dir"),
+        )
+        feature_files = feature_gen.generate(test_cases)
+
+        validator = GherkinValidator()
+        warnings: List[str] = []
+        for ff in feature_files:
+            vresult = validator.validate(ff.content)
+            if not vresult.valid:
+                warnings.extend(f"[{ff.filename}] {e}" for e in vresult.errors)
+            warnings.extend(f"[{ff.filename}] WARNING: {w}" for w in vresult.warnings)
+        return feature_files, warnings
+
+    def _parse_and_parameterize_steps(self, feature_files):
+        parser = StepParser()
+        raw_steps = parser.extract_steps(feature_files)
+        unique_steps = parser.deduplicate(raw_steps)
+        return parser.parameterize(unique_steps)
+
+    def _generate_step_defs(
+        self,
+        parameterized_steps,
+        feature_files,
+        framework,
+        language,
+        automation_lib,
+        config,
+        selector_map,
+    ):
+        step_gen = StepDefinitionGenerator(
+            framework=framework,
+            language=language,
+            automation_lib=automation_lib,
+            template_dir=config.get("template_dir"),
+            override_dir=config.get("override_dir"),
+        )
+        return step_gen.generate(
+            parameterized_steps,
+            feature_files,
+            selector_map=selector_map or None,
+        )
+
+    def _generate_pom_stubs(self, test_cases, language, automation_lib, config, artifacts):
+        generate_pom = config.get("generate_pom", True)
+        if not generate_pom or language not in POMGenerator.SUPPORTED_LANGUAGES:
+            return []
+
+        # Extract crawled pages from the site_model artifact.
+        # The pipeline provides site_model (SiteModelArtifact), not a separate
+        # "crawled_pages" key — so we pull .pages from it here.
+        site_model = artifacts.get("site_model")
+        crawled_pages = None
+        if site_model is not None:
+            # Pydantic object (live pipeline run)
+            pages_attr = getattr(site_model, "pages", None)
+            if pages_attr is not None:
+                crawled_pages = pages_attr
+            # Dict (deserialized from disk / ArtifactStore)
+            elif isinstance(site_model, dict):
+                crawled_pages = site_model.get("pages") or None
+
+        pom_gen = POMGenerator(
+            language=language,
+            automation_lib=automation_lib,
+            template_dir=config.get("template_dir"),
+            override_dir=config.get("override_dir"),
+        )
+        return pom_gen.generate(test_cases, crawled_pages=crawled_pages)
+
+    def _scaffold_project_if_requested(
+        self,
+        framework,
+        config,
+        feature_files,
+        step_defs,
+        pom_stubs,
+    ):
+        if not config.get("generate_project", False):
+            return None
+        scaffolder = ProjectScaffolder(framework=framework)
+        return scaffolder.scaffold(
+            project_name=config.get("project_name", "bdd_tests"),
+            features=feature_files,
+            step_defs=step_defs,
+            pom_stubs=pom_stubs or None,
+            base_url=config.get("base_url", "http://localhost:8080"),
+        )
+
+    def _build_success_result(
+        self,
+        feature_files,
+        step_defs,
+        pom_stubs,
+        project,
+        framework,
+        language,
+        automation_lib,
+        selector_map,
+        validation_warnings,
+    ) -> AgentResult:
+        total_scenarios = sum(ff.scenario_count for ff in feature_files)
+        total_step_defs = sum(sd.step_count for sd in step_defs)
+
+        result_artifacts = {
+            "feature_files": feature_files,
+            "step_definitions": step_defs,
+        }
+        if pom_stubs:
+            result_artifacts["pom_stubs"] = pom_stubs
+        if project:
+            result_artifacts["project"] = project
+
+        return AgentResult(
+            success=True,
+            artifacts=result_artifacts,
+            metadata={
+                "total_features": len(feature_files),
+                "total_scenarios": total_scenarios,
+                "total_step_defs": total_step_defs,
+                "total_pom_stubs": len(pom_stubs),
+                "project_generated": project is not None,
+                "framework": framework,
+                "language": language,
+                "automation_lib": automation_lib,
+                "selectors_injected": len(selector_map) if selector_map else 0,
+                "validation_warnings": validation_warnings,
+            },
+        )
 
     def get_capabilities(self) -> AgentCapabilities:
         """Return agent capabilities for pipeline discovery."""

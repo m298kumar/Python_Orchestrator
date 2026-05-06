@@ -1,13 +1,12 @@
 """Tests for POM Generator."""
 
 import pytest
+from stlc_platform.agents.bdd_agent.pom_generator import PageObjectStub, POMGenerator
 from stlc_platform.core.contracts import (
     CrawledPageArtifact,
     PageElementArtifact,
     TestCaseArtifact,
-    TestStepArtifact,
 )
-from stlc_platform.agents.bdd_agent.pom_generator import POMGenerator, PageObjectStub
 
 
 @pytest.fixture

@@ -98,9 +98,57 @@ class CoverageTracker:
         match_threshold: float | None = None,
     ):
         cfg = _load_coverage_config()
-        self._match_threshold = match_threshold if match_threshold is not None else float(cfg.get("match_threshold", _DEFAULT_MATCH_THRESHOLD))
-        self._weak_quality_threshold = weak_quality_threshold if weak_quality_threshold is not None else float(cfg.get("weak_quality_threshold", 0.5))
-        self._min_coverage_types = min_coverage_types if min_coverage_types is not None else int(cfg.get("min_coverage_types", 1))
+        self._match_threshold = (
+            match_threshold
+            if match_threshold is not None
+            else float(cfg.get("match_threshold", _DEFAULT_MATCH_THRESHOLD))
+        )
+        self._weak_quality_threshold = (
+            weak_quality_threshold
+            if weak_quality_threshold is not None
+            else float(cfg.get("weak_quality_threshold", 0.5))
+        )
+        self._min_coverage_types = (
+            min_coverage_types
+            if min_coverage_types is not None
+            else int(cfg.get("min_coverage_types", 1))
+        )
+
+    def _build_ac_entry(
+        self,
+        req_id: str,
+        ac_idx: int,
+        ac_text: str,
+        matching_tcs: List[Any],
+    ) -> CoverageEntry:
+        """Build a CoverageEntry for a single acceptance criterion."""
+        entry = CoverageEntry(req_id=req_id, ac_index=ac_idx, ac_text=ac_text)
+        quality_scores: List[float] = []
+        for tc in matching_tcs:
+            if self._match_tc_to_ac(tc, ac_text):
+                entry.test_case_ids.append(getattr(tc, "tc_id", ""))
+                test_type = getattr(tc, "test_type", "").lower()
+                if test_type:
+                    entry.coverage_types.add(test_type)
+                quality_scores.append(getattr(tc, "quality_score", 0.0))
+        if quality_scores:
+            entry.avg_quality_score = sum(quality_scores) / len(quality_scores)
+        return entry
+
+    def _classify_entries(self, report: CoverageReport) -> int:
+        """Classify entries into uncovered/weak and return covered count."""
+        covered_count = 0
+        for entry in report.entries:
+            if not entry.test_case_ids:
+                report.uncovered_entries.append(entry)
+            else:
+                covered_count += 1
+                if (
+                    len(entry.test_case_ids) == 1
+                    or entry.avg_quality_score < self._weak_quality_threshold
+                ):
+                    report.weak_entries.append(entry)
+        return covered_count
 
     def analyze(
         self,
@@ -144,49 +192,13 @@ class CoverageTracker:
             matching_tcs = tc_by_req.get(req_id, [])
 
             for ac_idx, ac_text in enumerate(acs):
-                entry = CoverageEntry(
-                    req_id=req_id,
-                    ac_index=ac_idx,
-                    ac_text=ac_text,
-                )
-
-                # Find TCs that cover this AC
-                quality_scores: List[float] = []
-                for tc in matching_tcs:
-                    if self._match_tc_to_ac(tc, ac_text):
-                        tc_id = getattr(tc, "tc_id", "")
-                        entry.test_case_ids.append(tc_id)
-
-                        # Collect coverage type from test_type
-                        test_type = getattr(tc, "test_type", "").lower()
-                        if test_type:
-                            entry.coverage_types.add(test_type)
-
-                        quality = getattr(tc, "quality_score", 0.0)
-                        quality_scores.append(quality)
-
-                if quality_scores:
-                    entry.avg_quality_score = sum(quality_scores) / len(quality_scores)
-
+                entry = self._build_ac_entry(req_id, ac_idx, ac_text, matching_tcs)
                 all_entries.append(entry)
 
         report.entries = all_entries
         report.total_acs = len(all_entries)
 
-        # Classify entries
-        covered_count = 0
-        for entry in all_entries:
-            if not entry.test_case_ids:
-                report.uncovered_entries.append(entry)
-            else:
-                covered_count += 1
-                # Weak: only 1 TC, or avg quality below threshold
-                if (
-                    len(entry.test_case_ids) == 1
-                    or entry.avg_quality_score < self._weak_quality_threshold
-                ):
-                    report.weak_entries.append(entry)
-
+        covered_count = self._classify_entries(report)
         report.overall_coverage = (covered_count / len(all_entries) * 100.0) if all_entries else 0.0
 
         logger.info(

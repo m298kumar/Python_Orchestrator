@@ -1,8 +1,8 @@
 """Tests for Java Cucumber and JavaScript Cucumber.js step definition generation."""
 
 import pytest
-from stlc_platform.agents.bdd_agent.step_parser import ParameterizedStep
 from stlc_platform.agents.bdd_agent.step_def_generator import StepDefinitionGenerator
+from stlc_platform.agents.bdd_agent.step_parser import ParameterizedStep
 
 
 @pytest.fixture
@@ -12,9 +12,7 @@ def cucumber_java_gen():
 
 @pytest.fixture
 def cucumberjs_gen():
-    return StepDefinitionGenerator(
-        framework="cucumberjs", language="javascript"
-    )
+    return StepDefinitionGenerator(framework="cucumberjs", language="javascript")
 
 
 def _make_steps() -> list:

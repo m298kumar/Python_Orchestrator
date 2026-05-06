@@ -18,10 +18,12 @@ class MockRequirement:
     description: str = "User should be able to log in with valid credentials"
     category: str = "Authentication"
     priority: str = "High"
-    acceptance_criteria: List[str] = field(default_factory=lambda: [
-        "User can login with valid credentials",
-        "System displays error for invalid password",
-    ])
+    acceptance_criteria: List[str] = field(
+        default_factory=lambda: [
+            "User can login with valid credentials",
+            "System displays error for invalid password",
+        ]
+    )
 
 
 class MockLLMClient:
@@ -84,7 +86,10 @@ class MockLLMClient:
             "description": "Multiple failed logins trigger temporary account freeze",
             "preconditions": "Security policy requires lockout after 5 failures",
             "steps": [
-                {"action": "Attempt login with wrong password 5 times", "expected_result": "Counter increments"},
+                {
+                    "action": "Attempt login with wrong password 5 times",
+                    "expected_result": "Counter increments",
+                },
                 {"action": "Try sixth login attempt", "expected_result": "Account locked message"},
                 {"action": "Wait 15 minutes and retry", "expected_result": "Login succeeds"},
             ],
@@ -101,7 +106,10 @@ class MockLLMClient:
             "description": "Idle session expires after configured inactivity period",
             "preconditions": "Session timeout configured to 30 minutes",
             "steps": [
-                {"action": "Login and remain idle for 31 minutes", "expected_result": "Timer expires"},
+                {
+                    "action": "Login and remain idle for 31 minutes",
+                    "expected_result": "Timer expires",
+                },
                 {"action": "Attempt navigation to protected page", "expected_result": "Redirected"},
                 {"action": "Check session cookie", "expected_result": "Cookie invalidated"},
             ],
@@ -119,7 +127,10 @@ class MockLLMClient:
             "preconditions": "MFA enabled for user account with TOTP configured",
             "steps": [
                 {"action": "Complete primary login", "expected_result": "MFA challenge shown"},
-                {"action": "Enter TOTP code from authenticator", "expected_result": "Code verified"},
+                {
+                    "action": "Enter TOTP code from authenticator",
+                    "expected_result": "Code verified",
+                },
                 {"action": "Confirm MFA approval", "expected_result": "Full access granted"},
             ],
             "expected_outcome": "Two-factor verification completed successfully",
@@ -150,10 +161,12 @@ class TestValidateInput:
         return TestGenerationAgent()
 
     def test_valid_input(self, agent):
-        result = agent.validate_input({
-            "requirements": [MockRequirement()],
-            "llm_client": MockLLMClient(),
-        })
+        result = agent.validate_input(
+            {
+                "requirements": [MockRequirement()],
+                "llm_client": MockLLMClient(),
+            }
+        )
         assert result.valid is True
         assert result.errors == []
 
@@ -163,31 +176,39 @@ class TestValidateInput:
         assert any("requirements" in e for e in result.errors)
 
     def test_empty_requirements(self, agent):
-        result = agent.validate_input({
-            "requirements": [],
-            "llm_client": MockLLMClient(),
-        })
+        result = agent.validate_input(
+            {
+                "requirements": [],
+                "llm_client": MockLLMClient(),
+            }
+        )
         assert result.valid is False
 
     def test_requirements_not_list(self, agent):
-        result = agent.validate_input({
-            "requirements": "not a list",
-            "llm_client": MockLLMClient(),
-        })
+        result = agent.validate_input(
+            {
+                "requirements": "not a list",
+                "llm_client": MockLLMClient(),
+            }
+        )
         assert result.valid is False
 
     def test_missing_llm_client(self, agent):
-        result = agent.validate_input({
-            "requirements": [MockRequirement()],
-        })
+        result = agent.validate_input(
+            {
+                "requirements": [MockRequirement()],
+            }
+        )
         assert result.valid is False
         assert any("llm_client" in e for e in result.errors)
 
     def test_no_vector_store_warning(self, agent):
-        result = agent.validate_input({
-            "requirements": [MockRequirement()],
-            "llm_client": MockLLMClient(),
-        })
+        result = agent.validate_input(
+            {
+                "requirements": [MockRequirement()],
+                "llm_client": MockLLMClient(),
+            }
+        )
         assert len(result.warnings) > 0
         assert any("vector_store" in w for w in result.warnings)
 

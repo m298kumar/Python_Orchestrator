@@ -1,9 +1,9 @@
 """Tests for GraphQL schema parser."""
 
 import json
-import pytest
 from pathlib import Path
 
+import pytest
 from stlc_platform.agents.api_test_agent.graphql_parser import GraphQLParser
 from stlc_platform.core.contracts import APIModelArtifact
 
@@ -92,9 +92,7 @@ class TestIntrospectionParsing:
 
     def test_create_user_mutation_has_args(self, gql_parser, introspection_schema):
         result = gql_parser.parse(introspection_schema)
-        create = next(
-            (ep for ep in result.endpoints if "createUser" in ep.tags), None
-        )
+        create = next((ep for ep in result.endpoints if "createUser" in ep.tags), None)
         assert create is not None
         param_names = [p["name"] for p in create.query_params]
         assert "name" in param_names
@@ -181,9 +179,7 @@ class TestGraphQLEdgeCases:
         assert len(result.endpoints) == 1
 
     def test_custom_endpoint_url(self, gql_parser, introspection_schema):
-        result = gql_parser.parse(
-            introspection_schema, endpoint_url="/api/graphql"
-        )
+        result = gql_parser.parse(introspection_schema, endpoint_url="/api/graphql")
         assert all(ep.path == "/api/graphql" for ep in result.endpoints)
 
     def test_preserves_example_request(self, gql_parser, introspection_schema):

@@ -16,7 +16,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -75,6 +74,7 @@ def _check_import(label: str, import_statement: str) -> bool:
 
 
 # ── Stage Checks ────────────────────────────────────────────────────────────
+
 
 def check_stage_0():
     """Foundation — structure, imports, contracts, config."""
@@ -210,14 +210,29 @@ def check_stage_0():
     # 17. Lint check (ruff)
     _run(
         "Lint check (ruff)",
-        [sys.executable, "-m", "ruff", "check", "stlc_platform/", "--select=E,F", "--ignore=E501,E402"],
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "stlc_platform/",
+            "--select=E,F",
+            "--ignore=E501,E402",
+        ],
         allow_fail=True,
     )
 
     # 18. Type check (mypy) — allow_fail for gradual adoption
     _run(
         "Type check (mypy)",
-        [sys.executable, "-m", "mypy", "stlc_platform/", "--ignore-missing-imports", "--no-error-summary"],
+        [
+            sys.executable,
+            "-m",
+            "mypy",
+            "stlc_platform/",
+            "--ignore-missing-imports",
+            "--no-error-summary",
+        ],
         allow_fail=True,
     )
 
@@ -335,7 +350,9 @@ def check_stage_1():
 
     # 16. Template completeness check
     global _PASS, _FAIL
-    template_dir = _ROOT / "stlc_platform" / "agents" / "requirements_agent" / "prompts" / "templates"
+    template_dir = (
+        _ROOT / "stlc_platform" / "agents" / "requirements_agent" / "prompts" / "templates"
+    )
     required_templates = ["system_prompt.j2", "user_prompt.j2", "few_shot_block.j2"]
     all_found = True
     for t in required_templates:
@@ -353,7 +370,8 @@ def check_stage_1():
     _run(
         "No hardcoded domain terms",
         [
-            sys.executable, "-c",
+            sys.executable,
+            "-c",
             (
                 "import pathlib, re; "
                 "agent_dir = pathlib.Path('stlc_platform/agents/requirements_agent'); "
@@ -509,7 +527,8 @@ def check_stage_2():
     _run(
         "No hardcoded domain terms in BDD agent",
         [
-            sys.executable, "-c",
+            sys.executable,
+            "-c",
             (
                 "import pathlib; "
                 "agent_dir = pathlib.Path('stlc_platform/agents/bdd_agent'); "
@@ -531,16 +550,20 @@ def check_stage_2():
     if stage2_tests:
         _run(
             "Stage 2 integration tests",
-            [sys.executable, "-m", "pytest", str(integration_dir / "test_stage2_validation.py"),
-             "-v", "--tb=short", "-q"],
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                str(integration_dir / "test_stage2_validation.py"),
+                "-v",
+                "--tb=short",
+                "-q",
+            ],
         )
 
 
-def check_stage_3():
-    """Web Crawler & API Test Generator (Phase 1: Crawler Agent)."""
-    check_stage_2()
-    print("\n--- Stage 3: Web Crawler & API Test Generator ---")
-
+def _check_stage_3_crawler():
+    """Phase 1: Crawler Agent checks (items 1-12)."""
     global _PASS, _FAIL
 
     # 1. CrawlerAgent package importable
@@ -600,7 +623,7 @@ def check_stage_3():
             "from stlc_platform.agents.crawler_agent import CrawlerAgent; "
             "agent = CrawlerAgent(); "
             "html_pages = {'http://localhost/test': '<html><head><title>Test</title></head>"
-            "<body><form><input name=\"email\" type=\"text\"><button type=\"submit\">Go</button></form></body></html>'}; "
+            '<body><form><input name="email" type="text"><button type="submit">Go</button></form></body></html>\'}; '
             "r = agent.execute({'html_pages': html_pages}, {}); "
             "assert r.success, f'CrawlerAgent failed: {r.errors}'; "
             "assert r.metadata['total_pages'] == 1; "
@@ -616,9 +639,9 @@ def check_stage_3():
             "from stlc_platform.core.contracts import RequirementArtifact; "
             "agent = CrawlerAgent(); "
             "html = {'http://localhost/login': '<html><head><title>Login</title></head>"
-            "<body><form><input name=\"username\"><button>Sign In</button></form></body></html>'}; "
-            "reqs = [RequirementArtifact(req_id=\"REQ-T\", title=\"Login\", description=\"Login page\", "
-            "acceptance_criteria=[\"User clicks Sign In button\"], priority=\"High\")]; "
+            '<body><form><input name="username"><button>Sign In</button></form></body></html>\'}; '
+            'reqs = [RequirementArtifact(req_id="REQ-T", title="Login", description="Login page", '
+            'acceptance_criteria=["User clicks Sign In button"], priority="High")]; '
             "r = agent.execute({'html_pages': html, 'requirements': reqs}, {}); "
             "assert r.success; "
             "assert 'discrepancy_report' in r.artifacts; "
@@ -630,7 +653,8 @@ def check_stage_3():
     _run(
         "No hardcoded domain terms in crawler agent",
         [
-            sys.executable, "-c",
+            sys.executable,
+            "-c",
             (
                 "import pathlib; "
                 "agent_dir = pathlib.Path('stlc_platform/agents/crawler_agent'); "
@@ -663,7 +687,10 @@ def check_stage_3():
             [sys.executable, "-m", "pytest", str(stage3_test), "-v", "--tb=short", "-q"],
         )
 
-    # ── Phase 2: API Discovery + API Test Generator ──────────────────────
+
+def _check_stage_3_api_tests():
+    """Phase 2: API Discovery + API Test Generator checks (items 13-24)."""
+    global _PASS, _FAIL
 
     # 13. APITestAgent package importable
     _check_import(
@@ -757,7 +784,8 @@ def check_stage_3():
     _run(
         "No hardcoded domain terms in API test agent",
         [
-            sys.executable, "-c",
+            sys.executable,
+            "-c",
             (
                 "import pathlib; "
                 "agent_dir = pathlib.Path('stlc_platform/agents/api_test_agent'); "
@@ -782,6 +810,7 @@ def check_stage_3():
         )
 
     # 24. Phase 2 integration tests pass
+    integration_dir = _ROOT / "tests" / "integration"
     stage3p2_test = integration_dir / "test_stage3p2_validation.py"
     if stage3p2_test.exists():
         _run(
@@ -789,10 +818,15 @@ def check_stage_3():
             [sys.executable, "-m", "pytest", str(stage3p2_test), "-v", "--tb=short", "-q"],
         )
 
-    # ── Phase 3: Multi-Framework + Cross-Stage ───────────────────────────
+
+def _check_stage_3_multi_framework():
+    """Phase 3: Multi-Framework + Cross-Stage checks (items 25-32)."""
+    global _PASS, _FAIL
 
     # 25. REST Assured template exists
-    ra_template = _ROOT / "stlc_platform" / "agents" / "api_test_agent" / "templates" / "rest_assured.java.j2"
+    ra_template = (
+        _ROOT / "stlc_platform" / "agents" / "api_test_agent" / "templates" / "rest_assured.java.j2"
+    )
     if ra_template.exists():
         _PASS += 1
         print("  PASS  REST Assured template exists")
@@ -801,7 +835,9 @@ def check_stage_3():
         print("  FAIL  REST Assured template missing")
 
     # 26. Karate template exists
-    karate_template = _ROOT / "stlc_platform" / "agents" / "api_test_agent" / "templates" / "karate.feature.j2"
+    karate_template = (
+        _ROOT / "stlc_platform" / "agents" / "api_test_agent" / "templates" / "karate.feature.j2"
+    )
     if karate_template.exists():
         _PASS += 1
         print("  PASS  Karate template exists")
@@ -871,6 +907,7 @@ def check_stage_3():
     )
 
     # 31. Phase 3 cross-stage integration tests pass
+    integration_dir = _ROOT / "tests" / "integration"
     stage3p3_test = integration_dir / "test_stage3p3_validation.py"
     if stage3p3_test.exists():
         _run(
@@ -881,10 +918,27 @@ def check_stage_3():
     # 32. Lint check on api_test_agent
     _run(
         "Lint check on api_test_agent",
-        [sys.executable, "-m", "ruff", "check",
-         "stlc_platform/agents/api_test_agent/", "--select=E,F", "--ignore=E501,E402"],
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "stlc_platform/agents/api_test_agent/",
+            "--select=E,F",
+            "--ignore=E501,E402",
+        ],
         allow_fail=True,
     )
+
+
+def check_stage_3():
+    """Web Crawler & API Test Generator (Phase 1: Crawler Agent)."""
+    check_stage_2()
+    print("\n--- Stage 3: Web Crawler & API Test Generator ---")
+
+    _check_stage_3_crawler()
+    _check_stage_3_api_tests()
+    _check_stage_3_multi_framework()
 
 
 def check_stage_4():
@@ -1125,13 +1179,17 @@ def check_stage_4():
     _run(
         "Stage 4 Phase 2 unit tests",
         [
-            sys.executable, "-m", "pytest",
+            sys.executable,
+            "-m",
+            "pytest",
             str(_ROOT / "tests" / "unit" / "pipeline" / "test_skill_loader.py"),
             str(_ROOT / "tests" / "unit" / "pipeline" / "test_profile_loader.py"),
             str(_ROOT / "tests" / "unit" / "pipeline" / "test_config_profiles.py"),
             str(_ROOT / "tests" / "unit" / "pipeline" / "test_model_router.py"),
             str(_ROOT / "tests" / "unit" / "pipeline" / "test_feedback_store.py"),
-            "-v", "--tb=short", "-q",
+            "-v",
+            "--tb=short",
+            "-q",
         ],
     )
 
@@ -1156,108 +1214,164 @@ def check_stage_5():
     # ── Imports ──────────────────────────────────────────────────────────
 
     # 1. FastAPI app importable
-    _run("FastAPI app importable", [
-        sys.executable, "-c",
-        "from stlc_platform.api.main import app; assert app is not None",
-    ])
+    _run(
+        "FastAPI app importable",
+        [
+            sys.executable,
+            "-c",
+            "from stlc_platform.api.main import app; assert app is not None",
+        ],
+    )
 
     # 2. API schemas importable
-    _run("API schemas importable", [
-        sys.executable, "-c",
-        "from stlc_platform.api.schemas import PipelineRunRequest, HealthResponse, WSMessage",
-    ])
+    _run(
+        "API schemas importable",
+        [
+            sys.executable,
+            "-c",
+            "from stlc_platform.api.schemas import PipelineRunRequest, HealthResponse, WSMessage",
+        ],
+    )
 
     # 3. RunManager importable
-    _run("RunManager importable", [
-        sys.executable, "-c",
-        "from stlc_platform.api.deps import RunManager, get_run_manager, get_ws_manager",
-    ])
+    _run(
+        "RunManager importable",
+        [
+            sys.executable,
+            "-c",
+            "from stlc_platform.api.deps import RunManager, get_run_manager, get_ws_manager",
+        ],
+    )
 
     # 4. WebSocket ConnectionManager importable
-    _run("WebSocket ConnectionManager importable", [
-        sys.executable, "-c",
-        "from stlc_platform.api.websocket import ConnectionManager",
-    ])
+    _run(
+        "WebSocket ConnectionManager importable",
+        [
+            sys.executable,
+            "-c",
+            "from stlc_platform.api.websocket import ConnectionManager",
+        ],
+    )
 
     # 5. Background task runner importable
-    _run("Background task runner importable", [
-        sys.executable, "-c",
-        "from stlc_platform.api.tasks import submit_pipeline_run, run_pipeline_background",
-    ])
+    _run(
+        "Background task runner importable",
+        [
+            sys.executable,
+            "-c",
+            "from stlc_platform.api.tasks import submit_pipeline_run, run_pipeline_background",
+        ],
+    )
 
     # 6. All 11 route modules importable
-    _run("All route modules importable", [
-        sys.executable, "-c",
-        "from stlc_platform.api.routes import ("
-        "pipeline, agents, requirements, test_cases, bdd, "
-        "crawler, api_tests, artifacts, feedback, config, files"
-        ")",
-    ])
+    _run(
+        "All route modules importable",
+        [
+            sys.executable,
+            "-c",
+            "from stlc_platform.api.routes import ("
+            "pipeline, agents, requirements, test_cases, bdd, "
+            "crawler, api_tests, artifacts, feedback, config, files"
+            ")",
+        ],
+    )
 
     # ── Frontend files ───────────────────────────────────────────────────
 
     # 7. Frontend package.json exists
-    _run("Frontend package.json exists", [
-        sys.executable, "-c",
-        f"from pathlib import Path; assert Path(r'{frontend / 'package.json'}').exists()",
-    ])
+    _run(
+        "Frontend package.json exists",
+        [
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; assert Path(r'{frontend / 'package.json'}').exists()",
+        ],
+    )
 
     # 8. Vite config exists
-    _run("Frontend vite.config.ts exists", [
-        sys.executable, "-c",
-        f"from pathlib import Path; assert Path(r'{frontend / 'vite.config.ts'}').exists()",
-    ])
+    _run(
+        "Frontend vite.config.ts exists",
+        [
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; assert Path(r'{frontend / 'vite.config.ts'}').exists()",
+        ],
+    )
 
     # 9. All 8 page components exist
     pages_dir = str(frontend / "src" / "pages")
-    _run("All 8 page components exist", [
-        sys.executable, "-c",
-        "import sys; from pathlib import Path; "
-        f"d = Path(r'{pages_dir}'); "
-        "pages = ['Dashboard','Requirements','TestCases','BddCode','Crawler','ApiTests','Config','History']; "
-        "missing = [p for p in pages if not (d / (p + '.tsx')).exists()]; "
-        "sys.exit(1) if missing else None",
-    ])
+    _run(
+        "All 8 page components exist",
+        [
+            sys.executable,
+            "-c",
+            "import sys; from pathlib import Path; "
+            f"d = Path(r'{pages_dir}'); "
+            "pages = ['Dashboard','Requirements','TestCases','BddCode','Crawler','ApiTests','Config','History']; "
+            "missing = [p for p in pages if not (d / (p + '.tsx')).exists()]; "
+            "sys.exit(1) if missing else None",
+        ],
+    )
 
     # 10. All 5 reusable components exist
     comps_dir = str(frontend / "src" / "components")
-    _run("All 5 reusable components exist", [
-        sys.executable, "-c",
-        "import sys; from pathlib import Path; "
-        f"d = Path(r'{comps_dir}'); "
-        "comps = ['Layout','StatusBadge','CodeViewer','NotificationProvider','LiveProgress']; "
-        "missing = [c for c in comps if not (d / (c + '.tsx')).exists()]; "
-        "sys.exit(1) if missing else None",
-    ])
+    _run(
+        "All 5 reusable components exist",
+        [
+            sys.executable,
+            "-c",
+            "import sys; from pathlib import Path; "
+            f"d = Path(r'{comps_dir}'); "
+            "comps = ['Layout','StatusBadge','CodeViewer','NotificationProvider','LiveProgress']; "
+            "missing = [c for c in comps if not (d / (c + '.tsx')).exists()]; "
+            "sys.exit(1) if missing else None",
+        ],
+    )
 
     # 11. All 3 hooks exist
     hooks_dir = str(frontend / "src" / "hooks")
-    _run("All 3 custom hooks exist", [
-        sys.executable, "-c",
-        "import sys; from pathlib import Path; "
-        f"d = Path(r'{hooks_dir}'); "
-        "hooks = ['useWebSocket','usePipeline','useRequirements']; "
-        "missing = [h for h in hooks if not (d / (h + '.ts')).exists()]; "
-        "sys.exit(1) if missing else None",
-    ])
+    _run(
+        "All 3 custom hooks exist",
+        [
+            sys.executable,
+            "-c",
+            "import sys; from pathlib import Path; "
+            f"d = Path(r'{hooks_dir}'); "
+            "hooks = ['useWebSocket','usePipeline','useRequirements']; "
+            "missing = [h for h in hooks if not (d / (h + '.ts')).exists()]; "
+            "sys.exit(1) if missing else None",
+        ],
+    )
 
     # 12. API client exists
-    _run("API client module exists", [
-        sys.executable, "-c",
-        f"from pathlib import Path; assert Path(r'{frontend / 'src' / 'api' / 'client.ts'}').exists()",
-    ])
+    _run(
+        "API client module exists",
+        [
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; assert Path(r'{frontend / 'src' / 'api' / 'client.ts'}').exists()",
+        ],
+    )
 
     # 13. Vitest config exists
-    _run("Vitest config exists", [
-        sys.executable, "-c",
-        f"from pathlib import Path; assert Path(r'{frontend / 'vitest.config.ts'}').exists()",
-    ])
+    _run(
+        "Vitest config exists",
+        [
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; assert Path(r'{frontend / 'vitest.config.ts'}').exists()",
+        ],
+    )
 
     # 14. Frontend test setup exists
-    _run("Frontend test setup exists", [
-        sys.executable, "-c",
-        f"from pathlib import Path; assert Path(r'{frontend / 'src' / 'test' / 'setup.ts'}').exists()",
-    ])
+    _run(
+        "Frontend test setup exists",
+        [
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; assert Path(r'{frontend / 'src' / 'test' / 'setup.ts'}').exists()",
+        ],
+    )
 
     # ── Backend API tests ────────────────────────────────────────────────
 
@@ -1266,7 +1380,8 @@ def check_stage_5():
     if api_test_files:
         _run(
             "Stage 5 backend API unit tests",
-            [sys.executable, "-m", "pytest"] + [str(f) for f in api_test_files]
+            [sys.executable, "-m", "pytest"]
+            + [str(f) for f in api_test_files]
             + ["-v", "--tb=short", "-q"],
         )
 
@@ -1279,11 +1394,15 @@ def check_stage_5():
         )
 
     # 17. __stage__ is 5
-    _run("__stage__ is 5", [
-        sys.executable, "-c",
-        "import stlc_platform; assert stlc_platform.__stage__ == 5, "
-        f"f'Expected 5, got {'{'}stlc_platform.__stage__{'}'}'",
-    ])
+    _run(
+        "__stage__ is 5",
+        [
+            sys.executable,
+            "-c",
+            "import stlc_platform; assert stlc_platform.__stage__ == 5, "
+            f"f'Expected 5, got {'{'}stlc_platform.__stage__{'}'}'",
+        ],
+    )
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -1303,7 +1422,11 @@ def main():
 
     parser = argparse.ArgumentParser(description="STLC Platform Validation Gate")
     parser.add_argument(
-        "--stage", "-s", type=int, required=True, choices=range(6),
+        "--stage",
+        "-s",
+        type=int,
+        required=True,
+        choices=range(6),
         help="Stage number to validate (0-5)",
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="Show command output")

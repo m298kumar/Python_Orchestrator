@@ -14,13 +14,6 @@ from pathlib import Path
 from typing import List
 
 import pytest
-
-from stlc_platform.core.contracts import (
-    FeatureFileArtifact,
-    StepDefinitionArtifact,
-    TestCaseArtifact,
-    TestStepArtifact,
-)
 from stlc_platform.agents.bdd_agent import (
     BDDAgent,
     FeatureFileGenerator,
@@ -28,12 +21,16 @@ from stlc_platform.agents.bdd_agent import (
     StepDefinitionGenerator,
     StepParser,
 )
-from stlc_platform.agents.bdd_agent.step_parser import ParameterizedStep
+from stlc_platform.core.contracts import (
+    TestCaseArtifact,
+    TestStepArtifact,
+)
 
 _FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
 
 # -- Helpers -----------------------------------------------------------------
+
 
 def _load_fixture(name: str) -> List[TestCaseArtifact]:
     """Load a JSON fixture file and return TestCaseArtifact list."""
@@ -71,12 +68,17 @@ def _load_fixture(name: str) -> List[TestCaseArtifact]:
 
 # -- Feature File Generation Tests ------------------------------------------
 
+
 class TestFeatureFileGeneration:
     """Integration tests for the feature file generation pipeline."""
 
-    @pytest.fixture(params=["test_cases_ecommerce.json",
-                            "test_cases_healthcare.json",
-                            "test_cases_banking.json"])
+    @pytest.fixture(
+        params=[
+            "test_cases_ecommerce.json",
+            "test_cases_healthcare.json",
+            "test_cases_banking.json",
+        ]
+    )
     def test_cases(self, request) -> List[TestCaseArtifact]:
         return _load_fixture(request.param)
 
@@ -94,9 +96,7 @@ class TestFeatureFileGeneration:
         validator = GherkinValidator()
         for ff in features:
             result = validator.validate(ff.content)
-            assert result.valid, (
-                f"Feature '{ff.filename}' has Gherkin errors: {result.errors}"
-            )
+            assert result.valid, f"Feature '{ff.filename}' has Gherkin errors: {result.errors}"
 
     def test_feature_files_contain_feature_keyword(self, test_cases):
         gen = FeatureFileGenerator()
@@ -119,6 +119,7 @@ class TestFeatureFileGeneration:
 
 
 # -- Gherkin Validation Tests ------------------------------------------------
+
 
 class TestGherkinValidation:
     """Integration tests for Gherkin validation on generated content."""
@@ -154,15 +155,18 @@ class TestGherkinValidation:
 
 # -- Step Parsing Tests ------------------------------------------------------
 
+
 class TestStepParsing:
     """Integration tests for step extraction and parameterization."""
 
     def test_extracts_steps_from_all_domains(self):
         parser = StepParser()
         gen = FeatureFileGenerator()
-        for fixture in ["test_cases_ecommerce.json",
-                        "test_cases_healthcare.json",
-                        "test_cases_banking.json"]:
+        for fixture in [
+            "test_cases_ecommerce.json",
+            "test_cases_healthcare.json",
+            "test_cases_banking.json",
+        ]:
             tcs = _load_fixture(fixture)
             features = gen.generate(tcs)
             steps = parser.extract_steps(features)
@@ -202,6 +206,7 @@ class TestStepParsing:
 
 # -- Step Definition Generation Tests ----------------------------------------
 
+
 class TestStepDefinitionGeneration:
     """Integration tests for step definition skeleton generation."""
 
@@ -215,9 +220,7 @@ class TestStepDefinitionGeneration:
         return parser.parameterize(unique), features
 
     def test_behave_output_is_valid_python(self):
-        steps, features = self._get_parameterized_steps(
-            "test_cases_ecommerce.json"
-        )
+        steps, features = self._get_parameterized_steps("test_cases_ecommerce.json")
         step_gen = StepDefinitionGenerator(framework="behave")
         results = step_gen.generate(steps)
         for sd in results:
@@ -227,9 +230,7 @@ class TestStepDefinitionGeneration:
             assert sd.language == "python"
 
     def test_pytest_bdd_output_is_valid_python(self):
-        steps, features = self._get_parameterized_steps(
-            "test_cases_ecommerce.json"
-        )
+        steps, features = self._get_parameterized_steps("test_cases_ecommerce.json")
         step_gen = StepDefinitionGenerator(framework="pytest_bdd")
         results = step_gen.generate(steps, features)
         for sd in results:
@@ -237,9 +238,7 @@ class TestStepDefinitionGeneration:
             assert sd.framework == "pytest_bdd"
 
     def test_behave_has_all_decorator_types(self):
-        steps, features = self._get_parameterized_steps(
-            "test_cases_ecommerce.json"
-        )
+        steps, features = self._get_parameterized_steps("test_cases_ecommerce.json")
         step_gen = StepDefinitionGenerator(framework="behave")
         results = step_gen.generate(steps)
         content = results[0].content
@@ -248,19 +247,13 @@ class TestStepDefinitionGeneration:
         assert "@then(" in content
 
     def test_selenium_import_when_configured(self):
-        steps, _ = self._get_parameterized_steps(
-            "test_cases_ecommerce.json"
-        )
-        step_gen = StepDefinitionGenerator(
-            framework="behave", automation_lib="selenium"
-        )
+        steps, _ = self._get_parameterized_steps("test_cases_ecommerce.json")
+        step_gen = StepDefinitionGenerator(framework="behave", automation_lib="selenium")
         results = step_gen.generate(steps)
         assert "selenium" in results[0].content.lower()
 
     def test_step_count_covers_all_keywords(self):
-        steps, features = self._get_parameterized_steps(
-            "test_cases_ecommerce.json"
-        )
+        steps, features = self._get_parameterized_steps("test_cases_ecommerce.json")
         step_gen = StepDefinitionGenerator(framework="behave")
         results = step_gen.generate(steps)
         total = sum(sd.step_count for sd in results)
@@ -269,9 +262,11 @@ class TestStepDefinitionGeneration:
 
     def test_multi_domain_step_defs_all_valid_python(self):
         """Test step definition generation across all 3 domains."""
-        for fixture in ["test_cases_ecommerce.json",
-                        "test_cases_healthcare.json",
-                        "test_cases_banking.json"]:
+        for fixture in [
+            "test_cases_ecommerce.json",
+            "test_cases_healthcare.json",
+            "test_cases_banking.json",
+        ]:
             steps, features = self._get_parameterized_steps(fixture)
             for fw in ("behave", "pytest_bdd"):
                 step_gen = StepDefinitionGenerator(framework=fw)
@@ -281,6 +276,7 @@ class TestStepDefinitionGeneration:
 
 
 # -- BDDAgent End-to-End Tests -----------------------------------------------
+
 
 class TestBDDAgentEndToEnd:
     """Integration tests for the BDDAgent orchestrating the full pipeline."""
@@ -371,14 +367,17 @@ class TestBDDAgentEndToEnd:
 
 # -- Cross-Domain Consistency Tests ------------------------------------------
 
+
 class TestCrossDomainConsistency:
     """Tests ensuring consistent behavior across all domains."""
 
     def test_all_domains_produce_features_and_stepdefs(self):
         agent = BDDAgent()
-        for fixture in ["test_cases_ecommerce.json",
-                        "test_cases_healthcare.json",
-                        "test_cases_banking.json"]:
+        for fixture in [
+            "test_cases_ecommerce.json",
+            "test_cases_healthcare.json",
+            "test_cases_banking.json",
+        ]:
             tcs = _load_fixture(fixture)
             result = agent.execute(
                 {"test_cases": tcs},
@@ -404,9 +403,11 @@ class TestCrossDomainConsistency:
     def test_generated_features_have_no_unicode_issues(self):
         """Ensure generated Gherkin content is ASCII-safe for cross-platform use."""
         gen = FeatureFileGenerator()
-        for fixture in ["test_cases_ecommerce.json",
-                        "test_cases_healthcare.json",
-                        "test_cases_banking.json"]:
+        for fixture in [
+            "test_cases_ecommerce.json",
+            "test_cases_healthcare.json",
+            "test_cases_banking.json",
+        ]:
             tcs = _load_fixture(fixture)
             features = gen.generate(tcs)
             for ff in features:
@@ -415,6 +416,4 @@ class TestCrossDomainConsistency:
                 # Feature file should not contain unprintable control chars
                 for char in ff.content:
                     if ord(char) < 32 and char not in ("\n", "\r", "\t"):
-                        pytest.fail(
-                            f"Control char U+{ord(char):04X} in {ff.filename}"
-                        )
+                        pytest.fail(f"Control char U+{ord(char):04X} in {ff.filename}")

@@ -24,6 +24,8 @@ export interface PipelineRunStatus {
   current_stage?: string;
   total_duration_seconds?: number;
   error_message?: string;
+  archived: boolean;
+  archived_at?: string;
 }
 
 export interface PipelineRunSummary {
@@ -33,6 +35,8 @@ export interface PipelineRunSummary {
   started_at: string;
   stages_completed_count: number;
   total_duration_seconds?: number;
+  archived: boolean;
+  archived_at?: string;
 }
 
 export interface AgentInfo {
@@ -77,6 +81,7 @@ export interface TestCase {
   status: string;
   test_level: string;
   quality_score: number;
+  run_id?: string;
 }
 
 export interface FeatureFile {
@@ -85,6 +90,7 @@ export interface FeatureFile {
   scenario_count: number;
   tags: string[];
   content?: string;
+  run_id?: string;
 }
 
 export interface HealthResponse {
@@ -166,6 +172,18 @@ export const listPipelineRuns = () => api.get<PipelineRunSummary[]>('/pipeline/r
 export const getPipelineRun = (runId: string) =>
   api.get<PipelineRunStatus>('/pipeline/runs/' + runId);
 
+export const archiveRun = (runId: string) =>
+  api.post<PipelineRunSummary>('/pipeline/runs/' + runId + '/archive');
+
+export const restoreRun = (runId: string) =>
+  api.post<PipelineRunSummary>('/pipeline/runs/' + runId + '/restore');
+
+export const deleteRun = (runId: string) =>
+  api.delete<{ deleted: string }>('/pipeline/runs/' + runId);
+
+export const clearAllRuns = () =>
+  api.delete<{ deleted: number }>('/pipeline/runs');
+
 // ---------------------------------------------------------------------------
 // Agents
 // ---------------------------------------------------------------------------
@@ -198,7 +216,7 @@ export const updateRequirement = (reqId: string, data: Partial<Requirement>) =>
 // ---------------------------------------------------------------------------
 
 export const listTestCases = (params?: Record<string, string>) =>
-  api.get<TestCase[]>('/test-cases/', { params });
+  api.get<TestCase[]>('/test-cases/', { params: { limit: 500, ...params } });
 
 /** List test cases for a specific pipeline run. */
 export const listTestCasesByRun = (runId: string) =>
@@ -230,7 +248,9 @@ export const bulkRejectTestCases = (tcIds: string[], reason?: string) =>
 // ---------------------------------------------------------------------------
 
 export const listFeatures = (runId?: string) =>
-  api.get<FeatureFile[]>('/bdd/features', { params: runId ? { run_id: runId } : {} });
+  api.get<FeatureFile[]>('/bdd/features', {
+    params: { limit: 500, ...(runId ? { run_id: runId } : {}) },
+  });
 
 export const getFeature = (filename: string) => api.get<FeatureFile>('/bdd/features/' + filename);
 
@@ -271,6 +291,7 @@ export interface SiteModelResponse {
   total_forms: number;
   navigation_graph: Record<string, string[]>;
   crawl_timestamp: string;
+  run_id?: string;
 }
 
 export interface PageSummary {
@@ -281,9 +302,13 @@ export interface PageSummary {
   link_count: number;
 }
 
-export const getSiteModel = () => api.get<SiteModelResponse>('/crawler/site-model');
+export const listCrawlerRuns = () => api.get<string[]>('/crawler/runs');
 
-export const listCrawlerPages = () => api.get<PageSummary[]>('/crawler/pages');
+export const getSiteModel = (runId?: string) =>
+  api.get<SiteModelResponse>('/crawler/site-model', { params: runId ? { run_id: runId } : {} });
+
+export const listCrawlerPages = (runId?: string) =>
+  api.get<PageSummary[]>('/crawler/pages', { params: runId ? { run_id: runId } : {} });
 
 // ---------------------------------------------------------------------------
 // API Tests
@@ -297,9 +322,13 @@ export interface ApiTestFile {
   test_count: number;
   test_level: string;
   content?: string;
+  run_id?: string;
 }
 
-export const listApiTests = () => api.get<ApiTestFile[]>('/api-tests/');
+export const listApiTests = (runId?: string) =>
+  api.get<ApiTestFile[]>('/api-tests/', {
+    params: { limit: 500, ...(runId ? { run_id: runId } : {}) },
+  });
 
 export const getApiTest = (filename: string) =>
   api.get<ApiTestFile>('/api-tests/' + encodeURIComponent(filename));
@@ -311,7 +340,17 @@ export const getApiTest = (filename: string) =>
 export interface ConfigResponse {
   project: Record<string, any>;
   llm: Record<string, any>;
+  crawler: Record<string, any>;
+  api_testing: Record<string, any>;
+  test_generation: Record<string, any>;
+  bdd: Record<string, any>;
+  quality_gate: Record<string, any>;
+  coverage: Record<string, any>;
   output: Record<string, any>;
+  chromadb: Record<string, any>;
+  export: Record<string, any>;
+  circuit_breaker: Record<string, any>;
+  metrics: Record<string, any>;
 }
 
 export interface LLMTestRequest {

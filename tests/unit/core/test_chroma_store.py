@@ -4,20 +4,19 @@ Tests the non-network components: vocab extraction, TC formatting,
 and RequirementsVectorStore lifecycle with a mocked ChromaDB client.
 """
 
-from unittest.mock import MagicMock
 from dataclasses import dataclass
 from typing import List, Optional
+from unittest.mock import MagicMock
 
 import pytest
-
 from stlc_platform.core.storage.chroma_store import (
+    RequirementsVectorStore,
     _extract_vocab,
     _tc_to_doc,
-    RequirementsVectorStore,
 )
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class FakeRequirement:
@@ -43,6 +42,7 @@ def _mock_collection():
 
 
 # ── Tests for _extract_vocab ─────────────────────────────────────────────────
+
 
 class TestExtractVocab:
     def test_extracts_screen_names(self):
@@ -77,7 +77,9 @@ class TestExtractVocab:
 
     def test_empty_requirement(self):
         req = FakeRequirement(
-            req_id="REQ-004", title="Empty", description="No UI elements",
+            req_id="REQ-004",
+            title="Empty",
+            description="No UI elements",
         )
         vocab = _extract_vocab(req)
         assert isinstance(vocab["screens"], list)
@@ -85,7 +87,9 @@ class TestExtractVocab:
 
     def test_category_from_attribute(self):
         req = FakeRequirement(
-            req_id="REQ-005", title="Test", description="Test",
+            req_id="REQ-005",
+            title="Test",
+            description="Test",
             category="Security",
         )
         vocab = _extract_vocab(req)
@@ -93,6 +97,7 @@ class TestExtractVocab:
 
 
 # ── Tests for _tc_to_doc ─────────────────────────────────────────────────────
+
 
 class TestTcToDoc:
     def test_formats_basic_tc(self):
@@ -133,6 +138,7 @@ class TestTcToDoc:
 
 # ── Tests for RequirementsVectorStore ────────────────────────────────────────
 
+
 class TestRequirementsVectorStoreInit:
     def test_not_ready_before_initialize(self):
         store = RequirementsVectorStore()
@@ -161,8 +167,12 @@ class TestRequirementsVectorStoreWithMock:
 
     def test_add_requirements(self, store):
         reqs = [
-            FakeRequirement(req_id="REQ-001", title="Login", description="User can log in", tags=["login"]),
-            FakeRequirement(req_id="REQ-002", title="Logout", description="User can log out", tags=["logout"]),
+            FakeRequirement(
+                req_id="REQ-001", title="Login", description="User can log in", tags=["login"]
+            ),
+            FakeRequirement(
+                req_id="REQ-002", title="Logout", description="User can log out", tags=["logout"]
+            ),
         ]
         store.add_requirements(reqs)
         store._coll_reqs.add.assert_called_once()

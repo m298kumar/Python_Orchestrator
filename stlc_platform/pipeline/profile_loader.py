@@ -84,9 +84,7 @@ class ProfileLoader:
         """
         path = self._profiles_dir / f"{profile_name}.yaml"
         if not path.exists():
-            raise FileNotFoundError(
-                f"Profile '{profile_name}' not found at {path}"
-            )
+            raise FileNotFoundError(f"Profile '{profile_name}' not found at {path}")
 
         data = _load_yaml(path)
         return ExecutionProfile(
@@ -167,52 +165,34 @@ class ProfileLoader:
 
         return filtered
 
+    _FILTER_ATTR_MAP = {
+        "priority": ("priority",),
+        "test_level": ("test_level", "test_type"),
+        "requirement_ids": ("req_id",),
+        "categories": ("category",),
+    }
+
     def _item_matches(
         self,
         item: Any,
         filters: Dict[str, Any],
         item_type: str = "",
     ) -> bool:
-        """Check if a single item matches all applicable filters."""
-        # Priority filter
-        priority_filter = filters.get("priority")
-        if priority_filter:
-            item_priority = self._get_attr(item, "priority", "")
-            if item_priority and item_priority.lower() not in [
-                p.lower() for p in priority_filter
-            ]:
+        for filter_key, attr_names in self._FILTER_ATTR_MAP.items():
+            filter_values = filters.get(filter_key)
+            if not filter_values:
+                continue
+            item_value = self._get_attr(item, attr_names[0], "")
+            for attr_name in attr_names[1:]:
+                if not item_value:
+                    item_value = self._get_attr(item, attr_name, "")
+            if item_value and item_value.lower() not in [v.lower() for v in filter_values]:
                 return False
 
-        # Test level filter (for test cases)
-        level_filter = filters.get("test_level")
-        if level_filter:
-            item_level = self._get_attr(item, "test_level", "") or self._get_attr(
-                item, "test_type", ""
-            )
-            if item_level and item_level.lower() not in [
-                lv.lower() for lv in level_filter
-            ]:
-                return False
-
-        # Requirement ID filter
-        req_id_filter = filters.get("requirement_ids")
-        if req_id_filter:
-            item_req_id = self._get_attr(item, "req_id", "")
-            if item_req_id and item_req_id not in req_id_filter:
-                return False
-
-        # Tags filter (match any)
         tags_filter = filters.get("tags")
         if tags_filter:
             item_tags = self._get_attr(item, "tags", [])
             if item_tags and not any(t in item_tags for t in tags_filter):
-                return False
-
-        # Category filter
-        cat_filter = filters.get("categories")
-        if cat_filter:
-            item_cat = self._get_attr(item, "category", "")
-            if item_cat and item_cat.lower() not in [c.lower() for c in cat_filter]:
                 return False
 
         return True

@@ -7,10 +7,9 @@ import json
 from pathlib import Path
 
 import pytest
-
 from stlc_platform.agents.api_test_agent.test_generator import (
-    APITestGenerator,
     SUPPORTED_FRAMEWORKS,
+    APITestGenerator,
 )
 from stlc_platform.core.contracts import APIEndpointArtifact, APIModelArtifact
 
@@ -52,6 +51,7 @@ def generator():
 @pytest.fixture
 def petstore_model():
     from stlc_platform.agents.api_test_agent.openapi_parser import OpenAPIParser
+
     spec = json.loads((_FIXTURES / "openapi_petstore.json").read_text())
     return OpenAPIParser().parse(spec)
 
@@ -273,8 +273,7 @@ class TestGeneratedCodeQuality:
                 ast.parse(artifact.content)
             except SyntaxError as e:
                 pytest.fail(
-                    f"SyntaxError in {artifact.filename}: {e}\n"
-                    f"Content:\n{artifact.content[:500]}"
+                    f"SyntaxError in {artifact.filename}: {e}\nContent:\n{artifact.content[:500]}"
                 )
 
     def test_failure_type_comments_present(self, generator):

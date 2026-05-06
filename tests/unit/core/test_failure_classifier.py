@@ -3,10 +3,9 @@ Tests for FailureClassifier — Phase C failure classification.
 """
 
 import pytest
-
 from stlc_platform.core.llm.failure_classifier import (
-    FailureClassifier,
     FailureClassification,
+    FailureClassifier,
     FailureType,
 )
 
@@ -17,7 +16,11 @@ class MockReq:
     description = "The system shall allow users to log in."
 
 
-SLOT = {"test_type": "positive", "target_ac": "User can log in with valid email and password", "ac_type": "general"}
+SLOT = {
+    "test_type": "positive",
+    "target_ac": "User can log in with valid email and password",
+    "ac_type": "general",
+}
 
 
 @pytest.fixture
@@ -38,12 +41,19 @@ class TestTruncation:
 
     def test_valid_json_not_truncated(self, classifier):
         raw = '{"title": "Test"}'
-        parsed = {"title": "Test", "description": "Valid description text here",
-                  "preconditions": "User is logged in already",
-                  "steps": [{"action": "Click button", "expected_result": "Result shown"},
-                            {"action": "Check output", "expected_result": "Output correct"}],
-                  "expected_outcome": "Everything works fine", "given": "User is on page",
-                  "when": "User clicks the button", "then": "Result is displayed"}
+        parsed = {
+            "title": "Test",
+            "description": "Valid description text here",
+            "preconditions": "User is logged in already",
+            "steps": [
+                {"action": "Click button", "expected_result": "Result shown"},
+                {"action": "Check output", "expected_result": "Output correct"},
+            ],
+            "expected_outcome": "Everything works fine",
+            "given": "User is on page",
+            "when": "User clicks the button",
+            "then": "Result is displayed",
+        }
         result = classifier._check_truncation(raw, parsed, SLOT, MockReq())
         assert result is None
 
@@ -66,18 +76,31 @@ class TestSchemaViolation:
 
     def test_complete_fields_pass(self, classifier):
         parsed = {
-            "title": "T", "description": "D", "preconditions": "P",
-            "steps": [{"action": "a", "expected_result": "e"}, {"action": "b", "expected_result": "f"}],
-            "expected_outcome": "E", "given": "G", "when": "W", "then": "T",
+            "title": "T",
+            "description": "D",
+            "preconditions": "P",
+            "steps": [
+                {"action": "a", "expected_result": "e"},
+                {"action": "b", "expected_result": "f"},
+            ],
+            "expected_outcome": "E",
+            "given": "G",
+            "when": "W",
+            "then": "T",
         }
         result = classifier._check_schema_violation("raw", parsed, SLOT, MockReq())
         assert result is None
 
     def test_empty_steps_detected(self, classifier):
         parsed = {
-            "title": "T", "description": "D", "preconditions": "P",
+            "title": "T",
+            "description": "D",
+            "preconditions": "P",
             "steps": [],
-            "expected_outcome": "E", "given": "G", "when": "W", "then": "T",
+            "expected_outcome": "E",
+            "given": "G",
+            "when": "W",
+            "then": "T",
         }
         result = classifier._check_schema_violation("raw", parsed, SLOT, MockReq())
         assert result is not None
@@ -90,8 +113,11 @@ class TestInstructionLeakage:
     def test_leakage_detected(self, classifier):
         parsed = {
             "description": "Before writing each step, mentally answer the question.",
-            "preconditions": "P", "expected_outcome": "E",
-            "given": "G", "when": "W", "then": "T",
+            "preconditions": "P",
+            "expected_outcome": "E",
+            "given": "G",
+            "when": "W",
+            "then": "T",
         }
         result = classifier._check_instruction_leakage("raw", parsed, SLOT, MockReq())
         assert result is not None
@@ -100,8 +126,11 @@ class TestInstructionLeakage:
     def test_clean_output_passes(self, classifier):
         parsed = {
             "description": "Verifies user login with valid credentials.",
-            "preconditions": "User account exists", "expected_outcome": "Login succeeds",
-            "given": "User on page", "when": "User logs in", "then": "Dashboard shown",
+            "preconditions": "User account exists",
+            "expected_outcome": "Login succeeds",
+            "given": "User on page",
+            "when": "User logs in",
+            "then": "Dashboard shown",
         }
         result = classifier._check_instruction_leakage("raw", parsed, SLOT, MockReq())
         assert result is None
@@ -120,7 +149,9 @@ class TestHollow:
                 {"action": "perform the action", "expected_result": "verify the outcome"},
                 {"action": "check the result", "expected_result": "the test passes"},
             ],
-            "given": "G", "when": "W", "then": "T",
+            "given": "G",
+            "when": "W",
+            "then": "T",
         }
         result = classifier._check_hollow("raw", parsed, SLOT, MockReq())
         assert result is not None
@@ -132,10 +163,18 @@ class TestHollow:
             "preconditions": "A registered user account exists with email test@example.com",
             "expected_outcome": "User is redirected to the dashboard after successful login",
             "steps": [
-                {"action": "Navigate to login page at /auth/login", "expected_result": "Login form displayed"},
-                {"action": "Enter test@example.com in email field", "expected_result": "Email accepted"},
+                {
+                    "action": "Navigate to login page at /auth/login",
+                    "expected_result": "Login form displayed",
+                },
+                {
+                    "action": "Enter test@example.com in email field",
+                    "expected_result": "Email accepted",
+                },
             ],
-            "given": "G", "when": "W", "then": "T",
+            "given": "G",
+            "when": "W",
+            "then": "T",
         }
         result = classifier._check_hollow("raw", parsed, SLOT, MockReq())
         assert result is None
@@ -152,9 +191,14 @@ class TestOffTopic:
             "preconditions": "Payment method configured",
             "steps": [{"action": "Enter credit card", "expected_result": "Card accepted"}],
             "expected_outcome": "Payment processed successfully",
-            "given": "Card on file", "when": "User pays", "then": "Receipt shown",
+            "given": "Card on file",
+            "when": "User pays",
+            "then": "Receipt shown",
         }
-        slot = {"test_type": "positive", "target_ac": "User can log in with valid email and password credentials to access dashboard"}
+        slot = {
+            "test_type": "positive",
+            "target_ac": "User can log in with valid email and password credentials to access dashboard",
+        }
         result = classifier._check_off_topic("raw", parsed, slot, MockReq())
         assert result is not None
         assert result.failure_type == FailureType.OFF_TOPIC
@@ -166,7 +210,9 @@ class TestOffTopic:
             "preconditions": "User account with email exists",
             "steps": [{"action": "Enter email", "expected_result": "Email field populated"}],
             "expected_outcome": "User logged in with valid credentials",
-            "given": "User has email", "when": "Enters password", "then": "Login success",
+            "given": "User has email",
+            "when": "Enters password",
+            "then": "Login success",
         }
         result = classifier._check_off_topic("raw", parsed, SLOT, MockReq())
         assert result is None
@@ -184,7 +230,9 @@ class TestRepetitive:
                 {"action": "Click the login button", "expected_result": "Button clicked"},
                 {"action": "Click the login button", "expected_result": "Button clicked"},
             ],
-            "given": "A", "when": "B", "then": "C",
+            "given": "A",
+            "when": "B",
+            "then": "C",
         }
         result = classifier._check_repetitive("raw", parsed, SLOT, MockReq())
         assert result is not None
@@ -192,7 +240,10 @@ class TestRepetitive:
 
     def test_duplicate_gwt_detected(self, classifier):
         parsed = {
-            "steps": [{"action": "Step 1", "expected_result": "R1"}, {"action": "Step 2", "expected_result": "R2"}],
+            "steps": [
+                {"action": "Step 1", "expected_result": "R1"},
+                {"action": "Step 2", "expected_result": "R2"},
+            ],
             "given": "User is on the login page",
             "when": "User is on the login page",
             "then": "User is on the login page",
@@ -207,7 +258,9 @@ class TestRepetitive:
                 {"action": "Enter email address", "expected_result": "Email accepted"},
                 {"action": "Click login button", "expected_result": "Redirect to dashboard"},
             ],
-            "given": "User on login page", "when": "User enters credentials", "then": "User sees dashboard",
+            "given": "User on login page",
+            "when": "User enters credentials",
+            "then": "User sees dashboard",
         }
         result = classifier._check_repetitive("raw", parsed, SLOT, MockReq())
         assert result is None
@@ -230,7 +283,6 @@ class TestPromptAdaptation:
 
     def test_off_topic_adaptation(self, classifier):
         fc = FailureClassification(FailureType.OFF_TOPIC, 0.8, "test", "repeat_ac")
-        slot = {"target_ac": "User can log in"}
         adapted = classifier.adapt_prompt("original prompt", fc)
         assert "CRITICAL" in adapted
 
@@ -263,7 +315,10 @@ class TestFullClassification:
             "steps": [
                 {"action": "Navigate to login page", "expected_result": "Login form displayed"},
                 {"action": "Enter valid email", "expected_result": "Email field populated"},
-                {"action": "Enter valid password and click login", "expected_result": "User logged in"},
+                {
+                    "action": "Enter valid password and click login",
+                    "expected_result": "User logged in",
+                },
             ],
             "expected_outcome": "User is logged in and sees dashboard",
             "given": "User has a valid account with email and password",

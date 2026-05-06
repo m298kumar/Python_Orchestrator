@@ -243,9 +243,7 @@ class ModelRouter:
 
         return signals
 
-    def _apply_complexity_promotion(
-        self, preferred: str, signals: ComplexitySignals
-    ) -> str:
+    def _apply_complexity_promotion(self, preferred: str, signals: ComplexitySignals) -> str:
         """Promote to a higher tier if complexity warrants it."""
         score = signals.complexity_score
 

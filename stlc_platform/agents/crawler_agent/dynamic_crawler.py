@@ -23,24 +23,93 @@ Usage:
 
 from __future__ import annotations
 
+import logging
+import os
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlparse
 
 from stlc_platform.core.contracts import CrawledPageArtifact, PageElementArtifact
 
-# Check Playwright availability at import time
+logger = logging.getLogger(__name__)
+
+# Check Playwright availability at import time (pip package only)
 _PLAYWRIGHT_AVAILABLE = False
 try:
     from playwright.sync_api import sync_playwright  # noqa: F401
+
     _PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     pass
 
 
 def is_playwright_available() -> bool:
-    """Check if Playwright is installed and available."""
+    """Return True if the playwright pip package is importable."""
     return _PLAYWRIGHT_AVAILABLE
+
+
+def is_playwright_ready() -> bool:
+    """
+    Return True if playwright is installed AND the Chromium binary file exists on disk.
+
+    This is a stricter check than ``is_playwright_available()``:
+    the pip package might be installed without the browser binary
+    (which requires a separate ``playwright install chromium`` step).
+
+    Note: ``p.chromium.executable_path`` only returns the *expected* path string
+    without verifying the file exists — we must check ``os.path.isfile()`` explicitly.
+    """
+    if not _PLAYWRIGHT_AVAILABLE:
+        return False
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as p:
+            exe_path = p.chromium.executable_path
+        return os.path.isfile(exe_path)
+    except Exception:
+        return False
+
+
+def _ensure_chromium() -> None:
+    """
+    Auto-install the Chromium browser binary if the playwright package is
+    installed but the binary has not been downloaded yet.
+
+    Runs ``playwright install chromium`` as a subprocess.  One-time cost
+    (~200 MB download); subsequent calls return immediately once the binary
+    is present.
+
+    Raises:
+        ImportError: If playwright package is not installed, or if the
+            auto-install subprocess fails.
+    """
+    if not _PLAYWRIGHT_AVAILABLE:
+        raise ImportError(
+            "Playwright is not installed — dynamic crawling unavailable. "
+            "pip install playwright && playwright install chromium"
+        )
+    if is_playwright_ready():
+        return  # Binary already present — nothing to do
+
+    logger.info(
+        "Chromium binary not found. Running 'playwright install chromium' "
+        "(one-time download ~200 MB)…"
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "playwright", "install", "chromium"],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    if result.returncode != 0:
+        raise ImportError(
+            "Playwright chromium browser is not installed — dynamic crawling unavailable. "
+            f"Auto-install failed: {result.stderr.strip()}"
+        )
+    logger.info("Chromium installed successfully.")
 
 
 @dataclass
@@ -102,12 +171,9 @@ class DynamicCrawler:
         timeout_ms: int = 30000,
         auth_config: Optional[Dict[str, str]] = None,
     ):
-        if not _PLAYWRIGHT_AVAILABLE:
-            raise ImportError(
-                "Playwright is required for dynamic crawling. Install it with:\n"
-                "  pip install playwright\n"
-                "  playwright install chromium"
-            )
+        # Ensure pip package is installed and Chromium binary is present.
+        # Auto-installs Chromium if the package is there but the binary isn't.
+        _ensure_chromium()
 
         self.base_url = base_url.rstrip("/")
         self.max_depth = max_depth
@@ -163,77 +229,57 @@ class DynamicCrawler:
                 visited.add(url)
 
                 try:
-                    # Set up request interception with a named handler
-                    # so we can properly remove it later (lambdas can't be removed by identity)
-                    captured: List[CapturedRequest] = []
-
-                    def _response_handler(resp: Any) -> None:
-                        self._on_response(resp, captured)
-
-                    page.on("response", _response_handler)
-
-                    try:
-                        # Navigate
-                        if self.wait_for_idle:
-                            page.goto(url, wait_until="networkidle")
-                        else:
-                            page.goto(url, wait_until="domcontentloaded")
-
-                        # Wait a bit for any remaining async ops
-                        page.wait_for_timeout(500)
-
-                        # Extract page content
-                        title = page.title()
-
-                        # Extract elements via page evaluation
-                        elements = self._extract_elements(page)
-
-                        # Extract forms
-                        forms = self._extract_forms(page)
-
-                        # Build API calls from captured requests
-                        api_calls = [
-                            {
-                                "method": r.method,
-                                "url": r.url,
-                                "status": r.status,
-                                "content_type": r.content_type,
-                            }
-                            for r in captured
-                            if r.is_api_call
-                        ]
-
-                        # Create artifact
-                        page_artifact = CrawledPageArtifact(
-                            url=url,
-                            title=title,
-                            elements=elements,
-                            forms=forms,
-                            api_calls=api_calls,
-                        )
-                        result.pages.append(page_artifact)
-                        result.captured_requests.extend(captured)
-                        result.pages_visited += 1
-
-                        # Screenshot
-                        if self.capture_screenshots:
-                            result.screenshots[url] = page.screenshot()
-
-                        # Discover links for BFS
-                        links = self._extract_links(page, url)
-                        for link in links:
-                            if link not in visited:
-                                queue.append((link, depth + 1))
-                    finally:
-                        # Remove the exact handler reference to avoid listener leak
-                        page.remove_listener("response", _response_handler)
-
+                    new_links = self._visit_page(page, url, result)
+                    for link in new_links:
+                        if link not in visited:
+                            queue.append((link, depth + 1))
                 except Exception as e:
                     result.errors.append(f"Error crawling {url}: {e}")
 
             browser.close()
 
         return result
+
+    def _visit_page(self, page: Any, url: str, result: CrawlResult) -> List[str]:
+        """Visit a single page, extract content, and return discovered links."""
+        captured: List[CapturedRequest] = []
+
+        def _response_handler(resp: Any) -> None:
+            self._on_response(resp, captured)
+
+        page.on("response", _response_handler)
+        try:
+            wait_strategy = "networkidle" if self.wait_for_idle else "domcontentloaded"
+            page.goto(url, wait_until=wait_strategy)
+            page.wait_for_timeout(500)
+
+            api_calls = [
+                {
+                    "method": r.method,
+                    "url": r.url,
+                    "status": r.status,
+                    "content_type": r.content_type,
+                }
+                for r in captured
+                if r.is_api_call
+            ]
+            page_artifact = CrawledPageArtifact(
+                url=url,
+                title=page.title(),
+                elements=self._extract_elements(page),
+                forms=self._extract_forms(page),
+                api_calls=api_calls,
+            )
+            result.pages.append(page_artifact)
+            result.captured_requests.extend(captured)
+            result.pages_visited += 1
+
+            if self.capture_screenshots:
+                result.screenshots[url] = page.screenshot()
+
+            return self._extract_links(page, url)
+        finally:
+            page.remove_listener("response", _response_handler)
 
     def _authenticate(self, page: Any) -> None:
         """Perform form-based login."""
@@ -271,13 +317,15 @@ class DynamicCrawler:
                 or "/graphql" in url
             )
 
-            captured.append(CapturedRequest(
-                method=method,
-                url=url,
-                status=status,
-                content_type=content_type,
-                is_api_call=is_api,
-            ))
+            captured.append(
+                CapturedRequest(
+                    method=method,
+                    url=url,
+                    status=status,
+                    content_type=content_type,
+                    is_api_call=is_api,
+                )
+            )
         except (AttributeError, TypeError, OSError):
             pass  # Ignore capture errors for non-critical network tracking
 
@@ -334,7 +382,8 @@ class DynamicCrawler:
 
     def _extract_forms(self, page: Any) -> List[Dict[str, Any]]:
         """Extract forms from the live page."""
-        return list(page.evaluate("""() => {
+        return list(
+            page.evaluate("""() => {
             const forms = [];
             document.querySelectorAll('form').forEach(form => {
                 const fields = [];
@@ -354,7 +403,8 @@ class DynamicCrawler:
                 });
             });
             return forms;
-        }"""))
+        }""")
+        )
 
     def _extract_links(self, page: Any, current_url: str) -> List[str]:
         """Extract same-origin links from the page."""
