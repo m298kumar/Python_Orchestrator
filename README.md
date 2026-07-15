@@ -1,12 +1,12 @@
 # AI Test Case Orchestrator — STLC Automation Platform
 
-**Automatically generate, validate, and manage test cases from requirements using local or cloud LLMs, ChromaDB semantic search, and a multi-agent pipeline — with BDD generation, API testing, web crawling, and a full web dashboard.**
+**Automatically generate, validate, and manage test cases from requirements using local or cloud LLMs, ChromaDB for semantic search, and a multi-agent pipeline — with BDD generation, API testing, web crawling, and a full web dashboard.**
 
 ---
 
 ## 📋 Project Overview
 
-The **Python Orchestrator** is an AI-powered Software Testing Life Cycle (STLC) automation platform. It reads requirements in virtually any format, uses LLMs (Ollama, OpenAI, Anthropic) to intelligently generate test cases, validates them with quality scoring, and exports them to CSV, Zephyr Scale, or JSON. Beyond test generation, it includes a web crawler for UI discrepancy detection, an API test generator, a BDD feature file generator, and a real-time web dashboard — all orchestrated through a DAG-based pipeline.
+The **Python Orchestrator** is an AI-powered Software Testing Life Cycle (STLC) automation platform. It reads requirements in virtually any format, uses LLMs (Ollama, OpenAI, Anthropic) to intelligently generate test cases, validates them with quality scoring, and exports them to CSV, Zephyr Scale, or JSON. Beyond test generation, it includes a web crawler for UI discrepancy detection, an API test generator, a BDD feature file generator, and a real-time web dashboard — all orchestrated through a RAG-based pipeline.
 
 ### 💡 Why This Project?
 
