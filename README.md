@@ -6,7 +6,7 @@
 
 ## 📋 Project Overview
 
-The **Python Orchestrator** is an AI-powered Software Testing Life Cycle (STLC) automation platform. It reads requirements in virtually any format, uses LLMs (Ollama, OpenAI, Anthropic) to intelligently generate test cases, validates them with quality scoring, and exports them to CSV, Zephyr Scale, or JSON. Beyond test generation, it includes a web crawler for UI discrepancy detection, an API test generator, a BDD feature file generator, and a real-time web dashboard — all orchestrated through a DAG-based pipeline.
+The **Python Orchestrator** is an AI-powered Software Testing Life Cycle (STLC) automation platform. It reads requirements in supported document and tabular formats, uses LLMs (Ollama, OpenAI, Anthropic) to generate structured test cases, validates requirements-agent output with quality scoring, and persists every pipeline stage as run-scoped JSON artifacts. Optional exporter utilities can create standard CSV, Zephyr Scale CSV, and JSON summary files when explicitly invoked. Beyond test generation, the platform includes a web crawler for UI discrepancy detection, an API test generator, a BDD feature-file generator, and a real-time web dashboard — all orchestrated through a DAG-based pipeline.
 
 ### 💡 Why This Project?
 
@@ -47,7 +47,7 @@ Manual test case creation is tedious, error-prone, and often inconsistent across
 | **BDD Agent** | Generates Gherkin feature files and step definition skeletons |
 | **Crawler Agent** | Crawls web apps (Playwright/BeautifulSoup), builds site models, detects discrepancies vs requirements |
 | **API Test Agent** | Generates API tests from OpenAPI specs in 4 frameworks: pytest, Rest Assured, Karate, Supertest |
-| **Enrichment Agent** | Improves existing test cases with feedback and quality enhancements |
+| **Enrichment Agent** | Passes existing cases through and adds deterministic cases for crawler discrepancies |
 
 ### 📊 Quality & Coverage
 - **Quality scoring** (0.0–1.0) across 5 dimensions: coverage, clarity, executability, uniqueness, structure
@@ -68,10 +68,12 @@ Manual test case creation is tedious, error-prone, and often inconsistent across
 - **Human review workflow** — revalidate, approve, reject, and bulk-review test cases
 - **Configuration UI** — captures specification, review storage, crawler, BDD, generation, quality, coverage, and metrics settings
 
-### 📤 Export Formats
-- **Standard CSV** — 17-column test case export
-- **Zephyr Scale CSV** — Jira import-ready format
-- **JSON Report** — generation metadata, statistics, quality scores
+### 📤 Export Utilities
+- **Standard CSV** — 17-column tabular test-case export that can be opened in Excel
+- **Zephyr Scale CSV** — file formatted for manual import into Zephyr Scale
+- **JSON Report** — generation metadata, statistics, and quality scores
+
+The current DAG and API persist stage artifacts under `output/.stlc_runs/<run_id>/`; they do not automatically invoke these exporter classes. Native `.xlsx` test-case export and direct Jira/Zephyr API upload are not implemented.
 
 ### 🛠️ MCP Server (Model Context Protocol)
 - Expose orchestrator as tools for Claude Desktop and other MCP clients
@@ -129,7 +131,7 @@ The LLM receives a type-specific prompt with:
 - Domain context and component resolution
 - The approved test-case specification at `docs/specifications/TEST_CASE_GENERATION_SPEC.md`
 
-Output is strict JSON with Gherkin-style steps (Given/When/Then).
+The LLM output is strict structured JSON containing both conventional tabular test-case data (`steps[]` with an action and expected result) and separate BDD fields (`given`, `when`, and `then`). Eligible cases are converted into Gherkin `.feature` files and framework-specific step definitions by the downstream BDD stage.
 
 ### Step 5: Sanitise & Score
 Every generated test case passes through a multi-layer sanitiser:
@@ -149,8 +151,8 @@ Then a quality scorer rates each test case 0.0–1.0 across 5 dimensions:
 
 Tests scoring below 0.4 are flagged for regeneration. Tests scoring 0.65 or higher are accepted.
 
-### Step 6: Export & Feedback
-Test cases are exported to your chosen format and presented in the dashboard for human review. A reviewer can revalidate, approve, reject, or perform bulk actions. Each decision is written to the project-local SQLite audit store. Approval promotes a test case to ChromaDB only when it is semantically valid, has no quality issues, and meets `quality_gate.accept_threshold` (0.65 by default). The API and orchestrator preserve one run ID throughout this workflow for traceability.
+### Step 6: Persist, Review & Optionally Export
+Generated artifacts are persisted under the run ID and presented in the dashboard for human review. A reviewer can revalidate, approve, reject, or perform bulk actions. Each decision is written to the project-local SQLite audit store. Approval promotes a test case to ChromaDB only when it is semantically valid, has no quality issues, and meets `quality_gate.accept_threshold` (0.65 by default). The API and orchestrator preserve one run ID throughout this workflow for traceability. CSV, Zephyr CSV, and JSON summary files require an explicit call to the exporter utilities; they are not currently automatic DAG stages.
 
 ---
 
@@ -165,18 +167,18 @@ REQ-002,Password Reset via Email,"Forgotten password reset via email link. Link 
 REQ-003,Product Search,"Users can search products by keyword, category, price range, and rating.",High,E-Commerce,"Search returns relevant results; Filters work correctly; Results paginated"
 ```
 
-### Generated Test Case (CSV Output)
+### Test Case CSV Representation (Optional Exporter Output)
 
 | TC ID | Req ID | Title | Type | Priority | Steps |
 |-------|--------|-------|------|----------|-------|
 | TC-001 | REQ-001 | Verify successful login with valid credentials | Positive | High | 4 |
 | TC-002 | REQ-001 | Verify login with invalid password | Negative | High | 3 |
-| TC-003 | REQ-001 | Verify account lockout after 5 failed attempts | Edge | Critical | 5 |
-| TC-004 | REQ-001 | Verify login with SQL injection attempt | Security | Critical | 3 |
+| TC-003 | REQ-001 | Verify account lockout after 5 failed attempts | Edge Case | High | 5 |
+| TC-004 | REQ-001 | Verify login with SQL injection attempt | Negative | High | 3 |
 | TC-005 | REQ-001 | Verify login with empty email field | Negative | Medium | 3 |
 | TC-006 | REQ-001 | Verify session creation after successful login | Positive | High | 4 |
 
-### Generated Test Case (Gherkin Format)
+### Downstream BDD Representation (Generated by the BDD Stage)
 
 ```gherkin
 Feature: User Login Authentication
@@ -190,23 +192,21 @@ Feature: User Login Authentication
     And a session is created for the user
 ```
 
-### JSON Generation Report
+### JSON Generation Summary (Optional Exporter Output)
 
 ```json
 {
-  "model": "llama3.2",
+  "model": "qwen2.5:32b-instruct-q4_K_M",
   "total_requirements": 5,
   "total_test_cases": 28,
   "avg_quality_score": 0.78,
   "breakdown_by_type": {
     "positive": 10,
     "negative": 11,
-    "edge": 5,
-    "security": 2
+    "edge_case": 7
   },
   "breakdown_by_priority": {
-    "Critical": 4,
-    "High": 14,
+    "High": 18,
     "Medium": 8,
     "Low": 2
   }
@@ -248,7 +248,7 @@ The API supports JWT and API key authentication (disabled by default via `STLC_A
 
 ```env
 STLC_AUTH_ENABLED=true
-STLC_API_KEY=your-secret-key
+STLC_API_KEYS=key-one,key-two
 STLC_JWT_SECRET=your-jwt-secret
 ```
 
@@ -292,8 +292,8 @@ requirements_file (.txt/.csv/.xlsx/.pdf/.docx/.json)
       │
       ▼
  ┌─────────────────────────────────────────────┐
- │         Export Layer                        │
- │  CSV | Zephyr Scale | JSON Report          │
+ │       Optional Exporter Utilities           │
+ │  CSV | Zephyr CSV | JSON (explicit call)   │
  └─────────────────────────────────────────────┘
       │
       ▼
@@ -341,10 +341,12 @@ The DAG-based pipeline executes stages in waves, allowing independent stages to 
 - **Output:** `APIModelArtifact` → `APITestArtifact[]`
 
 ### Stage 4: Enrichment
-- Review existing test cases for quality improvements
-- Apply feedback from previous runs
-- Add missing preconditions, edge cases, or data variations
-- **Output:** Enhanced `TestCaseArtifact[]`
+- Pass existing test cases through unchanged
+- Add deterministic test cases for discrepancies found by the crawler
+- Record original and discrepancy-derived case IDs in stage metadata
+- **Output:** Original plus discrepancy-derived `TestCaseArtifact[]`
+
+Reviewer feedback constraints are consumed by the requirements generator on future generation runs. Discrepancy-derived enrichment cases are not currently rescored by the enrichment agent and may be quarantined by the downstream BDD quality gate if they do not carry an eligible quality state.
 
 ### Stage 5: Coverage Analysis
 - Map test cases back to requirements
@@ -374,14 +376,14 @@ Coverage analysis and metrics persistence run after the DAG completes. Metrics r
 ### For Engineering Managers
 - **Metrics & trends** — track quality scores, costs, and coverage across pipeline runs
 - **Degradation alerts** — get notified when test quality drops
-- **Audit trail** — JSON reports with full generation metadata for compliance
-- **Jira integration** — one-click Zephyr Scale import for test management
+- **Audit trail** — run-scoped JSON artifacts plus SQLite review decisions provide generation and approval traceability
+- **Zephyr-compatible output** — exporter utility creates a CSV for manual import into Zephyr Scale
 
 ### For Organizations
 - **Zero cloud dependency** — runs 100% locally with Ollama + ChromaDB
 - **Cost control** — LLM caching and local models eliminate per-token charges
 - **Scalable** — Docker Compose with GPU support for enterprise workloads
-- **Extensible** — plugin architecture for custom agents, exporters, and LLM providers
+- **Extensible** — entry-point plugins for custom agents plus reusable exporter and LLM integration interfaces
 
 ### Prerequisites
 
@@ -393,15 +395,17 @@ Coverage analysis and metrics persistence run after the DAG completes. Metrics r
 ### Option 1: Full Platform (API + Dashboard)
 
 ```bash
-# 1. Install dependencies
-pip install -e .
-
-# 2. Start Ollama
-ollama serve
-ollama pull llama3.2
-
-# 3. Run the FastAPI backend (PowerShell)
+# 1. Create and activate a virtual environment (PowerShell)
+py -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m pip install -e . --no-deps
+
+# 2. Start Ollama and pull the model configured in config/stlc_config.yaml
+ollama serve
+ollama pull qwen2.5:32b-instruct-q4_K_M
+
+# 3. Run the FastAPI backend
 python -m uvicorn stlc_platform.api.main:app --host 127.0.0.1 --port 8000 --reload
 
 # 4. In a second terminal, run the dashboard
@@ -415,6 +419,10 @@ npm run dev
 ### Option 2: Docker Compose (Recommended for Production)
 
 ```bash
+# Required by docker-compose.yml even when authentication is initially disabled
+cp .env.example .env
+# Replace the placeholder values for STLC_JWT_SECRET and STLC_ADMIN_PASSWORD
+
 # Build and start everything (app + Ollama)
 docker-compose up -d
 
@@ -429,9 +437,9 @@ docker-compose down
 
 ## 📄 Supported Requirements Formats
 
-The platform accepts requirements in virtually any format. Here's what each looks like:
+The platform accepts `.txt`, `.md`, `.csv`, `.xlsx`, `.json`, `.pdf`, and `.docx` requirement inputs. Here's what each looks like:
 
-### CSV / Excel
+### CSV / Excel Input
 
 ```csv
 id,title,description,priority,category,acceptance_criteria
@@ -439,6 +447,8 @@ REQ-001,User Login,"Users log in with email and password",High,Security,"Valid l
 ```
 
 Flexible column matching: `id` also accepts `req_id`, `requirement_id`. `title` accepts `name`, `summary`. `description` accepts `details`, `content`, `requirement`.
+
+Both `.csv` and `.xlsx` are supported as requirement inputs. Generated test cases are not currently exported as native `.xlsx`; the optional standard CSV exporter produces a file that Excel can open.
 
 ### Plain Text (`.txt`)
 
@@ -541,9 +551,6 @@ The built frontend is served by FastAPI in production mode when `STLC_SERVE_FRON
 ### Pipeline Runner (Modern Platform)
 
 ```bash
-# Run full pipeline
-stlc run --pipeline config/pipelines/full_stlc.yaml --config config/stlc_config.yaml
-
 # Run single agent
 stlc run --agent test_generation --input requirements.json
 
@@ -554,9 +561,9 @@ stlc agents list
 stlc metrics list
 stlc metrics trends
 
-# CI mode (JSON output)
-stlc run --pipeline config/pipelines/full_stlc.yaml --config config/stlc_config.yaml --ci
 ```
+
+Use the dashboard or `POST /api/pipeline/run` for the complete requirements-to-BDD workflow. Although the CLI exposes `--pipeline` and `--config`, the current CLI pipeline path does not load the supplied base configuration or inject requirements uploaded through the API. Full-pipeline CLI execution should therefore be treated as incomplete until that configuration path is corrected. Single-agent JSON input must match the selected agent's artifact contract and include any required runtime objects.
 
 ### MCP Server
 
@@ -568,14 +575,14 @@ python mcp_server.py
 python mcp_server.py stats
 python mcp_server.py list-examples
 
-# Validate one exported test case without modifying storage
-python mcp_server.py validate-tc --input output/test_cases.csv --tc-id TC-0001
+# Validate one explicitly exported test case without modifying storage
+python mcp_server.py validate-tc --input path/to/test_cases.csv --tc-id TC-0001
 
 # After human review, explicitly store an approved example
-python mcp_server.py store-example --input output/test_cases.csv --tc-id TC-0001 --ac-type general
+python mcp_server.py store-example --input path/to/test_cases.csv --tc-id TC-0001 --ac-type general
 ```
 
-`store-example` writes to the persistent ChromaDB example collection. Use it only after human review; the dashboard approval workflow is preferred because it also records the decision in SQLite and enforces semantic quality eligibility.
+The current pipeline does not automatically create `test_cases.csv`; the two commands above require a CSV created explicitly with `CSVExporter` or another compatible source. `store-example` writes to the persistent ChromaDB example collection. Use it only after human review; the dashboard approval workflow is preferred because it also records the decision in SQLite and enforces semantic quality eligibility.
 
 ---
 
@@ -583,7 +590,7 @@ python mcp_server.py store-example --input output/test_cases.csv --tc-id TC-0001
 
 ### Quality Scoring Deep Dive
 
-Every generated test case is scored 0.0–1.0. Understanding the scoring helps you tune the system:
+Every test case produced by the requirements generator is scored from 0.0–1.0. Discrepancy-derived cases added later by the enrichment agent are not currently rescored. Understanding the requirements-generation score helps you tune the system:
 
 | Dimension | Weight | What It Measures |
 |-----------|--------|-----------------|
@@ -600,20 +607,21 @@ Every generated test case is scored 0.0–1.0. Understanding the scoring helps y
 
 ### Execution Profiles
 
-Profiles let you run the pipeline with different scopes:
+Profiles filter which requirements and test cases are processed. They do not change which stages exist in the selected DAG:
 
-| Profile | Use Case | Stages Executed |
-|---------|----------|----------------|
-| **Smoke** | Quick validation | Requirements → Test Generation → Export |
-| **Targeted** | Specific feature testing | Requirements → Test Generation → BDD → Export |
-| **Regression** | Full suite | All 5 stages including Crawler, API Tests, Enrichment |
+| Profile | Use Case | Scope Applied |
+|---------|----------|---------------|
+| **Smoke** | Quick validation | High/critical-priority items, capped at 20 test cases |
+| **Targeted** | Specific feature testing | Configured requirement IDs or tags |
+| **Regression** | Full regression scope | No filters or test-count limit |
 
 ```bash
-# Run smoke profile (fastest)
-stlc run --pipeline config/pipelines/full_stlc.yaml --config config/stlc_config.yaml --profile smoke
+# Requirements must be uploaded first through the Requirements page or upload API.
+# Run the full DAG with smoke filtering:
+curl.exe -X POST http://localhost:8000/api/pipeline/run -H "Content-Type: application/json" -d '{"profile":"smoke"}'
 
-# Run full regression
-stlc run --pipeline config/pipelines/full_stlc.yaml --config config/stlc_config.yaml --profile regression
+# Run the same DAG without scope filters:
+curl.exe -X POST http://localhost:8000/api/pipeline/run -H "Content-Type: application/json" -d '{"profile":"regression"}'
 ```
 
 ### Environment Variables (.env)
@@ -690,14 +698,11 @@ pytest tests/unit/ --cov=stlc_platform --cov-report=html
 # Integration tests
 pytest tests/integration/
 
-# BDD tests (behave)
-behave features/
-behave features/ --tags=smoke
-behave features/ --tags=llm_generation
-
 # Full test suite with coverage
 pytest tests/ --cov=stlc_platform --cov-report=term-missing --cov-fail-under=75
 ```
+
+The repository does not contain a root Behave suite. The BDD agent can generate a standalone Behave, pytest-bdd, Cucumber Java, or CucumberJS project; run that generated project's framework-specific commands from its own output directory.
 
 ---
 
@@ -740,13 +745,15 @@ Python_Orchestrator/
 
 | Category | Packages |
 |----------|----------|
-| **LLM & AI** | ollama, langchain, langchain-ollama, chromadb, sentence-transformers |
+| **LLM & AI (base)** | ollama, chromadb |
+| **LLM & AI (optional)** | OpenAI, Anthropic, LangChain integrations, sentence-transformers |
 | **Web API** | fastapi, uvicorn, python-multipart |
 | **File Processing** | python-docx, PyPDF2, openpyxl, pandas |
-| **Testing** | behave, pytest |
+| **Testing** | pytest (development); behave and pytest-bdd are optional generated-BDD dependencies |
 | **Utilities** | python-dotenv, pydantic, pydantic-settings, rich, click, requests, PyYAML, Jinja2, beautifulsoup4 |
-| **MCP** | mcp, slowapi |
-| **Auth** | PyJWT |
+| **API runtime** | slowapi, python-json-logger, Playwright when installed through the complete runtime requirements |
+| **MCP (optional)** | mcp |
+| **Auth (optional)** | PyJWT, passlib/bcrypt |
 
 ---
 
@@ -759,15 +766,18 @@ The platform supports custom plugins via Python entry points. You can extend it 
 Create a new agent by extending `BaseAgent`:
 
 ```python
-from stlc_platform.core.base_agent import BaseAgent, AgentResult
+from stlc_platform.core.base_agent import AgentResult, BaseAgent, ValidationResult
 
 class MyCustomAgent(BaseAgent):
-    def get_capabilities(self):
-        return {"agent_id": "my_agent", "description": "Does something special"}
+    agent_id = "my_agent"
+    agent_version = "1.0.0"
 
-    def execute(self, input_artifacts, config):
+    def validate_input(self, artifacts):
+        return ValidationResult(valid=True)
+
+    def execute(self, artifacts, config):
         # Your logic here
-        return AgentResult(artifacts={"output": my_artifacts}, status="success")
+        return AgentResult(success=True, artifacts={"output": artifacts})
 ```
 
 Register in `pyproject.toml`:
@@ -779,7 +789,7 @@ my_agent = "my_package.my_agent:MyCustomAgent"
 
 ### Custom Exporters
 
-Add new export formats by creating an exporter class and registering it. The existing `CSVExporter`, `ZephyrScaleExporter`, and `JSONReportExporter` serve as templates.
+Add new export formats by creating an exporter class and invoking it explicitly from your integration code. The existing `CSVExporter`, `ZephyrScaleExporter`, and `JSONReportExporter` serve as templates. Agent discovery supports Python entry points, but there is currently no equivalent exporter registry or automatic exporter pipeline stage.
 
 ### Custom Skill Files
 
@@ -805,16 +815,18 @@ The skill loader automatically injects these into the agent context during pipel
 ```bash
 ollama serve
 ollama list
-ollama pull llama3.2
+ollama pull qwen2.5:32b-instruct-q4_K_M
 ```
+
+The pulled model name and Ollama base URL must match `llm.model` and `llm.base_url` in `config/stlc_config.yaml`.
 
 **LLM returns bad JSON:**
 - Lower `OLLAMA_TEMPERATURE` (try `0.1`)
-- Try `mistral` model (better structured output)
+- Confirm the configured model supports reliable structured JSON output
 - Increase `OLLAMA_NUM_CTX` for long requirements
 
 **Slow generation:**
-- Use a smaller model (`llama3.2` instead of `llama3.1:8b`)
+- Configure a smaller model that is available on your Ollama server
 - Reduce `MAX_TC_PER_REQ`
 
 ---
