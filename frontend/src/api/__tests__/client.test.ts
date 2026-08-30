@@ -24,6 +24,9 @@ import {
   listFeatures,
   getHealth,
   getSiteModel,
+  approveTestCase,
+  bulkApproveTestCases,
+  revalidateTestCase,
 } from '../client';
 
 describe('API client', () => {
@@ -57,5 +60,11 @@ describe('API client', () => {
 
   it('getSiteModel is a function', () => {
     expect(typeof getSiteModel).toBe('function');
+  });
+
+  it('exposes run-scoped human review operations', () => {
+    expect(typeof approveTestCase).toBe('function');
+    expect(typeof bulkApproveTestCases).toBe('function');
+    expect(typeof revalidateTestCase).toBe('function');
   });
 });

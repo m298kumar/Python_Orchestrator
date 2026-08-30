@@ -121,14 +121,38 @@ def _extract_urls_from_requirements(merged_config: Dict[str, Any]) -> None:
                 if api_path_re.match(path):
                     api_paths.add(path)
 
-    # Inject crawler base_url if not already configured
+    # Requirements are the authoritative target for this run. A stale project
+    # default must not silently crawl a different application.
     crawler_cfg = merged_config.setdefault("crawler", {})
-    if not crawler_cfg.get("base_url") and not crawler_cfg.get("html_pages"):
-        if full_urls:
-            parsed = urlparse(next(iter(full_urls)))
-            base = f"{parsed.scheme}://{parsed.netloc}"
-            crawler_cfg["base_url"] = base
-            logger.info("Extracted crawler base_url from requirements: %s", base)
+    if full_urls and not crawler_cfg.get("html_pages"):
+        requirement_origins = {
+            f"{parsed.scheme}://{parsed.netloc}"
+            for url in full_urls
+            if (parsed := urlparse(url)).scheme and parsed.netloc
+        }
+        configured = str(crawler_cfg.get("base_url", "") or "").strip()
+        configured_origin = ""
+        if configured:
+            parsed_configured = urlparse(configured)
+            configured_origin = f"{parsed_configured.scheme}://{parsed_configured.netloc}"
+
+        if len(requirement_origins) == 1:
+            required_origin = next(iter(requirement_origins))
+            if configured_origin and configured_origin != required_origin:
+                logger.warning(
+                    "Crawler target '%s' does not match requirement origin '%s'; "
+                    "using the requirement origin for this run.",
+                    configured_origin,
+                    required_origin,
+                )
+            crawler_cfg["base_url"] = required_origin
+            logger.info("Derived crawler base_url from requirements: %s", required_origin)
+        elif configured_origin not in requirement_origins:
+            origins = ", ".join(sorted(requirement_origins))
+            raise ValueError(
+                "Requirements reference multiple application origins "
+                f"({origins}); configure crawler.base_url to one of them explicitly."
+            )
 
     # Build minimal OpenAPI spec from discovered API paths if none configured
     api_cfg = merged_config.setdefault("api_testing", {})
@@ -356,6 +380,7 @@ def run_pipeline_background(
             on_stage_complete=on_stage_complete,
             skill_loader=skill_loader,
             execution_profile=execution_profile,
+            run_id=run_id,
         )
         _active_orchestrators[run_id] = orchestrator
 

@@ -78,6 +78,31 @@ class TestValidateInput:
 
 
 class TestExecute:
+    def test_partial_auth_is_not_activated(self, agent: CrawlerAgent, monkeypatch):
+        captured = {}
+
+        class FakeCrawler:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+            def crawl(self):
+                class Result:
+                    pages = []
+                    captured_requests = []
+
+                return Result()
+
+        monkeypatch.setattr(
+            "stlc_platform.agents.crawler_agent.agent.DynamicCrawler", FakeCrawler
+        )
+        agent._dynamic_crawl(
+            "https://demo.opencart.com",
+            {"crawler": {"auth": {"login_url": "https://demo.opencart.com", "username": "", "password": "stale"}}},
+            5,
+        )
+
+        assert captured["auth_config"] is None
+
     def test_parse_and_build_from_html(self, agent: CrawlerAgent):
         result = agent.execute(
             {"html_pages": {"http://localhost/": SIMPLE_HTML}},

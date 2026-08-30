@@ -147,6 +147,8 @@ class AppConfig:
 
 _KNOWN_TOP_LEVEL_KEYS = {
     "project",
+    "specifications",
+    "review",
     "llm",
     "chromadb",
     "test_generation",

@@ -188,6 +188,13 @@ class DynamicCrawler:
         parsed = urlparse(self.base_url)
         self._base_origin = f"{parsed.scheme}://{parsed.netloc}"
 
+    # Realistic Chrome user-agent — Cloudflare checks this against Sec-CH-UA headers
+    _USER_AGENT = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+
     def crawl(self) -> CrawlResult:
         """
         Execute the BFS crawl synchronously.
@@ -197,8 +204,49 @@ class DynamicCrawler:
         result = CrawlResult()
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=self.headless)
-            context = browser.new_context()
+            browser = pw.chromium.launch(
+                headless=self.headless,
+                args=[
+                    # Disable the AutomationControlled flag that Cloudflare detects
+                    "--disable-blink-features=AutomationControlled",
+                    # Suppress the 'Chrome is being controlled by automation' banner
+                    "--disable-infobars",
+                    # Avoid sandbox issues in some environments
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                ],
+            )
+            context = browser.new_context(
+                user_agent=self._USER_AGENT,
+                viewport={"width": 1280, "height": 800},
+                # Mimic real browser locale / timezone
+                locale="en-US",
+                timezone_id="America/New_York",
+                # Disable the webdriver flag via permissions
+                extra_http_headers={
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+            )
+
+            # Override navigator.webdriver BEFORE any page navigation.
+            # Cloudflare's JS challenge reads this property — setting it to
+            # undefined makes the browser indistinguishable from a real user.
+            context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined,
+                    configurable: true,
+                });
+                // Remove Playwright-specific chrome runtime markers
+                window.chrome = { runtime: {} };
+                // Spoof plugins array (headless has 0, real browsers have some)
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3],
+                });
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en'],
+                });
+            """)
+
             page = context.new_page()
             page.set_default_timeout(self.timeout_ms)
 
@@ -249,8 +297,29 @@ class DynamicCrawler:
 
         page.on("response", _response_handler)
         try:
-            wait_strategy = "networkidle" if self.wait_for_idle else "domcontentloaded"
-            page.goto(url, wait_until=wait_strategy)
+            # Always use domcontentloaded for the initial goto — using networkidle
+            # causes an indefinite hang on Cloudflare-protected sites because the
+            # CF JS challenge continuously fires network requests and networkidle
+            # never fires within the timeout, causing a TimeoutError that swallows
+            # the page entirely (result.pages stays empty → "no pages" failure).
+            page.goto(url, wait_until="domcontentloaded")
+
+            # If Cloudflare served a JS challenge (cf-mitigated header / challenge
+            # page), wait for it to auto-resolve then settle the real page.
+            if self._is_cloudflare_challenge(page):
+                logger.info("Cloudflare challenge detected at %s — waiting for resolution…", url)
+                page.wait_for_timeout(6000)   # CF challenges typically resolve in 3–5 s
+                try:
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception:
+                    pass  # If still not idle after 15 s, extract whatever is rendered
+            elif self.wait_for_idle:
+                # Non-CF page: honour the wait_for_network_idle config for SPAs
+                try:
+                    page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
+                except Exception:
+                    pass  # Partial load is fine — extract what rendered
+
             page.wait_for_timeout(500)
 
             api_calls = [
@@ -280,6 +349,17 @@ class DynamicCrawler:
             return self._extract_links(page, url)
         finally:
             page.remove_listener("response", _response_handler)
+
+    def _is_cloudflare_challenge(self, page: Any) -> bool:
+        """Return True if the current page is a Cloudflare bot-challenge page."""
+        try:
+            title = page.title()
+            if "just a moment" in title.lower() or "checking your browser" in title.lower():
+                return True
+            # Look for the CF challenge form or turnstile widget
+            return bool(page.query_selector("#challenge-form, #turnstile-wrapper, .cf-browser-verification"))
+        except Exception:
+            return False
 
     def _authenticate(self, page: Any) -> None:
         """Perform form-based login."""
@@ -335,6 +415,38 @@ class DynamicCrawler:
             const elements = [];
             const selectors = 'input, button, a, select, textarea, [role="button"]';
 
+            function buildCssSelector(el) {
+                if (el.id) return '#' + el.id;
+                if (el.dataset.testid) return `[data-testid="${el.dataset.testid}"]`;
+                if (el.name) return `${el.tagName.toLowerCase()}[name="${el.name}"]`;
+                if (el.getAttribute('aria-label'))
+                    return `[aria-label="${el.getAttribute('aria-label')}"]`;
+                if (el.className && typeof el.className === 'string') {
+                    const cls = el.className.trim().split(/\\s+/)[0];
+                    if (cls) return '.' + cls;
+                }
+                return el.tagName.toLowerCase();
+            }
+
+            function buildXPath(el) {
+                const tag = el.tagName.toLowerCase();
+                if (el.id) return `//*[@id="${el.id}"]`;
+                if (el.dataset.testid) return `//*[@data-testid="${el.dataset.testid}"]`;
+                if (el.name) return `//${tag}[@name="${el.name}"]`;
+                if (el.getAttribute('aria-label'))
+                    return `//*[@aria-label="${el.getAttribute('aria-label')}"]`;
+                const text = el.textContent?.trim();
+                if (text && text.length <= 40 && ['button','a','label'].includes(tag)) {
+                    const safe = text.replace(/"/g, "'");
+                    return `//${tag}[normalize-space(.)="${safe}"]`;
+                }
+                if (el.className && typeof el.className === 'string') {
+                    const cls = el.className.trim().split(/\\s+/)[0];
+                    if (cls) return `//${tag}[contains(@class,"${cls}")]`;
+                }
+                return `//${tag}`;
+            }
+
             document.querySelectorAll(selectors).forEach(el => {
                 const rect = el.getBoundingClientRect();
                 if (rect.width === 0 && rect.height === 0) return;  // Skip hidden
@@ -343,26 +455,19 @@ class DynamicCrawler:
                 if (type === 'a') type = 'link';
                 if (el.getAttribute('role') === 'button') type = 'button';
 
-                // Build best selector
-                let selector = el.tagName.toLowerCase();
-                if (el.id) selector = '#' + el.id;
-                else if (el.dataset.testid) selector = `[data-testid="${el.dataset.testid}"]`;
-                else if (el.name) selector = `${el.tagName.toLowerCase()}[name="${el.name}"]`;
-                else if (el.className && typeof el.className === 'string') {
-                    const cls = el.className.trim().split(/\\s+/)[0];
-                    if (cls) selector = '.' + cls;
-                }
-
                 elements.push({
                     element_type: type,
                     name: el.name || el.id || el.getAttribute('aria-label') || el.textContent?.trim().substring(0, 50) || '',
-                    selector: selector,
+                    selector: buildCssSelector(el),
+                    xpath: buildXPath(el),
                     text: el.textContent?.trim().substring(0, 200) || el.placeholder || el.value || '',
                     attributes: {
                         type: el.type || '',
                         placeholder: el.placeholder || '',
                         href: el.href || '',
                         role: el.getAttribute('role') || '',
+                        'data-testid': el.dataset.testid || '',
+                        'aria-label': el.getAttribute('aria-label') || '',
                     }
                 });
             });
@@ -374,6 +479,7 @@ class DynamicCrawler:
                 element_type=e["element_type"],
                 name=e["name"],
                 selector=e["selector"],
+                xpath=e.get("xpath", ""),
                 text=e["text"],
                 attributes={k: v for k, v in e.get("attributes", {}).items() if v},
             )

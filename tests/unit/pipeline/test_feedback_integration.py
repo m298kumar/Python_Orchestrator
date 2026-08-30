@@ -330,7 +330,7 @@ class TestGeneratorFeedbackIntegration:
         mock_llm.generate_test_case.return_value = {
             "test_cases": [
                 {
-                    "title": "Test Login",
+                    "title": "Verify successful login with valid credentials",
                     "description": "Test login flow",
                     "preconditions": "User is on login page",
                     "test_type": "positive",
@@ -415,11 +415,11 @@ class TestArtifactResolverFeedbackStore:
 # ── Auto-Store High-Quality Examples ────────────────────────────────────────
 
 
-class TestAutoStoreExamples:
-    """Test that high-scoring TCs are auto-stored in ChromaDB."""
+class TestHumanApprovalRequired:
+    """Generation must never auto-promote test cases into ChromaDB."""
 
-    def test_high_quality_tc_triggers_store(self):
-        """TCs scoring above auto_example_threshold are stored."""
+    def test_high_quality_tc_is_not_auto_stored(self):
+        """A high score alone cannot replace explicit human approval."""
         from stlc_platform.agents.requirements_agent.generator import TestCaseGenerator
         from stlc_platform.core.quality.scorer import ScorerConfig
 
@@ -450,7 +450,9 @@ class TestAutoStoreExamples:
                             "expected_result": "System authenticates and redirects to dashboard",
                         },
                     ],
-                    "expected_outcome": "User is logged in and sees the dashboard",
+                    "expected_outcome": (
+                        "User logs in with valid credentials and can access the dashboard"
+                    ),
                     "given": "User has a verified account and is on the login page",
                     "when": "User enters valid email and password and clicks Login",
                     "then": "User is authenticated and redirected to the dashboard",
@@ -485,6 +487,13 @@ class TestAutoStoreExamples:
         tcs = gen.generate_for_requirement(MockReq(), max_tests=1)
         assert len(tcs) >= 1
 
-        # Check that store_approved_tc was called for the high-quality TC
-        if tcs[0].quality_score >= config.auto_example_threshold:
-            mock_vector.store_approved_tc.assert_called()
+        assert tcs[0].quality_score >= config.auto_example_threshold
+        mock_vector.store_approved_tc.assert_not_called()
+
+    def test_tc_with_quality_issue_is_not_promoted(self):
+        from stlc_platform.agents.requirements_agent.generator import TestCaseGenerator
+
+        vector_store = MagicMock()
+        generator = TestCaseGenerator(llm_client=MagicMock(), vector_store=vector_store)
+        assert not hasattr(generator, "_maybe_store_example")
+        vector_store.store_approved_tc.assert_not_called()

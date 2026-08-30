@@ -151,6 +151,22 @@ class MockLLMClient:
 
 
 class TestSlotPlan:
+    def test_semantic_types_override_incompatible_round_robin(self, generator):
+        req = MockRequirement()
+        req.acceptance_criteria = [
+            "On successful registration the user is redirected",
+            "Duplicate email addresses are rejected with an error",
+            "Password must be at least 4 characters",
+        ]
+
+        slots = generator._build_slot_plan(req, 3, True, True)
+
+        assert [slot["test_type"] for slot in slots] == [
+            "positive",
+            "negative",
+            "edge_case",
+        ]
+
     """Test slot plan generation."""
 
     @pytest.fixture

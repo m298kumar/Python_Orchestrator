@@ -27,7 +27,9 @@ _feedback_store: Optional[FeedbackStore] = None
 def _get_feedback_store() -> FeedbackStore:
     global _feedback_store
     if _feedback_store is None:
-        _feedback_store = FeedbackStore()
+        from stlc_platform.api.routes.test_cases import _get_rag_store
+
+        _feedback_store = FeedbackStore(chroma_store=_get_rag_store())
     return _feedback_store
 
 

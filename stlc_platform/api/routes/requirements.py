@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import tempfile
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/api/requirements", tags=["requirements"])
 
 # In-memory requirements store: req_id -> dict
 _requirements: Dict[str, Dict[str, Any]] = {}
+_requirement_history: Dict[str, List[Dict[str, Any]]] = {}
 _req_lock = threading.Lock()
 
 _SUPPORTED_EXTENSIONS = {"json", "yaml", "yml", "csv", "xlsx", "txt", "pdf", "docx", "md"}
@@ -70,11 +72,29 @@ async def upload_requirements(file: UploadFile = File(...)) -> list[RequirementR
 
         reader = RequirementsReader()
         parsed = reader.read(tmp_path)
+        from stlc_platform.core.config_loader import _find_project_root, _load_yaml
+        from stlc_platform.core.specifications import SpecificationLoader
+
+        raw_config = _load_yaml(_find_project_root() / "config" / "stlc_config.yaml")
+        spec_loader = SpecificationLoader(raw_config)
+        requirement_spec = spec_loader.load("requirements")
+        violations = {
+            req.req_id: spec_loader.validate_requirement(req)
+            for req in parsed
+            if spec_loader.validate_requirement(req)
+        }
+        if violations:
+            raise HTTPException(
+                status_code=422,
+                detail={"message": "Requirements violate the approved specification", "errors": violations},
+            )
     except ImportError as e:
         raise HTTPException(
             status_code=400,
             detail=f"Missing dependency for .{ext} files: {e}",
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse file: {e}")
     finally:
@@ -87,6 +107,14 @@ async def upload_requirements(file: UploadFile = File(...)) -> list[RequirementR
             item = req.to_dict()
             req_id = item.get("req_id") or f"REQ-{len(_requirements) + i + 1:04d}"
             item["req_id"] = req_id
+            item["specification_versions"] = {
+                requirement_spec.specification_id: requirement_spec.version
+            }
+            previous = _requirements.get(req_id)
+            if previous:
+                _requirement_history.setdefault(req_id, []).append(dict(previous))
+            item["revision_number"] = int((previous or {}).get("revision_number", 0)) + 1
+            item["revised_at"] = datetime.now(timezone.utc).isoformat()
             _requirements[req_id] = item
             results.append(_dict_to_response(item))
 
@@ -114,6 +142,17 @@ def get_requirement(req_id: str) -> RequirementResponse:
     return _dict_to_response(item)
 
 
+@router.get("/{req_id}/history")
+def get_requirement_history(req_id: str) -> Dict[str, Any]:
+    """Return every retained revision, including the current requirement."""
+    with _req_lock:
+        current = _requirements.get(req_id)
+        history = list(_requirement_history.get(req_id, []))
+    if current is None:
+        raise HTTPException(status_code=404, detail=f"Requirement '{req_id}' not found")
+    return {"req_id": req_id, "revisions": [*history, dict(current)]}
+
+
 @router.put("/{req_id}", response_model=RequirementResponse)
 def update_requirement(req_id: str, update: RequirementUpdate) -> RequirementResponse:
     """Update editable fields of a requirement."""
@@ -122,7 +161,10 @@ def update_requirement(req_id: str, update: RequirementUpdate) -> RequirementRes
             raise HTTPException(status_code=404, detail=f"Requirement '{req_id}' not found")
 
         existing = _requirements[req_id]
+        _requirement_history.setdefault(req_id, []).append(dict(existing))
         changes = update.model_dump(exclude_unset=True)
         existing.update(changes)
+        existing["revision_number"] = int(existing.get("revision_number", 1)) + 1
+        existing["revised_at"] = datetime.now(timezone.utc).isoformat()
         _requirements[req_id] = existing
     return _dict_to_response(existing)

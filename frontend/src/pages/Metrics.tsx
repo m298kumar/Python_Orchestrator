@@ -51,6 +51,15 @@ function QualityBar({ score }: { score: number }) {
   );
 }
 
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '-';
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const wholeSeconds = Math.round(seconds);
+  const minutes = Math.floor(wholeSeconds / 60);
+  const remainder = wholeSeconds % 60;
+  return `${minutes}m ${remainder.toString().padStart(2, '0')}s`;
+}
+
 export default function Metrics() {
   const [trends, setTrends] = useState<MetricsTrend | null>(null);
   const [runs, setRuns] = useState<MetricsRun[]>([]);
@@ -175,7 +184,7 @@ export default function Metrics() {
               <BarChart3 className="h-4 w-4" />
               Avg Gen Time
             </div>
-            <p className="text-2xl font-bold text-gray-800 dark:text-gray-200">{trends.avg_generation_time.toFixed(1)}s</p>
+            <p className="text-2xl font-bold text-gray-800 dark:text-gray-200">{formatDuration(trends.avg_generation_time)}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">per pipeline run</p>
           </div>
         </div>
@@ -274,12 +283,12 @@ export default function Metrics() {
                     <QualityBar score={m.avg_quality_score} />
                   </td>
                   <td className="px-4 py-3 text-right font-medium">{m.total_test_cases}</td>
-                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">{m.tokens_used.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">${m.estimated_cost_usd.toFixed(4)}</td>
+                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400" title={`Input: ${(m.input_tokens ?? 0).toLocaleString()} · Output: ${(m.output_tokens ?? 0).toLocaleString()}`}>{m.tokens_used.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400" title={`${m.llm_provider || 'unknown'}${m.llm_model ? ` / ${m.llm_model}` : ''}`}>${m.estimated_cost_usd.toFixed(4)}</td>
                   <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
-                    {(m.coverage_pct * 100).toFixed(0)}%
+                    {m.coverage_pct.toFixed(0)}%
                   </td>
-                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">{m.generation_time_seconds.toFixed(1)}s</td>
+                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">{formatDuration(m.generation_time_seconds)}</td>
                 </tr>
               ))}
             </tbody>

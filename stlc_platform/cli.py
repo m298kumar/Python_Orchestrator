@@ -494,7 +494,7 @@ def metrics_run(run_id: str, metrics_dir: str, as_json: bool) -> None:
         click.echo(f"  Cost:          ${m.estimated_cost_usd:.4f}")
         click.echo(f"  Cache hit:     {m.cache_hit_rate:.1%}")
         click.echo(f"  Gen time:      {m.generation_time_seconds:.1f}s")
-        click.echo(f"  Coverage:      {m.coverage_pct:.1%}")
+        click.echo(f"  Coverage:      {m.coverage_pct:.1f}%")
         click.echo(
             f"  Stages:        {m.stages_completed} completed, "
             f"{m.stages_failed} failed, {m.stages_skipped} skipped"

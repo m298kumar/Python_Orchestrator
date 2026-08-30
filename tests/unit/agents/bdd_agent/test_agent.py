@@ -83,10 +83,49 @@ class TestExecute:
         assert result.metadata["total_scenarios"] == 1
         assert result.metadata["framework"] == "behave"
 
+    def test_nested_bdd_config_controls_pom_language(self, agent):
+        result = agent.execute(
+            artifacts={"test_cases": [_make_tc()]},
+            config={
+                "bdd": {
+                    "framework": "behave",
+                    "language": "python",
+                    "pom_language": "java",
+                }
+            },
+        )
+        assert result.success is True
+        assert result.metadata["pom_language"] == "java"
+
     def test_invalid_input_returns_failure(self, agent):
         result = agent.execute(artifacts={}, config={})
         assert result.success is False
         assert len(result.errors) > 0
+
+    def test_semantically_ineligible_cases_are_quarantined(self, agent):
+        eligible = _make_tc(tc_id="TC-good", quality_score=0.9)
+        invalid = _make_tc(
+            tc_id="TC-bad",
+            quality_score=0.65,
+            quality_issues=["Semantic mismatch: incompatible test type"],
+        )
+        result = agent.execute(
+            artifacts={"test_cases": [eligible, invalid]},
+            config={
+                "framework": "behave",
+                "quality_gate": {"accept_threshold": 0.65},
+                "specifications": {
+                    "enforce": True,
+                    "test_cases": "docs/specifications/TEST_CASE_GENERATION_SPEC.md",
+                    "bdd": "docs/specifications/BDD_GENERATION_SPEC.md",
+                },
+            },
+        )
+
+        assert result.success is True
+        assert result.metadata["total_scenarios"] == 1
+        assert result.metadata["quarantined_test_cases"] == ["TC-bad"]
+        assert "TC-bad" in result.metadata["validation_warnings"][-1]
 
     def test_pytest_bdd_framework(self, agent):
         result = agent.execute(
@@ -95,6 +134,15 @@ class TestExecute:
         )
         assert result.success is True
         assert result.metadata["framework"] == "pytest_bdd"
+
+    def test_cucumber_alias_uses_java_generator(self, agent):
+        result = agent.execute(
+            artifacts={"test_cases": [_make_tc()]},
+            config={"bdd": {"framework": "cucumber", "language": "java"}},
+        )
+
+        assert result.success is True
+        assert result.metadata["framework"] == "cucumber_java"
 
     def test_multi_requirement_features(self, agent):
         tcs = [

@@ -456,6 +456,72 @@ class TestOverallScoring:
         assert tc2.quality_issues == ["minor"]
 
 
+class TestSemanticQualityChecks:
+    def test_public_registration_rejects_logged_in_precondition(self):
+        scorer = TestCaseScorer()
+        tc = _make_tc(
+            preconditions="A user is logged in with valid credentials before registration",
+            given="An authenticated user is logged in",
+        )
+        slot = _make_slot(
+            target_ac="Registration form is publicly accessible without prior authentication"
+        )
+
+        report = scorer.score(tc, slot, _FakeReq())
+
+        assert report.suggestion == "regenerate"
+        assert any("public/unauthenticated" in issue for issue in report.issues)
+
+    def test_malformed_email_cannot_be_expected_to_succeed(self):
+        scorer = TestCaseScorer()
+        tc = _make_tc(
+            steps=[
+                TestStepArtifact(
+                    action="Enter test@example in the email field",
+                    expected_result="System accepts the address and redirects to success",
+                ),
+                TestStepArtifact(
+                    action="Click the Continue button",
+                    expected_result="Registration succeeds",
+                ),
+            ]
+        )
+        slot = _make_slot(
+            target_ac="Email field validates format and rejects malformed addresses"
+        )
+
+        report = scorer.score(tc, slot, _FakeReq())
+
+        assert report.suggestion == "regenerate"
+        assert any("malformed email" in issue for issue in report.issues)
+        assert report.overall_score < scorer.config.accept_threshold
+
+    def test_non_boundary_ac_rejects_edge_case_threshold_language(self):
+        scorer = TestCaseScorer()
+        tc = _make_tc(test_type="edge_case")
+        slot = _make_slot(
+            target_ac="The newly registered user is automatically authenticated",
+            test_type="edge_case",
+        )
+
+        report = scorer.score(tc, slot, _FakeReq())
+
+        assert report.suggestion == "regenerate"
+        assert any("non-boundary AC" in issue for issue in report.issues)
+
+    def test_no_account_record_requires_persistence_check(self):
+        scorer = TestCaseScorer()
+        tc = _make_tc()
+        slot = _make_slot(
+            target_ac="Duplicate email is rejected and no account record is created"
+        )
+
+        report = scorer.score(tc, slot, _FakeReq())
+
+        assert report.suggestion == "regenerate"
+        assert any("persistence verification" in issue for issue in report.issues)
+
+
 # ── Helper methods ───────────────────────────────────────────────────────────
 
 

@@ -140,7 +140,14 @@ class TestCaseResponse(BaseModel):
     status: str = "generated"  # generated, approved, rejected
     test_level: str = ""
     quality_score: float = 0.0
+    quality_issues: List[str] = Field(default_factory=list)
+    quality_validated: bool = True
     run_id: Optional[str] = None
+    rag_example_id: Optional[str] = None
+    review_id: Optional[int] = None
+    reviewer: str = ""
+    review_reason: str = ""
+    reviewed_at: str = ""
 
 
 class TestCaseUpdate(BaseModel):
@@ -158,13 +165,22 @@ class TestCaseAction(BaseModel):
     """Approve/reject a test case."""
 
     reason: Optional[str] = None
+    reviewer: Optional[str] = None
+
+
+class TestCaseRef(BaseModel):
+    """Unambiguous test-case identity across pipeline runs."""
+
+    tc_id: str
+    run_id: str
 
 
 class BulkTestCaseAction(BaseModel):
     """Bulk approve/reject test cases."""
 
-    tc_ids: List[str] = Field(..., min_length=1, max_length=500)
+    items: List[TestCaseRef] = Field(..., min_length=1, max_length=500)
     reason: Optional[str] = None
+    reviewer: Optional[str] = None
 
 
 # ── BDD ──────────────────────────────────────────────────────────────────────
@@ -253,6 +269,7 @@ class ConfigResponse(BaseModel):
     """Current configuration (sanitized)."""
 
     project: Dict[str, Any] = Field(default_factory=dict)
+    specifications: Dict[str, Any] = Field(default_factory=dict)
     llm: Dict[str, Any] = Field(default_factory=dict)
     crawler: Dict[str, Any] = Field(default_factory=dict)
     api_testing: Dict[str, Any] = Field(default_factory=dict)
@@ -265,6 +282,7 @@ class ConfigResponse(BaseModel):
     export: Dict[str, Any] = Field(default_factory=dict)
     circuit_breaker: Dict[str, Any] = Field(default_factory=dict)
     metrics: Dict[str, Any] = Field(default_factory=dict)
+    review: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ConfigUpdate(BaseModel):
@@ -279,6 +297,7 @@ class ConfigUpdate(BaseModel):
 
     updates: Optional[Dict[str, Any]] = None
     project: Optional[Dict[str, Any]] = None
+    specifications: Optional[Dict[str, Any]] = None
     llm: Optional[Dict[str, Any]] = None
     crawler: Optional[Dict[str, Any]] = None
     api_testing: Optional[Dict[str, Any]] = None
@@ -291,6 +310,7 @@ class ConfigUpdate(BaseModel):
     export: Optional[Dict[str, Any]] = None
     circuit_breaker: Optional[Dict[str, Any]] = None
     metrics: Optional[Dict[str, Any]] = None
+    review: Optional[Dict[str, Any]] = None
 
 
 class LLMTestRequest(BaseModel):
@@ -345,7 +365,11 @@ class MetricsResponse(BaseModel):
     avg_quality_score: float = 0.0
     quality_distribution: Dict[str, int] = Field(default_factory=dict)
     tokens_used: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
     estimated_cost_usd: float = 0.0
+    llm_provider: str = ""
+    llm_model: str = ""
     cache_hit_rate: float = 0.0
     generation_time_seconds: float = 0.0
     per_stage_durations: Dict[str, float] = Field(default_factory=dict)

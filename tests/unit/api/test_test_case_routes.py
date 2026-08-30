@@ -5,9 +5,11 @@ Uses the shared TestCaseStore via deps; we inject a fresh store per test.
 """
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from stlc_platform.api.deps import TestCaseStore
 from stlc_platform.api.main import app
+from stlc_platform.api.review_store import TestCaseReviewStore
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -22,6 +24,14 @@ def _isolated_store(tmp_path, monkeypatch):
     monkeypatch.setattr("stlc_platform.api.routes.test_cases.get_tc_store", lambda: store)
     # Also patch the deps-level singleton so endpoints pick it up
     monkeypatch.setattr("stlc_platform.api.deps._tc_store", store)
+    monkeypatch.setattr(
+        "stlc_platform.api.routes.test_cases._review_store",
+        TestCaseReviewStore(tmp_path / "reviews.sqlite3"),
+    )
+    monkeypatch.setattr(
+        "stlc_platform.api.routes.test_cases._promote_approved_tc",
+        lambda tc: f"rag-{tc['tc_id']}",
+    )
     yield store
 
 
@@ -47,6 +57,8 @@ def _seed_test_case(store_fixture, tc_id="TC-001", **overrides):
         "expected_outcome": "Successful login",
         "tags": ["smoke"],
         "status": "generated",
+        "quality_score": 0.8,
+        "quality_issues": [],
     }
     data.update(overrides)
     store_fixture.populate([data])
@@ -143,6 +155,56 @@ class TestApproveTestCase:
         resp = client.post("/api/test-cases/TC-030/approve")
         assert resp.status_code == 200
         assert resp.json()["status"] == "approved"
+
+    def test_run_scoped_approval_selects_exact_duplicate(self, client, _isolated_store):
+        _seed_test_case(_isolated_store, "TC-030", quality_score=0.9)
+        first = dict(_isolated_store.get("TC-030"))
+        _isolated_store.clear()
+        _isolated_store.populate([first], run_id="run-one")
+        second = {**first, "title": "Same ID in second run"}
+        _isolated_store.populate([second], run_id="run-two")
+
+        resp = client.post(
+            "/api/test-cases/runs/run-two/TC-030/approve",
+            json={"reason": "Reviewed", "reviewer": "qa-user"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["run_id"] == "run-two"
+        assert resp.json()["rag_example_id"] == "rag-TC-030"
+        assert _isolated_store.get("TC-030", "run-one")["status"] == "generated"
+        assert _isolated_store.get("TC-030", "run-two")["status"] == "approved"
+
+    def test_sqlite_review_restores_status_after_reload(self, client, _isolated_store):
+        original = _seed_test_case(_isolated_store, "TC-031", quality_score=0.9)
+        _isolated_store.clear()
+        _isolated_store.populate([original], run_id="persistent-run")
+        approved = client.post(
+            "/api/test-cases/runs/persistent-run/TC-031/approve",
+            json={"reason": "Ready for reuse"},
+        )
+        assert approved.status_code == 200
+
+        _isolated_store.clear()
+        _isolated_store.populate([original], run_id="persistent-run")
+        restored = client.get("/api/test-cases/TC-031", params={"run_id": "persistent-run"})
+        assert restored.json()["status"] == "approved"
+        assert restored.json()["review_reason"] == "Ready for reuse"
+
+    def test_ineligible_run_scoped_approval_returns_409(
+        self, client, _isolated_store, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "stlc_platform.api.routes.test_cases._promote_approved_tc",
+            lambda tc: (_ for _ in ()).throw(HTTPException(status_code=409, detail="ineligible")),
+        )
+        original = _seed_test_case(
+            _isolated_store, "TC-032", quality_score=0.4, quality_issues=["Semantic conflict"]
+        )
+        _isolated_store.clear()
+        _isolated_store.populate([original], run_id="run-low")
+        resp = client.post("/api/test-cases/runs/run-low/TC-032/approve")
+        assert resp.status_code == 409
 
 
 # ---------------------------------------------------------------------------

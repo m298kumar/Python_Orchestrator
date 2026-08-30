@@ -469,6 +469,10 @@ class APITestGenerator:
         "quantity": 5,
         "qty": 5,
         "count": 5,
+        "price": 1999,
+        "amount": 1999,
+        "cost": 1999,
+        "total": 1999,
         "year": 2024,
         "id": 1,
     }

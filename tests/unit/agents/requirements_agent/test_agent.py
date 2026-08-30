@@ -153,6 +153,29 @@ class MockLLMClient:
         return scenario
 
 
+class TokenReportingMockLLMClient(MockLLMClient):
+    def __init__(self):
+        super().__init__()
+        self.input_tokens = 20
+        self.output_tokens = 10
+
+    def generate_test_case(self, prompt, system_prompt=None, **kwargs):
+        self.input_tokens += 120
+        self.output_tokens += 30
+        return super().generate_test_case(prompt, system_prompt, **kwargs)
+
+    @property
+    def accumulated_tokens(self):
+        client = self
+
+        class Usage:
+            input_tokens = client.input_tokens
+            output_tokens = client.output_tokens
+            total_tokens = input_tokens + output_tokens
+
+        return Usage()
+
+
 class TestValidateInput:
     """Test input validation."""
 
@@ -228,6 +251,46 @@ class TestExecute:
         config = {"max_tests": 1, "include_negative": False, "include_edge": False}
         result = agent.execute(artifacts, config)
         assert result.success is True
+
+    def test_provider_token_usage_is_exposed_on_agent_result(self, agent):
+        result = agent.execute(
+            {
+                "requirements": [MockRequirement()],
+                "llm_client": TokenReportingMockLLMClient(),
+            },
+            {"max_tests": 1, "include_negative": False, "include_edge": False},
+        )
+
+        assert result.tokens_used > 0
+        assert result.tokens_used == (
+            result.metadata["input_tokens"] + result.metadata["output_tokens"]
+        )
+        assert result.metadata["input_tokens"] % 120 == 0
+        assert result.metadata["output_tokens"] % 30 == 0
+
+    def test_nested_generation_config_is_consumed(self, agent):
+        result = agent.execute(
+            {"requirements": [MockRequirement()], "llm_client": MockLLMClient()},
+            {
+                "test_generation": {
+                    "max_per_requirement": 1,
+                    "include_negative": False,
+                    "include_edge_cases": False,
+                    "format": "standard",
+                    "domain_keywords": {"custom": ["login"]},
+                    "component_suffix_map": {"login": "Configured Login Page"},
+                    "sanitiser": {
+                        "min_desc_length": 10,
+                        "min_step_length": 10,
+                        "min_step_count": 1,
+                    },
+                }
+            },
+        )
+        assert result.success is True
+        assert result.metadata["tc_format"] == "standard"
+        assert result.metadata["domain"] == "custom"
+        assert result.metadata["total_test_cases"] == 2  # one positive slot per acceptance criterion
         assert "test_cases" in result.artifacts
         # AC-aware: MockRequirement has 2 ACs, effective_max = max(1, 2) = 2
         assert len(result.artifacts["test_cases"]) == 2

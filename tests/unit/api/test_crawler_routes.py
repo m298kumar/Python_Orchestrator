@@ -16,8 +16,9 @@ from stlc_platform.api.routes import crawler as crawler_module
 
 
 @pytest.fixture(autouse=True)
-def _clear_crawler_data():
-    """Clear the in-memory crawler stores between tests."""
+def _clear_crawler_data(tmp_path, monkeypatch):
+    """Isolate both in-memory state and disk auto-loading between tests."""
+    monkeypatch.setattr(crawler_module, "get_output_dir", lambda: tmp_path)
     crawler_module._site_models.clear()
     crawler_module._crawled_pages.clear()
     crawler_module._run_order.clear()

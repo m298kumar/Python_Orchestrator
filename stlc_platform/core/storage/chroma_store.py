@@ -10,12 +10,14 @@ Import path change:
 No logic changes from original — only import paths updated.
 """
 
+import hashlib
 import json
 import logging
 import os
 import re
 import uuid
 import warnings
+from datetime import datetime, timezone
 
 import requests
 
@@ -236,8 +238,9 @@ class RequirementsVectorStore:
     COLL_TCS = "tc_examples"
     COLL_VOCAB = "domain_vocab"
 
-    def __init__(self, chromadb_config=None):
+    def __init__(self, chromadb_config=None, project_id="default"):
         self._config = chromadb_config
+        self._project_id = str(project_id or "default")
         self._client = self._embed_fn = None
         self._coll_reqs = self._coll_tcs = self._coll_vocab = None
         self._ready = False
@@ -309,19 +312,59 @@ class RequirementsVectorStore:
             return
         docs, metas, ids = [], [], []
         for req in requirements:
-            ids.append(f"{req.req_id}_{uuid.uuid4().hex[:8]}")
-            docs.append(req.to_chroma_document())
+            document = req.to_chroma_document()
+            content_hash = hashlib.sha256(document.encode("utf-8")).hexdigest()[:16]
+            safe_project = re.sub(r"[^a-zA-Z0-9_-]", "_", self._project_id)
+            safe_req_id = re.sub(r"[^a-zA-Z0-9_-]", "_", str(req.req_id))
+            revision_id = f"requirement_{safe_project}_{safe_req_id}_{content_hash}"
+            revision_number, previous_revision_id = self._next_revision(req.req_id, content_hash)
+            ids.append(revision_id)
+            docs.append(document)
             metas.append(
                 {
+                    "project_id": self._project_id,
                     "req_id": req.req_id,
                     "title": req.title,
                     "priority": req.priority,
                     "category": getattr(req, "category", "Functional"),
-                    "tags": ",".join(getattr(req, "tags", [])),
+                    "tags": ",".join(getattr(req, "tags", []) or []),
+                    "content_hash": content_hash,
+                    "revision_id": revision_id,
+                    "revision_number": revision_number,
+                    "previous_revision_id": previous_revision_id,
+                    "lineage_key": f"{self._project_id}:{req.req_id}",
+                    "indexed_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
-        self._coll_reqs.add(documents=docs, metadatas=metas, ids=ids)
-        console.print(f"[green]Added {len(requirements)} requirement(s)[/green]")
+        self._coll_reqs.upsert(documents=docs, metadatas=metas, ids=ids)
+        console.print(f"[green]Indexed {len(requirements)} requirement(s)[/green]")
+
+    def _next_revision(self, req_id, content_hash):
+        """Return lineage metadata while making identical indexing idempotent."""
+        try:
+            existing = self._coll_reqs.get(
+                where={
+                    "$and": [
+                        {"project_id": self._project_id},
+                        {"req_id": str(req_id)},
+                    ]
+                },
+                include=["metadatas"],
+            )
+            metadatas = existing.get("metadatas", []) or []
+        except (AttributeError, TypeError, ValueError):
+            metadatas = []
+        if not isinstance(metadatas, list):
+            metadatas = []
+        for metadata in metadatas:
+            if metadata.get("content_hash") == content_hash:
+                return int(metadata.get("revision_number", 1)), str(
+                    metadata.get("previous_revision_id", "")
+                )
+        if not metadatas:
+            return 1, ""
+        latest = max(metadatas, key=lambda item: int(item.get("revision_number", 0)))
+        return int(latest.get("revision_number", 0)) + 1, str(latest.get("revision_id", ""))
 
     def search_similar(self, query, n_results=3, filter_metadata=None, min_similarity=0.3):
         self.initialize()
@@ -335,6 +378,8 @@ class RequirementsVectorStore:
         }
         if filter_metadata:
             kw["where"] = filter_metadata
+        else:
+            kw["where"] = {"project_id": self._project_id}
         res = self._coll_reqs.query(**kw)
         if not res["documents"] or not res["documents"][0]:
             return []
@@ -371,11 +416,15 @@ class RequirementsVectorStore:
 
     # ── Collection 2: TC Examples ────────────────────────────────────────────
 
-    def store_approved_tc(self, tc_dict, ac_type, test_type, domain=""):
+    def store_approved_tc(self, tc_dict, ac_type, test_type, domain="", human_approved=False):
+        if not human_approved:
+            raise ValueError("RAG promotion requires explicit human approval")
         self.initialize()
         tc_dict = dict(tc_dict)
         tc_dict.update({"ac_type": ac_type, "test_type": test_type, "domain": domain})
-        doc_id = f"ex_{ac_type}_{test_type}_{uuid.uuid4().hex[:8]}"
+        canonical = json.dumps(tc_dict, sort_keys=True, ensure_ascii=False)
+        content_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+        doc_id = f"ex_{ac_type}_{test_type}_{content_hash}"
         meta = {
             "ac_type": ac_type,
             "test_type": test_type,
@@ -383,10 +432,21 @@ class RequirementsVectorStore:
             "title": tc_dict.get("title", "")[:120],
             "component": tc_dict.get("component", ""),
             "tc_json": json.dumps(tc_dict, ensure_ascii=False)[:3000],
+            "human_approved": True,
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "content_hash": content_hash,
         }
-        self._coll_tcs.add(documents=[_tc_to_doc(tc_dict)], metadatas=[meta], ids=[doc_id])
+        self._coll_tcs.upsert(documents=[_tc_to_doc(tc_dict)], metadatas=[meta], ids=[doc_id])
         console.print(f"[green]Stored example TC:[/green] {doc_id} ({ac_type}/{test_type})")
         return doc_id
+
+    def delete_approved_tc(self, doc_id):
+        """Remove a promoted example after an explicit human reversal."""
+        if not doc_id:
+            return
+        self.initialize()
+        self._coll_tcs.delete(ids=[doc_id])
+        console.print(f"[yellow]Removed approved example TC:[/yellow] {doc_id}")
 
     @staticmethod
     def _parse_query_results(res, min_similarity):

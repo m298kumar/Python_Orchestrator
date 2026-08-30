@@ -29,10 +29,14 @@ Manual test case creation is tedious, error-prone, and often inconsistent across
 - **Few-shot learning** — retrieves approved test examples from ChromaDB for consistent quality
 - **Dynamic component resolution** — maps screen/UI elements via ChromaDB vocabulary + static suffix maps
 - **Output sanitisation** — loop detection, generic step filtering, hallucination prevention, Python dict leakage detection
+- **Specification guardrails** — approved requirement, test-case, and BDD specifications drive capture and generation
+- **Semantic quality validation** — invalid, contradictory, or requirement-misaligned examples are quarantined before BDD or RAG use
 
 ### 🔬 ChromaDB Vector Store
-- **Semantic search** — prevents duplicate test cases by understanding requirement context
-- **Approved example feedback loop** — store high-quality test cases to improve future generations
+- **Persistent, project-scoped knowledge** — requirements, revision lineage, approved examples, vocabulary, and crawled pages persist under `./chroma_db`
+- **Semantic search** — retrieves related requirements and approved examples while reducing duplicate test cases
+- **Human-approved feedback loop** — only explicitly approved, quality-valid test cases are promoted for future few-shot generation
+- **Safe RAG promotion** — examples below the configured quality threshold or carrying semantic quality issues are not added to RAG
 - **Domain vocabulary extraction** — automatically extracts screen names and UI elements for component resolution
 - **Ollama embeddings** with SentenceTransformer fallback
 
@@ -60,8 +64,9 @@ Manual test case creation is tedious, error-prone, and often inconsistent across
 ### 🌐 Web Dashboard
 - **React 18 + TypeScript + Vite + TailwindCSS** frontend
 - **Real-time pipeline monitoring** via WebSocket
-- **Test case viewing, metrics visualization, agent management**
-- **Feedback management and configuration UI**
+- **Run-scoped test case, BDD, API-test, crawler, and metrics views**
+- **Human review workflow** — revalidate, approve, reject, and bulk-review test cases
+- **Configuration UI** — captures specification, review storage, crawler, BDD, generation, quality, coverage, and metrics settings
 
 ### 📤 Export Formats
 - **Standard CSV** — 17-column test case export
@@ -94,13 +99,15 @@ The platform automatically detects your application domain and tailors test gene
 ## 🔍 How It Works — Step by Step
 
 ### Step 1: Ingest Requirements
-Drop in any requirements file — CSV, Excel, PDF, Word doc, or plain text. The `RequirementsReader` parses it into structured objects with ID, title, description, priority, category, and acceptance criteria. Flexible column name matching means your existing spreadsheets work out of the box.
+Drop in any requirements file — CSV, Excel, PDF, Word doc, or plain text. The `RequirementsReader` parses it into structured objects with ID, title, description, priority, category, acceptance criteria, and source lineage. Capture is validated against `docs/specifications/REQUIREMENTS_CAPTURE_SPEC.md`. Revisions retain their history instead of overwriting an earlier requirement with the same ID.
 
 ### Step 2: Store in ChromaDB
-Each requirement is embedded and stored in ChromaDB's vector store. This enables:
+Each valid requirement revision is embedded and stored in the project-scoped ChromaDB vector store. Test cases are not automatically promoted: only a human-approved test case that passes semantic validation and the configured quality threshold enters the reusable example collection. This enables:
 - **Semantic deduplication** — the LLM sees what tests already exist and avoids repeating them
 - **Few-shot retrieval** — approved test examples are fetched as context for the LLM
 - **Domain vocabulary** — screen names and UI elements are extracted and indexed
+
+The dashboard does not use ChromaDB as its current-run display database. It reloads test cases, BDD, API tests, crawler results, and metrics from `output/.stlc_runs/<run_id>/`; human review decisions are stored in the embedded SQLite file configured by `review.sqlite_path`.
 
 ### Step 3: Classify Acceptance Criteria
 Every acceptance criterion is classified into one of 6 types:
@@ -120,7 +127,7 @@ The LLM receives a type-specific prompt with:
 - Classified AC type with tailored hints
 - Few-shot examples from ChromaDB (if available)
 - Domain context and component resolution
-- Chain-of-thought instructions for thorough reasoning
+- The approved test-case specification at `docs/specifications/TEST_CASE_GENERATION_SPEC.md`
 
 Output is strict JSON with Gherkin-style steps (Given/When/Then).
 
@@ -131,6 +138,7 @@ Every generated test case passes through a multi-layer sanitiser:
 3. **Generic step detection** — flags vague steps like "verify the result"
 4. **Python dict leakage detection** — catches raw JSON/dict output
 5. **Hollow response detection** — rejects empty or near-empty outputs
+6. **Semantic validation** — checks requirement alignment, coherent actions/outcomes, and usable scenario content
 
 Then a quality scorer rates each test case 0.0–1.0 across 5 dimensions:
 - **Coverage** (25%) — how well the test covers the requirement
@@ -139,10 +147,10 @@ Then a quality scorer rates each test case 0.0–1.0 across 5 dimensions:
 - **Uniqueness** (15%) — is it distinct from other generated tests?
 - **Structural** (20%) — proper format, complete steps, expected outcomes
 
-Tests scoring below 0.4 are flagged for regeneration. Tests above 0.65 are accepted.
+Tests scoring below 0.4 are flagged for regeneration. Tests scoring 0.65 or higher are accepted.
 
 ### Step 6: Export & Feedback
-Test cases are exported to your chosen format. After review, you can store approved examples back into ChromaDB via the MCP server, creating a continuous improvement loop where each generation cycle produces better quality output.
+Test cases are exported to your chosen format and presented in the dashboard for human review. A reviewer can revalidate, approve, reject, or perform bulk actions. Each decision is written to the project-local SQLite audit store. Approval promotes a test case to ChromaDB only when it is semantically valid, has no quality issues, and meets `quality_gate.accept_threshold` (0.65 by default). The API and orchestrator preserve one run ID throughout this workflow for traceability.
 
 ---
 
@@ -218,14 +226,20 @@ The FastAPI backend exposes a comprehensive REST API. Full docs available at `ht
 | `GET` | `/api/health` | Health check |
 | `POST` | `/api/requirements/upload` | Upload requirements file |
 | `POST` | `/api/pipeline/run` | Trigger pipeline execution |
-| `GET` | `/api/pipeline/{run_id}` | Get pipeline run status |
-| `GET` | `/api/test-cases` | List generated test cases |
+| `GET` | `/api/pipeline/runs/{run_id}` | Get pipeline run status |
+| `GET` | `/api/test-cases/` | List generated test cases, optionally scoped by `run_id` |
 | `GET` | `/api/test-cases/{tc_id}` | Get specific test case |
-| `POST` | `/api/feedback/add` | Submit feedback on a test case |
+| `POST` | `/api/test-cases/runs/{run_id}/{tc_id}/revalidate` | Re-run semantic quality validation |
+| `POST` | `/api/test-cases/runs/{run_id}/{tc_id}/approve` | Persist approval and promote an eligible example to RAG |
+| `POST` | `/api/test-cases/runs/{run_id}/{tc_id}/reject` | Persist rejection without RAG promotion |
+| `POST` | `/api/test-cases/review-actions/bulk/approve` | Bulk approve eligible test cases |
+| `POST` | `/api/test-cases/review-actions/bulk/reject` | Bulk reject test cases |
+| `GET` | `/api/requirements/{req_id}/history` | Get requirement revision history and lineage |
 | `GET` | `/api/metrics/trends` | Quality score trends |
 | `GET` | `/api/agents` | List registered agents |
-| `POST` | `/api/crawler/start` | Start web crawl |
-| `POST` | `/api/api-tests/generate` | Generate API tests from OpenAPI spec |
+| `GET` | `/api/crawler/site-model?run_id=...` | Read a run's persisted crawler site model |
+| `GET` | `/api/bdd/features?run_id=...` | Read generated BDD features for a run |
+| `GET` | `/api/api-tests/?run_id=...` | Read generated API tests for a run |
 | `WS` | `/ws/pipeline/{run_id}` | Real-time pipeline progress via WebSocket |
 
 ### Authentication
@@ -256,17 +270,24 @@ requirements_file (.txt/.csv/.xlsx/.pdf/.docx/.json)
  │  Parallel wave execution with circuit       │
  │  breaker, retry, timeout, checkpointing     │
  └────┬────┬────┬────┬────┬────────────────────┘
-      │    │    │    │    │
-      ▼    ▼    ▼    ▼    ▼
-  Stage 1  Stage 2  Stage 3   Stage 4  Stage 5
-  Req/TC   BDD      Crawler   Enrich   Coverage
-  Gen      Gen      + API     Agent    Tracker
-                    Test Gen
+      │             │                 │
+      ▼             ▼                 ▼
+  Requirements   Crawler          API discovery
+  + TC generation (optional)      + generation
+      │             │              (optional)
+      └──────► Enrichment
+                   │
+                   ▼
+              BDD generation
+                   │
+                   ▼
+          Post-run coverage + metrics
       │
       ▼
  ┌─────────────────────────────────────────────┐
- │         ChromaDB Vector Store               │
- │  requirements | tc_examples | domain_vocab  │
+ │    Persistent Stores and Run Artifacts      │
+ │  ChromaDB knowledge | SQLite review audit   │
+ │  output/.stlc_runs/<run_id>/ artifacts      │
  └─────────────────────────────────────────────┘
       │
       ▼
@@ -277,8 +298,8 @@ requirements_file (.txt/.csv/.xlsx/.pdf/.docx/.json)
       │
       ▼
  ┌─────────────────────────────────────────────┐
- │         Feedback Loop                       │
- │  Approved TCs → ChromaDB → Better next run  │
+ │         Human-Governed Feedback Loop        │
+ │  Review → SQLite audit → eligible TC → RAG  │
  └─────────────────────────────────────────────┘
 ```
 
@@ -289,21 +310,24 @@ requirements_file (.txt/.csv/.xlsx/.pdf/.docx/.json)
 The DAG-based pipeline executes stages in waves, allowing independent stages to run in parallel.
 
 ### Stage 1: Requirements & Test Case Generation
-- Parse requirements from uploaded file
-- Store in ChromaDB with semantic embeddings
+- Parse and validate requirements against the approved capture specification
+- Store project-scoped revisions and lineage in ChromaDB with semantic embeddings
 - Classify each acceptance criterion by type
-- Generate test cases via LLM with type-specific prompts
-- Sanitise and quality-score each test case
+- Generate test cases via LLM with type-specific prompts and the approved test-case specification
+- Sanitise, semantically validate, and quality-score each test case
 - **Output:** `RequirementArtifact` → `TestCaseArtifact[]`
 
 ### Stage 2: BDD Feature Generation
-- Convert test cases into Gherkin feature files
-- Generate step definition skeletons in Python
-- Map Given/When/Then to automation framework (Playwright)
+- Convert eligible test cases into Gherkin feature files under the approved BDD specification
+- Quarantine semantically invalid cases while allowing valid cases to continue; fail the stage when none are eligible
+- Generate framework/language-specific step definition skeletons (`cucumber` is normalised to `cucumber_java`)
+- Map Given/When/Then to the configured automation library, including Playwright
 - **Output:** `FeatureFileArtifact[]` → `StepDefinitionArtifact[]`
 
 ### Stage 3a: Web Crawler & Discrepancy Detection
-- Crawl the live application (Playwright for dynamic, BeautifulSoup for static)
+- Derive or validate the application origin from uploaded requirements instead of silently crawling a stale configured site
+- Crawl the live application using Playwright, with an HTTP crawler fallback
+- Apply crawler authentication only when a complete username/password pair is configured
 - Build a structured site model with pages, elements, and flows
 - Compare actual UI against requirements to find discrepancies
 - Embed crawled pages in ChromaDB for semantic search
@@ -328,6 +352,8 @@ The DAG-based pipeline executes stages in waves, allowing independent stages to 
 - Flag low-quality test cases for regeneration
 - Auto-fill coverage gaps if enabled
 - **Output:** Coverage report with gap analysis
+
+Coverage analysis and metrics persistence run after the DAG completes. Metrics record exact input/output/total tokens when reported by the provider, provider/model-aware estimated cloud cost (local Ollama remains `$0`), coverage on a 0–100 percentage scale, per-stage duration, and total duration.
 
 ---
 
@@ -364,26 +390,7 @@ The DAG-based pipeline executes stages in waves, allowing independent stages to 
 - **Node.js 20+** (for frontend development)
 - **Docker** (optional, for containerized deployment)
 
-### Option 1: Quick CLI Run (Standalone)
-
-```bash
-# 1. Install dependencies
-pip install -r requirements.txt
-
-# 2. Install & start Ollama
-ollama serve
-ollama pull llama3.2        # or qwen:latest (default)
-ollama pull qwen3-embedding:0.6b  # for ChromaDB embeddings
-
-# 3. Configure
-cp .env.example .env
-# Edit .env to set your model and preferences
-
-# 4. Run
-python orchestrator.py --requirements test_data/sample_requirements.csv
-```
-
-### Option 2: Full Platform (API + Dashboard)
+### Option 1: Full Platform (API + Dashboard)
 
 ```bash
 # 1. Install dependencies
@@ -393,13 +400,19 @@ pip install -e .
 ollama serve
 ollama pull llama3.2
 
-# 3. Run the FastAPI server
-python -m uvicorn stlc_platform.api.main:app --host 0.0.0.0 --port 8000
+# 3. Run the FastAPI backend (PowerShell)
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn stlc_platform.api.main:app --host 127.0.0.1 --port 8000 --reload
 
-# 4. Open http://localhost:8000 in your browser
+# 4. In a second terminal, run the dashboard
+cd frontend
+npm install
+npm run dev
+
+# 5. Open http://localhost:5173 (API docs: http://localhost:8000/docs)
 ```
 
-### Option 3: Docker Compose (Recommended for Production)
+### Option 2: Docker Compose (Recommended for Production)
 
 ```bash
 # Build and start everything (app + Ollama)
@@ -491,10 +504,12 @@ The React dashboard provides a visual interface for the entire platform.
 ### Features
 - **Pipeline Monitor** — watch pipeline stages execute in real-time via WebSocket with live progress bars and stage status indicators
 - **Test Case Browser** — view, filter, and search generated test cases with quality scores
-- **Metrics Dashboard** — charts for quality score trends, test type distribution, priority breakdown, and cost tracking (Recharts)
+- **Metrics Dashboard** — run-scoped test counts, exact token usage, local/cloud cost estimates, 0–100% coverage, and duration formatted as seconds or minutes/seconds
 - **Agent Management** — view registered agents, their capabilities, and execution history
-- **Feedback Panel** — review and approve test cases, store examples for few-shot learning
-- **Configuration UI** — edit pipeline settings, LLM parameters, and quality gate thresholds without touching YAML files
+- **Human Review** — revalidate, approve, reject, and bulk-review test cases; only eligible approvals enter RAG
+- **Configuration UI** — edit project, specification, SQLite review, LLM, ChromaDB, generation, BDD, crawler, API-test, export, quality, coverage, circuit-breaker, and metrics settings
+
+The frontend reads generated data from the selected run's persisted artifacts. Test cases come from `enrich_test_cases.json` with `parse_requirements.json` as fallback; BDD comes from `generate_bdd_code.json`; API tests come from `generate_api_tests.json` with `discover_apis.json` as fallback. The backend reloads these artifacts after a restart.
 
 ### Tech Stack
 - **React 18** with TypeScript
@@ -523,33 +538,11 @@ The built frontend is served by FastAPI in production mode when `STLC_SERVE_FRON
 
 ## 📖 CLI Usage
 
-### Orchestrator (Legacy Standalone)
-
-```bash
-# Generate test cases from requirements
-python orchestrator.py --requirements reqs.csv
-
-# Use a different model
-python orchestrator.py --requirements reqs.txt --model mistral
-
-# Export only Zephyr Scale format
-python orchestrator.py --requirements reqs.csv --format zephyr
-
-# Limit test cases per requirement
-python orchestrator.py --requirements reqs.txt --max-tests 3
-
-# Clear ChromaDB and regenerate
-python orchestrator.py --requirements reqs.csv --clear-db
-
-# Skip ChromaDB for faster runs
-python orchestrator.py --requirements reqs.txt --no-chroma
-```
-
 ### Pipeline Runner (Modern Platform)
 
 ```bash
 # Run full pipeline
-stlc run --pipeline config/pipelines/default.yaml
+stlc run --pipeline config/pipelines/full_stlc.yaml --config config/stlc_config.yaml
 
 # Run single agent
 stlc run --agent test_generation --input requirements.json
@@ -562,7 +555,7 @@ stlc metrics list
 stlc metrics trends
 
 # CI mode (JSON output)
-stlc run --pipeline default.yaml --ci
+stlc run --pipeline config/pipelines/full_stlc.yaml --config config/stlc_config.yaml --ci
 ```
 
 ### MCP Server
@@ -571,12 +564,18 @@ stlc run --pipeline default.yaml --ci
 # Start MCP server for Claude Desktop
 python mcp_server.py
 
-# CLI mode
+# Inspect the persistent vector store and approved examples
 python mcp_server.py stats
-python mcp_server.py validate-tc TC-001
-python mcp_server.py store-example TC-001
 python mcp_server.py list-examples
+
+# Validate one exported test case without modifying storage
+python mcp_server.py validate-tc --input output/test_cases.csv --tc-id TC-0001
+
+# After human review, explicitly store an approved example
+python mcp_server.py store-example --input output/test_cases.csv --tc-id TC-0001 --ac-type general
 ```
+
+`store-example` writes to the persistent ChromaDB example collection. Use it only after human review; the dashboard approval workflow is preferred because it also records the decision in SQLite and enforces semantic quality eligibility.
 
 ---
 
@@ -611,10 +610,10 @@ Profiles let you run the pipeline with different scopes:
 
 ```bash
 # Run smoke profile (fastest)
-stlc run --pipeline default.yaml --profile smoke
+stlc run --pipeline config/pipelines/full_stlc.yaml --config config/stlc_config.yaml --profile smoke
 
 # Run full regression
-stlc run --pipeline default.yaml --profile regression
+stlc run --pipeline config/pipelines/full_stlc.yaml --config config/stlc_config.yaml --profile regression
 ```
 
 ### Environment Variables (.env)
@@ -649,6 +648,37 @@ The platform uses a YAML-based config with profile overlays:
 - `stlc_config.api.yaml` — API-specific overrides
 - `stlc_config.web.yaml` — web-specific overrides
 
+The current governance and persistence settings are:
+
+```yaml
+specifications:
+  enforce: true
+  requirements: docs/specifications/REQUIREMENTS_CAPTURE_SPEC.md
+  test_cases: docs/specifications/TEST_CASE_GENERATION_SPEC.md
+  bdd: docs/specifications/BDD_GENERATION_SPEC.md
+
+review:
+  sqlite_path: output/review/test_case_reviews.sqlite3
+
+chromadb:
+  persist_directory: ./chroma_db
+
+quality_gate:
+  accept_threshold: 0.65
+
+crawler:
+  base_url: https://www.demoblaze.com/
+  timeout_ms: 30000
+  verify_ssl: false
+  auth:
+    type: ""
+    login_url: https://www.demoblaze.com/
+    username: ""
+    password: ""
+```
+
+SQLite is embedded through Python's standard library; it does not require a separate server or installation. ChromaDB and the SQLite audit database persist across backend restarts as long as their configured project paths are retained. Keep credentials out of committed YAML and supply them through the configuration UI or environment-specific configuration.
+
 ---
 
 ## 🧪 Running Tests
@@ -675,15 +705,7 @@ pytest tests/ --cov=stlc_platform --cov-report=term-missing --cov-fail-under=75
 
 ```
 Python_Orchestrator/
-├── orchestrator.py              # Legacy CLI entry point
-├── run_pipeline.py              # Modern pipeline runner
 ├── mcp_server.py                # MCP server for AI tool exposure
-├── config.py                    # Legacy config (dataclass-based)
-├── requirements_reader.py       # Multi-format requirement parser
-├── chroma_store.py              # ChromaDB vector store
-├── llm_client.py                # Ollama LLM client
-├── test_generator.py            # Core test case generator
-├── environment.py               # Behave BDD test hooks
 │
 ├── stlc_platform/               # Modern platform package
 │   ├── core/                    # Core utilities
@@ -697,16 +719,18 @@ Python_Orchestrator/
 │   │   ├── api_test_agent/      # API test generation
 │   │   └── enrichment_agent/    # Test case enrichment
 │   ├── pipeline/                # DAG-based pipeline orchestration
-│   ├── api/                     # FastAPI REST + WebSocket API
+│   ├── api/                     # FastAPI REST, WebSocket, and SQLite review audit
 │   ├── exporters/               # CSV, Zephyr, JSON exporters
 │   └── cli.py                   # Full CLI interface
 │
 ├── frontend/                    # React dashboard
-├── config/                      # YAML configs, pipelines, profiles, skills
-├── exporters/                   # Legacy exporters
+├── config/                      # YAML configs, pipelines, profiles, and skills
+├── docs/specifications/         # Approved generation guardrails
 ├── tests/                       # Unit + integration tests
 ├── test_data/                   # Sample requirement files
-├── output/                      # Generated test case outputs
+├── output/.stlc_runs/           # Persistent run-scoped artifacts
+├── output/review/               # Embedded SQLite human-review audit
+├── chroma_db/                   # Persistent project-scoped vector data
 └── docker-compose.yml           # Docker orchestration
 ```
 
@@ -723,44 +747,6 @@ Python_Orchestrator/
 | **Utilities** | python-dotenv, pydantic, pydantic-settings, rich, click, requests, PyYAML, Jinja2, beautifulsoup4 |
 | **MCP** | mcp, slowapi |
 | **Auth** | PyJWT |
-
----
-
-## 🤖 Recommended Models
-
-### For Ollama (Local)
-
-| Model | Size | Best For | RAM Required |
-|-------|------|----------|-------------|
-| **qwen:latest** | ~4.7GB | Default, balanced quality | 8GB |
-| **llama3.2** | ~2GB | Fast generation, lower-end machines | 4GB |
-| **mistral** | ~4.1GB | Better structured JSON output | 8GB |
-| **llama3.1:8b** | ~4.7GB | Highest quality output | 8GB |
-| **qwen2.5:32b** | ~18GB | Enterprise-grade quality (GPU recommended) | 32GB+ |
-
-### Embedding Models
-
-| Model | Size | Notes |
-|-------|------|-------|
-| **qwen3-embedding:0.6b** | ~0.6GB | Recommended, fast and accurate | 2GB |
-| **nomic-embed-text** | ~0.3GB | Excellent alternative | 1GB |
-| **all-MiniLM-L6-v2** | ~80MB | SentenceTransformer fallback, no Ollama needed | 512MB |
-
-### For Cloud Providers
-
-| Provider | Model | Notes |
-|----------|-------|-------|
-| **OpenAI** | gpt-4o, gpt-4o-mini | Best structured output, paid |
-| **Anthropic** | claude-sonnet-4-20250514 | Excellent reasoning, paid |
-
-Switch providers in `config/stlc_config.yaml`:
-
-```yaml
-llm:
-  provider: openai  # or anthropic
-  model: gpt-4o-mini
-  api_key: sk-...
-```
 
 ---
 
@@ -822,20 +808,12 @@ ollama list
 ollama pull llama3.2
 ```
 
-**ChromaDB issues:**
-```bash
-python orchestrator.py --requirements reqs.csv --clear-db
-# Or skip entirely
-python orchestrator.py --requirements reqs.csv --no-chroma
-```
-
 **LLM returns bad JSON:**
 - Lower `OLLAMA_TEMPERATURE` (try `0.1`)
 - Try `mistral` model (better structured output)
 - Increase `OLLAMA_NUM_CTX` for long requirements
 
 **Slow generation:**
-- Use `--no-chroma` to skip embedding
 - Use a smaller model (`llama3.2` instead of `llama3.1:8b`)
 - Reduce `MAX_TC_PER_REQ`
 

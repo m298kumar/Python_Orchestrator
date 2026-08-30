@@ -67,6 +67,8 @@ class TestLoadFromFile:
     def test_load_full_stlc_yaml(self):
         dag = load_pipeline("config/pipelines/full_stlc.yaml")
         assert dag.pipeline_name == "full_stlc"
+        parse_stage = dag.get_stage("parse_requirements")
+        assert parse_stage.input_map["vector_store"] == "$runtime.vector_store"
         assert len(dag.stage_ids) >= 3
 
     def test_load_api_test_only_yaml(self):

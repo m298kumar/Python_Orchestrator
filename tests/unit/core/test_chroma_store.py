@@ -175,14 +175,33 @@ class TestRequirementsVectorStoreWithMock:
             ),
         ]
         store.add_requirements(reqs)
-        store._coll_reqs.add.assert_called_once()
-        call_args = store._coll_reqs.add.call_args
+        store._coll_reqs.upsert.assert_called_once()
+        call_args = store._coll_reqs.upsert.call_args
         assert len(call_args[1]["ids"]) == 2
         assert len(call_args[1]["documents"]) == 2
+        assert all(item.startswith("requirement_default_REQ-") for item in call_args[1]["ids"])
+        assert all("content_hash" in item for item in call_args[1]["metadatas"])
+        assert all(item["revision_number"] == 1 for item in call_args[1]["metadatas"])
 
     def test_add_empty_requirements(self, store):
         store.add_requirements([])
-        store._coll_reqs.add.assert_not_called()
+        store._coll_reqs.upsert.assert_not_called()
+
+    def test_changed_requirement_creates_linked_revision(self, store):
+        req = FakeRequirement(req_id="REQ-001", title="Login", description="Version one")
+        store.add_requirements([req])
+        first_metadata = store._coll_reqs.upsert.call_args.kwargs["metadatas"][0]
+        first_id = store._coll_reqs.upsert.call_args.kwargs["ids"][0]
+        store._coll_reqs.get.return_value = {"metadatas": [first_metadata]}
+
+        req.description = "Version two"
+        store.add_requirements([req])
+
+        second_metadata = store._coll_reqs.upsert.call_args.kwargs["metadatas"][0]
+        second_id = store._coll_reqs.upsert.call_args.kwargs["ids"][0]
+        assert second_id != first_id
+        assert second_metadata["revision_number"] == 2
+        assert second_metadata["previous_revision_id"] == first_id
 
     def test_search_similar_empty_collection(self, store):
         store._coll_reqs.count.return_value = 0
@@ -203,9 +222,19 @@ class TestRequirementsVectorStoreWithMock:
 
     def test_store_approved_tc(self, store):
         tc_dict = {"title": "Login TC", "test_type": "positive"}
-        doc_id = store.store_approved_tc(tc_dict, "security", "positive", "ecommerce")
+        doc_id = store.store_approved_tc(
+            tc_dict, "security", "positive", "ecommerce", human_approved=True
+        )
         assert doc_id.startswith("ex_security_positive_")
-        store._coll_tcs.add.assert_called_once()
+        store._coll_tcs.upsert.assert_called_once()
+
+    def test_store_tc_rejects_automatic_promotion(self, store):
+        with pytest.raises(ValueError, match="human approval"):
+            store.store_approved_tc({}, "general", "positive")
+
+    def test_delete_approved_tc_removes_promoted_example(self, store):
+        store.delete_approved_tc("rag-example")
+        store._coll_tcs.delete.assert_called_once_with(ids=["rag-example"])
 
     def test_retrieve_examples_empty(self, store):
         store._coll_tcs.count.return_value = 0

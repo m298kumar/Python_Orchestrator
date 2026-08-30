@@ -16,6 +16,7 @@ stages:
     input:
       requirements: "$config.requirements"
       llm_client: "$runtime.llm_client"
+      vector_store: "$runtime.vector_store"
       feedback_store: "$runtime.feedback_store"
     output: [test_cases]
 

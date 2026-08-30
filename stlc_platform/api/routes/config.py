@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from copy import deepcopy
 from typing import Any, Dict
 
 from fastapi import APIRouter
@@ -27,21 +28,36 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 
 # In-memory config state (protected by _config_lock for thread safety)
 _config_lock = threading.Lock()
-_config: Dict[str, Any] = {
+_DEFAULT_CONFIG: Dict[str, Any] = {
     "project": {},
-    "llm": {},
-    "crawler": {},
-    "api_testing": {},
-    "test_generation": {},
-    "bdd": {},
-    "quality_gate": {},
+    "specifications": {
+        "enforce": True,
+        "requirements": "docs/specifications/REQUIREMENTS_CAPTURE_SPEC.md",
+        "test_cases": "docs/specifications/TEST_CASE_GENERATION_SPEC.md",
+        "bdd": "docs/specifications/BDD_GENERATION_SPEC.md",
+    },
+    "llm": {"provider": "ollama", "base_url": "http://localhost:11434",
+            "temperature": 0.2, "timeout": 600, "num_ctx": 8192, "num_predict": 4096},
+    "crawler": {"max_depth": 3, "max_pages": 100, "rate_limit_ms": 1000,
+                "timeout_ms": 30000, "verify_ssl": True, "wait_for_network_idle": True,
+                "respect_robots_txt": True},
+    "api_testing": {"framework": "pytest_requests"},
+    "test_generation": {"max_per_requirement": 6, "include_negative": True,
+                        "include_edge_cases": True, "format": "gherkin"},
+    "bdd": {"language": "python", "framework": "behave", "automation_lib": "playwright",
+            "pom_language": "python"},
+    "quality_gate": {"accept_threshold": 0.65, "regenerate_threshold": 0.4,
+                     "max_regeneration_attempts": 2, "auto_example_threshold": 0.8},
     "coverage": {},
     "output": {},
-    "chromadb": {},
+    "chromadb": {"persist_directory": "./chroma_db", "collection_name": "requirements",
+                 "embedding_backend": "ollama"},
     "export": {},
     "circuit_breaker": {},
-    "metrics": {},
+    "metrics": {"dir": "output/metrics", "degradation_threshold_pct": 15},
+    "review": {"sqlite_path": "output/review/test_case_reviews.sqlite3"},
 }
+_config: Dict[str, Any] = deepcopy(_DEFAULT_CONFIG)
 
 # Fields that should be masked in responses
 _SENSITIVE_KEYS = {"api_key", "secret", "password", "token"}
@@ -88,19 +104,7 @@ def _load_initial_config() -> None:
             from stlc_platform.core.config_loader import _find_project_root, _load_yaml
 
             yaml_cfg = _load_yaml(_find_project_root() / "config" / "stlc_config.yaml")
-            _config["project"] = yaml_cfg.get("project", {})
-            _config["llm"] = yaml_cfg.get("llm", {})
-            _config["crawler"] = yaml_cfg.get("crawler", {})
-            _config["api_testing"] = yaml_cfg.get("api_testing", {})
-            _config["test_generation"] = yaml_cfg.get("test_generation", {})
-            _config["bdd"] = yaml_cfg.get("bdd", {})
-            _config["quality_gate"] = yaml_cfg.get("quality_gate", {})
-            _config["coverage"] = yaml_cfg.get("coverage", {})
-            _config["output"] = yaml_cfg.get("output", yaml_cfg.get("export", {}))
-            _config["chromadb"] = yaml_cfg.get("chromadb", {})
-            _config["export"] = yaml_cfg.get("export", {})
-            _config["circuit_breaker"] = yaml_cfg.get("circuit_breaker", {})
-            _config["metrics"] = yaml_cfg.get("metrics", {})
+            _config = _deep_merge_dicts(deepcopy(_DEFAULT_CONFIG), yaml_cfg)
         except (ImportError, OSError, ValueError):
             pass
         _config["_loaded"] = True
@@ -171,6 +175,7 @@ def get_config() -> ConfigResponse:
     with _config_lock:
         return ConfigResponse(
             project=_sanitize(_config.get("project", {})),
+            specifications=_sanitize(_config.get("specifications", {})),
             llm=_sanitize(_config.get("llm", {})),
             crawler=_sanitize(_config.get("crawler", {})),
             api_testing=_sanitize(_config.get("api_testing", {})),
@@ -183,6 +188,7 @@ def get_config() -> ConfigResponse:
             export=_sanitize(_config.get("export", {})),
             circuit_breaker=_sanitize(_config.get("circuit_breaker", {})),
             metrics=_sanitize(_config.get("metrics", {})),
+            review=_sanitize(_config.get("review", {})),
         )
 
 
@@ -216,6 +222,7 @@ def update_config(update: ConfigUpdate) -> ConfigResponse:
     # 2. Structured section updates -> flatten to dot-notation
     for section_name in (
         "project",
+        "specifications",
         "llm",
         "crawler",
         "api_testing",
@@ -228,6 +235,7 @@ def update_config(update: ConfigUpdate) -> ConfigResponse:
         "export",
         "circuit_breaker",
         "metrics",
+        "review",
     ):
         section_data = getattr(update, section_name, None)
         if section_data:
@@ -244,6 +252,7 @@ def update_config(update: ConfigUpdate) -> ConfigResponse:
     with _config_lock:
         return ConfigResponse(
             project=_sanitize(_config.get("project", {})),
+            specifications=_sanitize(_config.get("specifications", {})),
             llm=_sanitize(_config.get("llm", {})),
             crawler=_sanitize(_config.get("crawler", {})),
             api_testing=_sanitize(_config.get("api_testing", {})),
@@ -256,6 +265,7 @@ def update_config(update: ConfigUpdate) -> ConfigResponse:
             export=_sanitize(_config.get("export", {})),
             circuit_breaker=_sanitize(_config.get("circuit_breaker", {})),
             metrics=_sanitize(_config.get("metrics", {})),
+            review=_sanitize(_config.get("review", {})),
         )
 
 

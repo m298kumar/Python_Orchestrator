@@ -44,6 +44,12 @@ class TestRenderSystemPrompt:
         for i in range(1, 8):
             assert f"RULE {i}" in result
 
+    def test_approved_specification_is_injected_as_guardrail(self):
+        renderer = PromptRenderer(guardrail_text="MUST preserve requirement traceability.")
+        result = renderer.render_system_prompt()
+        assert "APPROVED TEST-CASE GENERATION SPECIFICATION" in result
+        assert "MUST preserve requirement traceability" in result
+
     def test_no_hardcoded_domain_terms(self):
         """System prompt should not contain banking/cheque/deposit references."""
         renderer = PromptRenderer()

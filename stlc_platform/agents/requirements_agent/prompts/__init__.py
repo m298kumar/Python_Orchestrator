@@ -45,6 +45,7 @@ class PromptRenderer:
         template_dir: Optional[Path] = None,
         override_dir: Optional[Path] = None,
         platform_verbs: Optional[Dict[str, Dict[str, str]]] = None,
+        guardrail_text: str = "",
     ):
         builtin_dir = template_dir or _TEMPLATES_DIR
         loaders: list[jinja2.BaseLoader] = []
@@ -60,6 +61,7 @@ class PromptRenderer:
             lstrip_blocks=True,
         )
         self._platform_verbs = platform_verbs or {}
+        self._guardrail_text = guardrail_text.strip()
 
     def render_system_prompt(
         self,
@@ -80,7 +82,7 @@ class PromptRenderer:
         platform = (tech_stack or {}).get("platform", "web")
         verbs = self._platform_verbs.get(platform, {})
 
-        return template.render(
+        rendered = template.render(
             domain=domain,
             app_description=f"the {domain} application" if domain else "this software application",
             tech_stack=tech_stack or {},
@@ -89,6 +91,13 @@ class PromptRenderer:
             navigate_verb=verbs.get("navigate", "navigate to"),
             page_loads_verb=verbs.get("page_loads", "page loads"),
         )
+        if self._guardrail_text:
+            rendered += (
+                "\n\nAPPROVED TEST-CASE GENERATION SPECIFICATION "
+                "(normative guardrail; follow all MUST and MUST NOT rules):\n"
+                f"{self._guardrail_text}"
+            )
+        return rendered
 
     def render_type_hints(
         self,

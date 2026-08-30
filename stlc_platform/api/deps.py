@@ -265,6 +265,7 @@ class TestCaseStore:
                 if tc_id:
                     entry = dict(tc)
                     entry.setdefault("status", "generated")
+                    entry.setdefault("quality_validated", True)
                     if run_id:
                         entry["run_id"] = run_id
                     self._test_cases[self._key(tc_id, run_id)] = entry
@@ -279,8 +280,10 @@ class TestCaseStore:
                 del self._test_cases[k]
             return len(to_remove)
 
-    def get(self, tc_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, tc_id: str, run_id: str = "") -> Optional[Dict[str, Any]]:
         with self._lock:
+            if run_id:
+                return self._test_cases.get(self._key(tc_id, run_id))
             # Try bare key first (backward compat), then scan for composite match
             if tc_id in self._test_cases:
                 return self._test_cases[tc_id]
@@ -299,8 +302,16 @@ class TestCaseStore:
         with self._lock:
             return {k: v for k, v in self._test_cases.items() if v.get("run_id") == run_id}
 
-    def update(self, tc_id: str, changes: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update(
+        self, tc_id: str, changes: Dict[str, Any], run_id: str = ""
+    ) -> Optional[Dict[str, Any]]:
         with self._lock:
+            if run_id:
+                key = self._key(tc_id, run_id)
+                if key not in self._test_cases:
+                    return None
+                self._test_cases[key].update(changes)
+                return dict(self._test_cases[key])
             # Support both bare and composite keys
             if tc_id in self._test_cases:
                 self._test_cases[tc_id].update(changes)

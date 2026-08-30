@@ -238,6 +238,7 @@ class ArtifactResolver:
     def __init__(self, store: ArtifactStore, config: Dict[str, Any]) -> None:
         self._store = store
         self._config = config
+        self._runtime_cache: Dict[str, Any] = {}
 
     def resolve(self, input_map: Dict[str, str]) -> Dict[str, Any]:
         """Resolve all references in an input_map to actual values."""
@@ -254,6 +255,7 @@ class ArtifactResolver:
             $?stage_id.artifact_key  -> returns None if stage was skipped/missing (optional input)
             $config.dotted.path      -> nested config lookup
             $runtime.llm_client      -> auto-create LLM client from config
+            $runtime.vector_store    -> shared ChromaDB vector store
             literal_value            -> pass through
         """
         if not isinstance(ref, str) or not ref.startswith("$"):
@@ -299,12 +301,38 @@ class ArtifactResolver:
         return self._store.get(stage_id, artifact_key)
 
     def _resolve_runtime(self, key: str) -> Any:
-        """Resolve runtime references like llm_client, feedback_store."""
+        """Resolve and cache runtime dependencies for this pipeline run."""
+        if key in self._runtime_cache:
+            return self._runtime_cache[key]
+
         if key == "llm_client":
-            return self._create_llm_client()
-        if key == "feedback_store":
-            return self._create_feedback_store()
-        raise KeyError(f"Unknown runtime key: '{key}'")
+            value = self._create_llm_client()
+        elif key == "vector_store":
+            value = self._create_vector_store()
+        elif key == "feedback_store":
+            value = self._create_feedback_store()
+        else:
+            raise KeyError(f"Unknown runtime key: '{key}'")
+
+        self._runtime_cache[key] = value
+        return value
+
+    def _create_vector_store(self) -> Any:
+        """Create and initialise the configured ChromaDB vector store."""
+        from stlc_platform.core.config_loader import ChromaDBConfig
+        from stlc_platform.core.storage.chroma_store import RequirementsVectorStore
+
+        chroma_raw = self._config.get("chromadb", {}) or {}
+        allowed = ChromaDBConfig.__dataclass_fields__
+        chroma_cfg = ChromaDBConfig(**{k: v for k, v in chroma_raw.items() if k in allowed})
+        project = self._config.get("project", {}) or {}
+        project_id = project.get("id") or project.get("name") or "default"
+        vector_store = RequirementsVectorStore(
+            chromadb_config=chroma_cfg,
+            project_id=str(project_id),
+        )
+        vector_store.initialize()
+        return vector_store
 
     def _create_feedback_store(self) -> Any:
         """Create a FeedbackStore, optionally with ChromaDB semantic search."""
@@ -312,18 +340,14 @@ class ArtifactResolver:
 
         from stlc_platform.pipeline.feedback_store import FeedbackStore
 
-        # Try to create with ChromaDB for semantic search
-        chroma_store = None
+        # Reuse the pipeline's vector store so all RAG collections share one client.
         try:
-            from stlc_platform.core.storage.chroma_store import RequirementsVectorStore
-
-            chroma_cfg = self._config.get("chromadb", {})
-            if chroma_cfg:
-                chroma_store = RequirementsVectorStore(chromadb_config=chroma_cfg)
-        except (ImportError, OSError, ValueError) as exc:
-            logging.getLogger(__name__).debug(
+            chroma_store = self._resolve_runtime("vector_store")
+        except (ImportError, RuntimeError, OSError, ValueError) as exc:
+            logging.getLogger(__name__).warning(
                 "ChromaDB unavailable, using JSON-only feedback: %s", exc
             )
+            chroma_store = None
 
         return FeedbackStore(
             persist_path=Path("./feedback"),

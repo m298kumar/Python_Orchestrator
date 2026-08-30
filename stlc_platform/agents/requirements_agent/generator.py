@@ -115,7 +115,6 @@ class TestCaseGenerator:
                 results,
             )
             results.append(best_tc)
-            self._maybe_store_example(best_tc, slot, results)
 
         return results
 
@@ -312,28 +311,6 @@ class TestCaseGenerator:
             console.print(f"    [yellow]  attempt {attempt} error: {e}[/yellow]")
             return None
 
-    def _maybe_store_example(
-        self,
-        tc: TestCaseArtifact,
-        slot: Dict[str, str],
-        results: List[TestCaseArtifact],
-    ) -> None:
-        auto_threshold = self.scorer.config.auto_example_threshold
-        report = self.scorer.score(tc=tc, slot=slot, requirement=None, existing_tcs=results)
-        if report.overall_score < auto_threshold or not self.vector_store:
-            return
-        if not hasattr(self.vector_store, "store_approved_tc"):
-            return
-        try:
-            self.vector_store.store_approved_tc(
-                tc_dict=tc.model_dump(),
-                ac_type=slot.get("ac_type", "general"),
-                test_type=slot["test_type"],
-                domain=self._domain or "",
-            )
-        except (AttributeError, RuntimeError, OSError):
-            pass
-
     def _deduplicate_tcs(self, all_tc: List[TestCaseArtifact]) -> List[TestCaseArtifact]:
         """Cross-requirement deduplication of generated test cases."""
         import logging as _logging
@@ -427,6 +404,14 @@ class TestCaseGenerator:
         # Phase D4: Domain vocabulary enrichment from generated test cases
         self._enrich_vocab(all_tc)
 
+        # Index only after generation so a requirement cannot retrieve itself as
+        # historical RAG context during its first run.
+        if self.vector_store:
+            try:
+                self.vector_store.add_requirements(requirements)
+            except Exception as e:
+                console.print(f"[yellow]Requirement indexing skipped: {e}[/yellow]")
+
         console.print(
             f"\n[bold green]{len(all_tc)} test cases "
             f"from {len(requirements)} requirements[/bold green]"
@@ -464,6 +449,7 @@ class TestCaseGenerator:
         for i in range(max_tc):
             test_type = pattern[i % len(pattern)]
             target_ac = acs[i % len(acs)]
+            test_type = self._semantic_test_type(target_ac, test_type, pattern)
             ac_type = self.classifier.classify(target_ac).ac_type
             title = ac_to_title(target_ac, test_type)
 
@@ -484,6 +470,35 @@ class TestCaseGenerator:
             )
 
         return slots
+
+    @staticmethod
+    def _semantic_test_type(target_ac: str, default: str, allowed: List[str]) -> str:
+        """Choose a test type compatible with the acceptance criterion.
+
+        The former round-robin plan could label a success criterion as a
+        negative test or invent a boundary for a non-boundary criterion.  The
+        quality scorer then (correctly) rejected the generated case downstream.
+        """
+        ac = str(target_ac or "").lower()
+        negative_markers = (
+            "reject", "invalid", "error", "fail", "denied", "duplicate",
+            "must not", "cannot", "without", "missing", "blocked",
+        )
+        boundary_markers = (
+            "minimum", "maximum", "at least", "at most", "between",
+            "length", "range", "limit", "threshold", "characters",
+        )
+        success_markers = ("on successful", "successfully", "is redirected", "authenticated")
+
+        preferred = default
+        if any(marker in ac for marker in negative_markers):
+            preferred = "negative"
+        elif any(marker in ac for marker in boundary_markers) or re.search(r"\b\d+\b", ac):
+            preferred = "edge_case"
+        elif any(marker in ac for marker in success_markers):
+            preferred = "positive"
+
+        return preferred if preferred in allowed else "positive"
 
     # -- Parsing ---------------------------------------------------------------
 

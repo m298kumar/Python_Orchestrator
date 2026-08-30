@@ -7,12 +7,19 @@ project:
     backend: rest
     database: ''
     auth: ''
-  platform: mobile
+  platform: web
+specifications:
+  enforce: true
+  requirements: docs/specifications/REQUIREMENTS_CAPTURE_SPEC.md
+  test_cases: docs/specifications/TEST_CASE_GENERATION_SPEC.md
+  bdd: docs/specifications/BDD_GENERATION_SPEC.md
+review:
+  sqlite_path: output/review/test_case_reviews.sqlite3
 llm:
   provider: ollama
   model: qwen2.5:32b-instruct-q4_K_M
   base_url: http://10.0.0.211:11434
-  temperature: 0.4
+  temperature: 0.2
   num_ctx: 8192
   timeout: 600
   num_predict: 4096
@@ -25,7 +32,7 @@ chromadb:
   ollama_embedding_url: http://localhost:11434/api/embeddings
   sentence_transformer_model: all-MiniLM-L6-v2
 test_generation:
-  max_per_requirement: 6
+  max_per_requirement: 4
   include_negative: true
   include_edge_cases: true
   format: gherkin
@@ -196,27 +203,28 @@ test_generation:
     checkout: Checkout Page
     cart: Shopping Cart
 bdd:
-  language: python
-  framework: behave
-  automation_lib: playwright   # playwright | selenium
-  pom_language: python         # python | java | javascript  (javascript = TypeScript + Playwright)
+  language: java
+  framework: cucumber
+  automation_lib: playwright
+  pom_language: python
 crawler:
-  base_url: https://demo.opencart.com/index.php
+  base_url: https://www.demoblaze.com/
   max_depth: 3
   max_pages: 100
   wait_for_network_idle: true
   respect_robots_txt: true
   rate_limit_ms: 1000
-  verify_ssl: false   # set false if Windows CRL check fails (CRYPT_E_NO_REVOCATION_CHECK)
+  timeout_ms: 30000
+  verify_ssl: false
   auth:
     type: ''
-    login_url: ''
+    login_url: https://www.demoblaze.com/
     username: ''
     password: ''
 api_testing:
   framework: pytest_requests
   openapi_spec: ''
-  base_url: https://demo.opencart.com
+  base_url: https://demo.opencart.com/
 export:
   output_dir: ./output
   formats:
