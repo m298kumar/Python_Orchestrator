@@ -21,13 +21,26 @@ env/
 
 # ChromaDB local storage
 chroma_db/
+*.sqlite3
 
 # Output artifacts
 output/
 
+# Runtime logs
+logs/
+*.log
+log*.txt
+
 # Node.js / Frontend
 node_modules/
 frontend/dist/
+*.tsbuildinfo
+
+# Editor and manual backup files
+*.backup
+
+# Accidental command-marker files
+frontend/npm
 
 # OS
 .DS_Store
