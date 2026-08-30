@@ -147,6 +147,38 @@ function CollapsibleSection({
   );
 }
 
+function JsonConfigEditor({
+  label, value, onChange,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (value: Record<string, unknown>) => void;
+}) {
+  const [text, setText] = useState(() => JSON.stringify(value ?? {}, null, 2));
+  const [error, setError] = useState('');
+  useEffect(() => setText(JSON.stringify(value ?? {}, null, 2)), [value]);
+  const commit = () => {
+    try {
+      const parsed = JSON.parse(text);
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+        throw new Error('Value must be a JSON object');
+      }
+      onChange(parsed);
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid JSON');
+    }
+  };
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} rows={8}
+        className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-xs font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Password Field
 // ---------------------------------------------------------------------------
@@ -318,6 +350,19 @@ export default function Config() {
       ...editedConfig,
       project: { ...editedConfig.project, [key]: value },
     });
+  }
+
+  function updateSpecifications(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({
+      ...editedConfig,
+      specifications: { ...editedConfig.specifications, [key]: value },
+    });
+  }
+
+  function updateReview(key: string, value: any) {
+    if (!editedConfig) return;
+    setEditedConfig({ ...editedConfig, review: { ...editedConfig.review, [key]: value } });
   }
 
   function updateOutput(key: string, value: any) {
@@ -598,12 +643,12 @@ export default function Config() {
                   min="0"
                   max="1"
                   step="0.05"
-                  value={llm.temperature ?? 0.7}
+                  value={llm.temperature ?? ''}
                   onChange={(e) => updateLlm('temperature', parseFloat(e.target.value))}
                   className="flex-1 h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-600"
                 />
                 <span className="text-sm font-mono text-gray-700 dark:text-gray-300 w-10 text-right">
-                  {(llm.temperature ?? 0.7).toFixed(2)}
+                  {Number(llm.temperature).toFixed(2)}
                 </span>
               </div>
               <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
@@ -620,8 +665,8 @@ export default function Config() {
                 type="number"
                 min={5}
                 max={600}
-                value={llm.timeout ?? 120}
-                onChange={(e) => updateLlm('timeout', parseInt(e.target.value, 10) || 120)}
+                value={llm.timeout ?? ''}
+                onChange={(e) => updateLlm('timeout', Number(e.target.value))}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
               <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
@@ -643,8 +688,8 @@ export default function Config() {
                 min={512}
                 max={131072}
                 step={512}
-                value={llm.num_ctx ?? 8192}
-                onChange={(e) => updateLlm('num_ctx', parseInt(e.target.value, 10) || 8192)}
+                value={llm.num_ctx ?? ''}
+                onChange={(e) => updateLlm('num_ctx', Number(e.target.value))}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
               <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
@@ -660,8 +705,8 @@ export default function Config() {
                 min={128}
                 max={32768}
                 step={128}
-                value={llm.num_predict ?? 3200}
-                onChange={(e) => updateLlm('num_predict', parseInt(e.target.value, 10) || 3200)}
+                value={llm.num_predict ?? ''}
+                onChange={(e) => updateLlm('num_predict', Number(e.target.value))}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
               <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
@@ -962,6 +1007,31 @@ export default function Config() {
         </div>
       </CollapsibleSection>
 
+      <CollapsibleSection
+        title="Approved Specifications"
+        icon={<ShieldCheck className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Enforce approved specifications</label>
+            <p className="text-xs text-gray-400 mt-0.5">Reject unapproved or missing generation guardrails.</p>
+          </div>
+          <button onClick={() => updateSpecifications('enforce', !editedConfig.specifications?.enforce)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full ${editedConfig.specifications?.enforce ? 'bg-blue-600' : 'bg-gray-300'}`}>
+            <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${editedConfig.specifications?.enforce ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+        {(['requirements', 'test_cases', 'bdd'] as const).map((key) => (
+          <div key={key}>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 capitalize">{key.replace('_', ' ')} specification</label>
+            <input type="text" value={editedConfig.specifications?.[key] ?? ''}
+              onChange={(e) => updateSpecifications(key, e.target.value)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm font-mono" />
+          </div>
+        ))}
+      </CollapsibleSection>
+
       {/* ================================================================= */}
       {/* 4. Crawler / Application Under Test Section (collapsible)          */}
       {/* ================================================================= */}
@@ -993,8 +1063,8 @@ export default function Config() {
               type="number"
               min={1}
               max={10}
-              value={editedConfig.crawler?.max_depth ?? 3}
-              onChange={(e) => updateCrawler('max_depth', parseInt(e.target.value, 10) || 3)}
+              value={editedConfig.crawler?.max_depth ?? ''}
+              onChange={(e) => updateCrawler('max_depth', Number(e.target.value))}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
             />
             <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
@@ -1008,8 +1078,8 @@ export default function Config() {
               type="number"
               min={1}
               max={500}
-              value={editedConfig.crawler?.max_pages ?? 100}
-              onChange={(e) => updateCrawler('max_pages', parseInt(e.target.value, 10) || 100)}
+              value={editedConfig.crawler?.max_pages ?? ''}
+              onChange={(e) => updateCrawler('max_pages', Number(e.target.value))}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
             />
             <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
@@ -1024,8 +1094,8 @@ export default function Config() {
               min={0}
               max={10000}
               step={100}
-              value={editedConfig.crawler?.rate_limit_ms ?? 1000}
-              onChange={(e) => updateCrawler('rate_limit_ms', parseInt(e.target.value, 10) || 1000)}
+              value={editedConfig.crawler?.rate_limit_ms ?? ''}
+              onChange={(e) => updateCrawler('rate_limit_ms', Number(e.target.value))}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
             />
             <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
@@ -1049,6 +1119,24 @@ export default function Config() {
                   editedConfig.crawler?.wait_for_network_idle !== false ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Navigation Timeout (ms)</label>
+            <input type="number" min={1000} value={editedConfig.crawler?.timeout_ms ?? ''}
+              onChange={(e) => updateCrawler('timeout_ms', Number(e.target.value))}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm" />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Verify TLS certificates</label>
+              <p className="text-xs text-gray-400 mt-0.5">Disable only for controlled test environments.</p>
+            </div>
+            <button onClick={() => updateCrawler('verify_ssl', !editedConfig.crawler?.verify_ssl)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full ${editedConfig.crawler?.verify_ssl ? 'bg-blue-600' : 'bg-gray-300'}`}>
+              <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${editedConfig.crawler?.verify_ssl ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
 
@@ -1197,8 +1285,8 @@ export default function Config() {
               type="number"
               min={1}
               max={20}
-              value={editedConfig.test_generation?.max_per_requirement ?? 6}
-              onChange={(e) => updateTestGeneration('max_per_requirement', parseInt(e.target.value, 10) || 6)}
+              value={editedConfig.test_generation?.max_per_requirement ?? ''}
+              onChange={(e) => updateTestGeneration('max_per_requirement', Number(e.target.value))}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
             />
             <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
@@ -1248,12 +1336,20 @@ export default function Config() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Format</label>
             <input
               type="text"
-              value={editedConfig.test_generation?.format ?? 'gherkin'}
+              value={editedConfig.test_generation?.format ?? ''}
               onChange={(e) => updateTestGeneration('format', e.target.value)}
               placeholder="gherkin"
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
             />
           </div>
+          <JsonConfigEditor label="Acceptance-criterion types" value={editedConfig.test_generation?.ac_types}
+            onChange={(value) => updateTestGeneration('ac_types', value)} />
+          <JsonConfigEditor label="Domain keywords" value={editedConfig.test_generation?.domain_keywords}
+            onChange={(value) => updateTestGeneration('domain_keywords', value)} />
+          <JsonConfigEditor label="Sanitiser rules" value={editedConfig.test_generation?.sanitiser}
+            onChange={(value) => updateTestGeneration('sanitiser', value)} />
+          <JsonConfigEditor label="Component suffix map" value={editedConfig.test_generation?.component_suffix_map}
+            onChange={(value) => updateTestGeneration('component_suffix_map', value)} />
         </div>
       </CollapsibleSection>
 
@@ -1270,7 +1366,7 @@ export default function Config() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Language</label>
             <input
               type="text"
-              value={editedConfig.bdd?.language ?? 'python'}
+              value={editedConfig.bdd?.language ?? ''}
               onChange={(e) => updateBdd('language', e.target.value)}
               placeholder="python"
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
@@ -1281,7 +1377,7 @@ export default function Config() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Framework</label>
             <input
               type="text"
-              value={editedConfig.bdd?.framework ?? 'behave'}
+              value={editedConfig.bdd?.framework ?? ''}
               onChange={(e) => updateBdd('framework', e.target.value)}
               placeholder="behave"
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
@@ -1292,11 +1388,17 @@ export default function Config() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Automation Library</label>
             <input
               type="text"
-              value={editedConfig.bdd?.automation_lib ?? 'playwright'}
+              value={editedConfig.bdd?.automation_lib ?? ''}
               onChange={(e) => updateBdd('automation_lib', e.target.value)}
               placeholder="playwright"
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Page Object Language</label>
+            <input type="text" value={editedConfig.bdd?.pom_language ?? ''}
+              onChange={(e) => updateBdd('pom_language', e.target.value)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm font-mono" />
           </div>
         </div>
       </CollapsibleSection>
@@ -1317,8 +1419,8 @@ export default function Config() {
               min={0}
               max={1}
               step={0.05}
-              value={editedConfig.quality_gate?.accept_threshold ?? 0.65}
-              onChange={(e) => updateQualityGate('accept_threshold', parseFloat(e.target.value) || 0.65)}
+              value={editedConfig.quality_gate?.accept_threshold ?? ''}
+              onChange={(e) => updateQualityGate('accept_threshold', Number(e.target.value))}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
             />
             <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
@@ -1477,7 +1579,7 @@ export default function Config() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Persist Directory</label>
             <input
               type="text"
-              value={editedConfig.chromadb?.persist_directory ?? './chroma_db'}
+              value={editedConfig.chromadb?.persist_directory ?? ''}
               onChange={(e) => updateChromadb('persist_directory', e.target.value)}
               placeholder="./chroma_db"
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
@@ -1545,6 +1647,20 @@ export default function Config() {
               Used when embedding backend is set to sentence_transformer.
             </p>
           </div>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Human Review Storage"
+        icon={<Database className="h-4 w-4" />}
+        defaultOpen={false}
+      >
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SQLite audit database path</label>
+          <input type="text" value={editedConfig.review?.sqlite_path ?? ''}
+            onChange={(e) => updateReview('sqlite_path', e.target.value)}
+            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm font-mono" />
+          <p className="mt-1 text-xs text-gray-400">Relative paths are resolved from the project root. A backend restart is required after changing this path.</p>
         </div>
       </CollapsibleSection>
 

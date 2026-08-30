@@ -57,6 +57,7 @@ class PipelineOrchestrator:
         on_stage_complete: Optional[Callable[[StageResult], None]] = None,
         skill_loader: Optional[SkillLoader] = None,
         execution_profile: Optional[ExecutionProfile] = None,
+        run_id: Optional[str] = None,
     ) -> None:
         self._dag = dag
         self._registry = registry
@@ -80,7 +81,7 @@ class PipelineOrchestrator:
         metrics_dir = metrics_cfg.get("dir", self._config.get("metrics_dir", "output/metrics"))
         self._metrics_collector = MetricsCollector(metrics_dir=Path(metrics_dir))
 
-        self._run_id = str(uuid.uuid4())[:8]
+        self._run_id = run_id or str(uuid.uuid4())[:8]
         self._store = ArtifactStore(run_dir=run_dir)
         self._resolver = ArtifactResolver(self._store, self._config)
 
@@ -115,7 +116,7 @@ class PipelineOrchestrator:
         total_duration = time.monotonic() - start_time
         status = self._determine_run_status()
         stage_durations = self._collect_stage_durations()
-        total_tokens = self._collect_total_tokens()
+        input_tokens, output_tokens, total_tokens = self._collect_token_usage()
 
         run_artifact = PipelineRunArtifact(
             run_id=self._run_id,
@@ -131,7 +132,7 @@ class PipelineOrchestrator:
             stage_durations=stage_durations,
         )
 
-        self._run_post_run_analysis(run_artifact, total_tokens)
+        self._run_post_run_analysis(run_artifact, input_tokens, output_tokens, total_tokens)
         return run_artifact
 
     def _build_failed_run_artifact(
@@ -224,24 +225,51 @@ class PipelineOrchestrator:
         return {sid: r.duration_seconds for sid, r in self._stage_results.items() if not r.skipped}
 
     def _collect_total_tokens(self) -> int:
-        return sum(
-            getattr(r.agent_result, "tokens_used", 0)
-            for r in self._stage_results.values()
-            if r.agent_result
-        )
+        return self._collect_token_usage()[2]
 
-    def _run_post_run_analysis(self, run_artifact: PipelineRunArtifact, total_tokens: int) -> None:
+    def _collect_token_usage(self) -> tuple[int, int, int]:
+        """Aggregate exact provider-reported usage from successful stages."""
+        input_tokens = 0
+        output_tokens = 0
+        unclassified_tokens = 0
+        for result in self._stage_results.values():
+            agent_result = result.agent_result
+            if not agent_result or not result.success:
+                continue
+            stage_input = int(agent_result.metadata.get("input_tokens", 0) or 0)
+            stage_output = int(agent_result.metadata.get("output_tokens", 0) or 0)
+            input_tokens += stage_input
+            output_tokens += stage_output
+            reported_total = int(getattr(agent_result, "tokens_used", 0) or 0)
+            if not stage_input and not stage_output:
+                unclassified_tokens += reported_total
+        return input_tokens, output_tokens, input_tokens + output_tokens + unclassified_tokens
+
+    def _run_post_run_analysis(
+        self,
+        run_artifact: PipelineRunArtifact,
+        input_tokens: int,
+        output_tokens: int,
+        total_tokens: int,
+    ) -> None:
         quality_scores = self._safe_extract_quality_scores()
         coverage_pct = self._safe_run_coverage_analysis()
-        estimated_cost = self._safe_estimate_run_cost(total_tokens)
+        estimated_cost = self._safe_estimate_run_cost(
+            input_tokens, output_tokens, total_tokens
+        )
         cache_hit_rate = self._safe_collect_cache_hit_rate()
+        llm_cfg = self._config.get("llm", self._config.get("ollama", {}))
 
         try:
             metrics = self._metrics_collector.collect(
                 run_artifact,
                 quality_scores=quality_scores,
                 token_count=total_tokens,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
                 estimated_cost=estimated_cost,
+                llm_provider=str(llm_cfg.get("provider", "ollama")),
+                llm_model=str(llm_cfg.get("model", "")),
                 coverage_pct=coverage_pct,
                 cache_hit_rate=cache_hit_rate,
             )
@@ -271,9 +299,11 @@ class PipelineOrchestrator:
             logger.warning("Post-run coverage analysis failed: %s", exc)
             return 0.0
 
-    def _safe_estimate_run_cost(self, total_tokens: int) -> float:
+    def _safe_estimate_run_cost(
+        self, input_tokens: int, output_tokens: int, total_tokens: int
+    ) -> float:
         try:
-            return self._estimate_run_cost(total_tokens)
+            return self._estimate_run_cost(input_tokens, output_tokens, total_tokens)
         except (ImportError, KeyError, ValueError) as exc:
             logger.warning("Post-run cost estimation failed: %s", exc)
             return 0.0
@@ -662,11 +692,12 @@ class PipelineOrchestrator:
 
         return report.overall_coverage
 
-    def _estimate_run_cost(self, total_tokens: int) -> float:
+    def _estimate_run_cost(
+        self, input_tokens: int, output_tokens: int, total_tokens: int
+    ) -> float:
         """Estimate LLM cost for this run based on provider/model config.
 
-        The input/output token split ratio is configurable via
-        ``metrics.input_token_ratio`` (default 0.4 = 40% input, 60% output).
+        Uses exact input/output counts reported by the configured provider.
         """
         try:
             from stlc_platform.core.llm.pricing import estimate_cost
@@ -674,11 +705,14 @@ class PipelineOrchestrator:
             llm_cfg = self._config.get("llm", self._config.get("ollama", {}))
             provider = llm_cfg.get("provider", "ollama")
             model = llm_cfg.get("model", "")
-            metrics_cfg = self._config.get("metrics", {})
-            input_ratio = float(metrics_cfg.get("input_token_ratio", 0.4))
-            input_ratio = max(0.0, min(1.0, input_ratio))
-            input_tokens = int(total_tokens * input_ratio)
-            output_tokens = total_tokens - input_tokens
+            unclassified = max(0, total_tokens - input_tokens - output_tokens)
+            if unclassified:
+                metrics_cfg = self._config.get("metrics", {})
+                input_ratio = float(metrics_cfg.get("input_token_ratio", 0.4))
+                input_ratio = max(0.0, min(1.0, input_ratio))
+                estimated_input = int(unclassified * input_ratio)
+                input_tokens += estimated_input
+                output_tokens += unclassified - estimated_input
             return estimate_cost(provider, model, input_tokens, output_tokens)
         except (ImportError, KeyError, ValueError, TypeError) as exc:
             logger.debug("Cost estimation unavailable: %s", exc)

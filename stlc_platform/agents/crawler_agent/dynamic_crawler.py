@@ -297,19 +297,28 @@ class DynamicCrawler:
 
         page.on("response", _response_handler)
         try:
-            wait_strategy = "networkidle" if self.wait_for_idle else "domcontentloaded"
-            page.goto(url, wait_until=wait_strategy)
+            # Always use domcontentloaded for the initial goto — using networkidle
+            # causes an indefinite hang on Cloudflare-protected sites because the
+            # CF JS challenge continuously fires network requests and networkidle
+            # never fires within the timeout, causing a TimeoutError that swallows
+            # the page entirely (result.pages stays empty → "no pages" failure).
+            page.goto(url, wait_until="domcontentloaded")
 
-            # If Cloudflare served a JS challenge (cf-mitigated header / challenge page),
-            # wait for it to resolve and the real page to load.
+            # If Cloudflare served a JS challenge (cf-mitigated header / challenge
+            # page), wait for it to auto-resolve then settle the real page.
             if self._is_cloudflare_challenge(page):
                 logger.info("Cloudflare challenge detected at %s — waiting for resolution…", url)
                 page.wait_for_timeout(6000)   # CF challenges typically resolve in 3–5 s
-                # Wait again for network to settle after the redirect
                 try:
                     page.wait_for_load_state("networkidle", timeout=15000)
                 except Exception:
-                    pass
+                    pass  # If still not idle after 15 s, extract whatever is rendered
+            elif self.wait_for_idle:
+                # Non-CF page: honour the wait_for_network_idle config for SPAs
+                try:
+                    page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
+                except Exception:
+                    pass  # Partial load is fine — extract what rendered
 
             page.wait_for_timeout(500)
 

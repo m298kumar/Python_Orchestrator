@@ -33,7 +33,11 @@ class RunMetrics:
         default_factory=lambda: {"excellent": 0, "good": 0, "fair": 0, "poor": 0}
     )
     tokens_used: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
     estimated_cost_usd: float = 0.0
+    llm_provider: str = ""
+    llm_model: str = ""
     cache_hit_rate: float = 0.0
     generation_time_seconds: float = 0.0
     per_stage_durations: Dict[str, float] = field(default_factory=dict)
@@ -66,7 +70,11 @@ class MetricsCollector:
         run_artifact: Any,
         quality_scores: Optional[List[float]] = None,
         token_count: int = 0,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
         estimated_cost: float = 0.0,
+        llm_provider: str = "",
+        llm_model: str = "",
         cache_hit_rate: float = 0.0,
         coverage_pct: float = 0.0,
         per_ac_type_scores: Optional[Dict[str, float]] = None,
@@ -93,7 +101,11 @@ class MetricsCollector:
             avg_quality_score=round(avg_score, 4),
             quality_distribution=distribution,
             tokens_used=token_count or getattr(run_artifact, "total_tokens_used", 0),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
             estimated_cost_usd=round(estimated_cost, 6),
+            llm_provider=llm_provider,
+            llm_model=llm_model,
             cache_hit_rate=round(cache_hit_rate, 4),
             generation_time_seconds=getattr(run_artifact, "total_duration_seconds", 0.0),
             per_stage_durations=getattr(run_artifact, "stage_durations", {}),

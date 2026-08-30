@@ -14,7 +14,7 @@ from stlc_platform.agents.requirements_agent.component_resolver import Component
 from stlc_platform.agents.requirements_agent.domain_detector import DomainDetector
 from stlc_platform.agents.requirements_agent.generator import TestCaseGenerator
 from stlc_platform.agents.requirements_agent.prompts import PromptRenderer
-from stlc_platform.agents.requirements_agent.sanitiser import TestCaseSanitiser
+from stlc_platform.agents.requirements_agent.sanitiser import SanitiserConfig, TestCaseSanitiser
 from stlc_platform.agents.requirements_agent.tech_stack import TechStackContext
 from stlc_platform.core.base_agent import (
     AgentCapabilities,
@@ -23,6 +23,7 @@ from stlc_platform.core.base_agent import (
     ValidationResult,
 )
 from stlc_platform.core.contracts import TestCaseArtifact  # noqa: F401 — re-exported
+from stlc_platform.core.specifications import SpecificationLoader
 
 
 class TestGenerationAgent(BaseAgent):
@@ -114,6 +115,14 @@ class TestGenerationAgent(BaseAgent):
         vector_store = artifacts.get("vector_store")
         feedback_store = artifacts.get("feedback_store")
 
+        spec_loader = SpecificationLoader(config)
+        test_case_spec = None
+        if config.get("specifications"):
+            try:
+                test_case_spec = spec_loader.load("test_cases")
+            except (OSError, ValueError) as exc:
+                return AgentResult(success=False, errors=[f"Specification validation failed: {exc}"])
+
         # Attach LLM response cache if not already set (Fix #4)
         if not getattr(llm_client, "_cache", None):
             try:
@@ -142,16 +151,36 @@ class TestGenerationAgent(BaseAgent):
                 pass  # fall back to defaults
 
         # Wire up generator with all dependencies
+        generation_cfg = config.get("test_generation", {}) or {}
+        ac_types_raw = generation_cfg.get("ac_types")
+        if isinstance(ac_types_raw, dict):
+            ac_types_raw = [
+                {"name": name, **(details or {})} for name, details in ac_types_raw.items()
+            ]
+        classifier = artifacts.get("classifier") or (
+            ACClassifier.from_config(ac_types_raw) if ac_types_raw else ACClassifier()
+        )
+        component_resolver = artifacts.get("component_resolver") or ComponentResolver(
+            suffix_map=generation_cfg.get("component_suffix_map"), vector_store=vector_store
+        )
+        sanitiser_raw = generation_cfg.get("sanitiser", {}) or {}
+        sanitiser_config = SanitiserConfig(
+            min_description_length=int(sanitiser_raw.get("min_desc_length", 15)),
+            min_step_action_length=int(sanitiser_raw.get("min_step_length", 20)),
+            min_good_steps=int(sanitiser_raw.get("min_step_count", 3)),
+        )
         generator = TestCaseGenerator(
             llm_client=llm_client,
-            prompt_renderer=artifacts.get("prompt_renderer") or PromptRenderer(),
-            classifier=artifacts.get("classifier") or ACClassifier(),
-            sanitiser=artifacts.get("sanitiser") or TestCaseSanitiser(),
-            component_resolver=artifacts.get("component_resolver")
-            or ComponentResolver(
-                vector_store=vector_store,
+            prompt_renderer=artifacts.get("prompt_renderer")
+            or PromptRenderer(guardrail_text=test_case_spec.content if test_case_spec else ""),
+            classifier=classifier,
+            sanitiser=artifacts.get("sanitiser")
+            or TestCaseSanitiser(
+                config=sanitiser_config, component_resolver=component_resolver
             ),
-            domain_detector=artifacts.get("domain_detector") or DomainDetector(),
+            component_resolver=component_resolver,
+            domain_detector=artifacts.get("domain_detector")
+            or DomainDetector.from_config(generation_cfg.get("domain_keywords")),
             tech_stack=tech_stack,
             vector_store=vector_store,
             domain=config.get("domain", "") or artifacts.get("domain", ""),
@@ -160,10 +189,26 @@ class TestGenerationAgent(BaseAgent):
         )
 
         # Extract config
-        max_tests = config.get("max_tests", 6)
-        include_negative = config.get("include_negative", True)
-        include_edge = config.get("include_edge", True)
-        tc_format = config.get("tc_format", "gherkin")
+        max_tests = config.get("max_tests", generation_cfg.get("max_per_requirement", 6))
+        include_negative = config.get(
+            "include_negative", generation_cfg.get("include_negative", True)
+        )
+        include_edge = config.get(
+            "include_edge", generation_cfg.get("include_edge_cases", True)
+        )
+        tc_format = config.get("tc_format", generation_cfg.get("format", "gherkin"))
+
+        # The runtime client is shared between pipeline runs. Capture a baseline
+        # so this stage reports only the calls made during the current run,
+        # rather than the client's lifetime cumulative usage.
+        starting_input_tokens = 0
+        starting_output_tokens = 0
+        try:
+            starting_usage = llm_client.accumulated_tokens
+            starting_input_tokens = int(starting_usage.input_tokens)
+            starting_output_tokens = int(starting_usage.output_tokens)
+        except AttributeError:
+            pass
 
         try:
             test_cases = generator.generate_for_all(
@@ -173,6 +218,13 @@ class TestGenerationAgent(BaseAgent):
                 include_edge=include_edge,
                 tc_format=tc_format,
             )
+            specification_versions = {}
+            if test_case_spec:
+                specification_versions[test_case_spec.specification_id] = test_case_spec.version
+                test_cases = [
+                    tc.model_copy(update={"specification_versions": specification_versions})
+                    for tc in test_cases
+                ]
 
             # Collect token usage from the LLM client (Phase C)
             tokens_used = 0
@@ -180,9 +232,13 @@ class TestGenerationAgent(BaseAgent):
             output_tokens = 0
             try:
                 accumulated = llm_client.accumulated_tokens
-                tokens_used = accumulated.total_tokens
-                input_tokens = accumulated.input_tokens
-                output_tokens = accumulated.output_tokens
+                input_tokens = max(
+                    0, int(accumulated.input_tokens) - starting_input_tokens
+                )
+                output_tokens = max(
+                    0, int(accumulated.output_tokens) - starting_output_tokens
+                )
+                tokens_used = input_tokens + output_tokens
             except AttributeError:
                 pass
 
@@ -197,7 +253,9 @@ class TestGenerationAgent(BaseAgent):
                     "tokens_used": tokens_used,
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
+                    "specification_versions": specification_versions,
                 },
+                tokens_used=tokens_used,
             )
 
         except Exception as e:

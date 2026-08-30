@@ -21,10 +21,12 @@ import {
   approveTestCase,
   rejectTestCase,
   updateTestCase,
+  revalidateTestCase,
   bulkApproveTestCases,
   bulkRejectTestCases,
   type TestCase,
   type PipelineRunSummary,
+  getConfig,
 } from '../api/client';
 import { exportToCSV, exportToJSON } from '../utils/export';
 
@@ -112,22 +114,26 @@ interface RowProps {
   selected: boolean;
   runColorIdx: number;
   runLabel: string;
+  qualityThreshold: number;
   onToggle: () => void;
   onSelect: (tcId: string) => void;
-  onApprove: (tcId: string) => void;
-  onReject: (tcId: string) => void;
-  onSave: (tcId: string, data: Partial<TestCase>) => void;
+  onApprove: (tc: TestCase) => void;
+  onReject: (tc: TestCase) => void;
+  onSave: (tc: TestCase, data: Partial<TestCase>) => void;
 }
 
 function TestCaseRow({
-  tc, expanded, selected, runColorIdx, runLabel,
+  tc, expanded, selected, runColorIdx, runLabel, qualityThreshold,
   onToggle, onSelect, onApprove, onReject, onSave,
 }: RowProps) {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(tc.title);
   const [editSteps, setEditSteps] = useState(tc.steps ?? []);
 
-  const handleSave = () => { onSave(tc.tc_id, { title: editTitle, steps: editSteps }); setEditing(false); };
+  const handleSave = () => { onSave(tc, { title: editTitle, steps: editSteps }); setEditing(false); };
+  const eligible = tc.quality_validated !== false
+    && tc.quality_score >= qualityThreshold
+    && (tc.quality_issues?.length ?? 0) === 0;
   const handleCancelEdit = () => { setEditTitle(tc.title); setEditSteps(tc.steps ?? []); setEditing(false); };
   const updateStep = (idx: number, field: 'action' | 'expected_result', value: string) =>
     setEditSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: value } : s)));
@@ -179,12 +185,12 @@ function TestCaseRow({
         <td className="px-4 py-3"><StatusBadge status={tc.status} size="sm" /></td>
         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-1">
-            <button onClick={() => onApprove(tc.tc_id)}
-              className="p-1 rounded text-green-500 hover:bg-green-50 dark:hover:bg-green-900/30"
-              title="Approve" aria-label={`Approve ${tc.tc_id}`}>
+            <button onClick={() => onApprove(tc)} disabled={!eligible}
+              className="p-1 rounded text-green-500 hover:bg-green-50 dark:hover:bg-green-900/30 disabled:text-gray-300 disabled:cursor-not-allowed"
+              title={eligible ? 'Approve and promote to RAG' : 'Resolve quality validation before approval'} aria-label={`Approve ${tc.tc_id}`}>
               <Check className="h-4 w-4" />
             </button>
-            <button onClick={() => onReject(tc.tc_id)}
+            <button onClick={() => onReject(tc)}
               className="p-1 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"
               title="Reject" aria-label={`Reject ${tc.tc_id}`}>
               <XCircle className="h-4 w-4" />
@@ -312,8 +318,11 @@ function TestCaseRow({
                   {tc.quality_score > 0 && (
                     <div>
                       <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Quality Score</span>
-                      <p className={`text-sm font-medium mt-0.5 ${tc.quality_score >= 0.7 ? 'text-green-600' : tc.quality_score >= 0.4 ? 'text-yellow-600' : 'text-red-600'}`}>
+                      <p className={`text-sm font-medium mt-0.5 ${tc.quality_score >= qualityThreshold ? 'text-green-600' : tc.quality_score >= 0.4 ? 'text-yellow-600' : 'text-red-600'}`}>
                         {(tc.quality_score * 100).toFixed(0)}%
+                      </p>
+                      <p className={`text-xs mt-1 ${eligible ? 'text-green-600' : 'text-red-600'}`}>
+                        {eligible ? 'Eligible for approval and RAG' : 'Not eligible for RAG promotion'}
                       </p>
                     </div>
                   )}
@@ -328,6 +337,19 @@ function TestCaseRow({
                     </div>
                   )}
                 </div>
+                {(tc.quality_issues?.length ?? 0) > 0 && (
+                  <div className="rounded border border-red-200 bg-red-50 dark:bg-red-900/20 p-3">
+                    <p className="text-xs font-semibold text-red-700 dark:text-red-300 uppercase">Quality issues</p>
+                    <ul className="mt-1 list-disc pl-5 text-sm text-red-700 dark:text-red-300">
+                      {tc.quality_issues.map((issue) => <li key={issue}>{issue}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {tc.rag_example_id && (
+                  <p className="text-xs text-green-700 dark:text-green-300">
+                    Persisted RAG example: <span className="font-mono">{tc.rag_example_id}</span>
+                  </p>
+                )}
               </div>
             )}
           </td>
@@ -357,6 +379,8 @@ export default function TestCases() {
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [qualityThreshold, setQualityThreshold] = useState(0.65);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Helper to build a unique row key from a test case
   const rowKey = (tc: TestCase) => `${tc.tc_id}::${tc.run_id ?? ''}`;
@@ -416,12 +440,14 @@ export default function TestCases() {
     (async () => {
       setLoading(true);
       try {
-        const [tcRes, runRes] = await Promise.all([
+        const [tcRes, runRes, configRes] = await Promise.all([
           listTestCases(),
           listPipelineRuns(),
+          getConfig(),
         ]);
         setAllTestCases(tcRes.data);
         setRuns(runRes.data);
+        setQualityThreshold(Number(configRes.data.quality_gate?.accept_threshold ?? 0.65));
         setError(null);
       } catch (err: any) {
         setError(err.message ?? 'Failed to load test cases');
@@ -440,28 +466,39 @@ export default function TestCases() {
   };
 
   const handleBulkApprove = useCallback(async () => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return;
+    const selected = allTestCases.filter((tc) => selectedIds.has(rowKey(tc)));
+    const eligible = selected.filter((tc) => tc.run_id && tc.quality_validated !== false
+      && tc.quality_score >= qualityThreshold && !(tc.quality_issues?.length));
+    if (!eligible.length) { setError('No selected test cases are eligible for RAG promotion.'); return; }
+    const reason = window.prompt(`Approve ${eligible.length} eligible test case(s) and promote them to persistent RAG? Enter an approval reason:`);
+    if (reason === null || !window.confirm(`${eligible.length} eligible case(s) will be promoted to ChromaDB. Continue?`)) return;
     try {
-      const res = await bulkApproveTestCases(ids);
+      const res = await bulkApproveTestCases(eligible.map((tc) => ({ tc_id: tc.tc_id, run_id: tc.run_id! })), reason);
+      const succeeded = res.data.results.filter((item) => item.success);
       setAllTestCases((prev) =>
-        prev.map((tc) => res.data.updated.includes(tc.tc_id) ? { ...tc, status: 'approved' } : tc)
+        prev.map((tc) => succeeded.some((item) => item.tc_id === tc.tc_id && item.run_id === tc.run_id)
+          ? { ...tc, status: 'approved', rag_example_id: succeeded.find((item) => item.tc_id === tc.tc_id && item.run_id === tc.run_id)?.rag_example_id }
+          : tc)
       );
+      setNotice(`${succeeded.length} approved and persisted to RAG; ${res.data.results.length - succeeded.length} failed.`);
       setSelectedIds(new Set());
     } catch (err: any) { setError(err.message ?? 'Bulk approve failed'); }
-  }, [selectedIds]);
+  }, [selectedIds, allTestCases, qualityThreshold]);
 
   const handleBulkReject = useCallback(async () => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return;
+    const selected = allTestCases.filter((tc) => selectedIds.has(rowKey(tc)) && tc.run_id);
+    if (!selected.length) return;
+    const reason = window.prompt(`Reject ${selected.length} selected test case(s). Enter a reason:`);
+    if (reason === null) return;
     try {
-      const res = await bulkRejectTestCases(ids);
+      const res = await bulkRejectTestCases(selected.map((tc) => ({ tc_id: tc.tc_id, run_id: tc.run_id! })), reason);
+      const succeeded = res.data.results.filter((item) => item.success);
       setAllTestCases((prev) =>
-        prev.map((tc) => res.data.updated.includes(tc.tc_id) ? { ...tc, status: 'rejected' } : tc)
+        prev.map((tc) => succeeded.some((item) => item.tc_id === tc.tc_id && item.run_id === tc.run_id) ? { ...tc, status: 'rejected' } : tc)
       );
       setSelectedIds(new Set());
     } catch (err: any) { setError(err.message ?? 'Bulk reject failed'); }
-  }, [selectedIds]);
+  }, [selectedIds, allTestCases]);
 
   const filtered = useMemo(() => {
     return allTestCases.filter((tc) => {
@@ -481,24 +518,34 @@ export default function TestCases() {
     );
   }, [filtered]);
 
-  const handleApprove = async (tcId: string) => {
+  const handleApprove = async (tc: TestCase) => {
+    if (!tc.run_id) { setError('This legacy test case has no run ID and cannot be safely approved.'); return; }
+    const reason = window.prompt(`Approve ${tc.tc_id} from run ${shortRunId(tc.run_id)} and promote it to persistent RAG? Enter an approval reason:`);
+    if (reason === null || !window.confirm('This will persist the approved example in ChromaDB. Continue?')) return;
     try {
-      await approveTestCase(tcId);
-      setAllTestCases((prev) => prev.map((tc) => tc.tc_id === tcId ? { ...tc, status: 'approved' } : tc));
+      const res = await approveTestCase(tc.tc_id, tc.run_id, reason);
+      setAllTestCases((prev) => prev.map((item) => rowKey(item) === rowKey(tc) ? res.data : item));
+      setNotice(`Approved and promoted to RAG as ${res.data.rag_example_id}.`);
     } catch (err: any) { setError(err.message ?? 'Failed to approve'); }
   };
 
-  const handleReject = async (tcId: string) => {
+  const handleReject = async (tc: TestCase) => {
+    if (!tc.run_id) { setError('This legacy test case has no run ID and cannot be safely rejected.'); return; }
+    const reason = window.prompt(`Reject ${tc.tc_id}. Enter a reason:`);
+    if (reason === null) return;
     try {
-      await rejectTestCase(tcId);
-      setAllTestCases((prev) => prev.map((tc) => tc.tc_id === tcId ? { ...tc, status: 'rejected' } : tc));
+      const res = await rejectTestCase(tc.tc_id, tc.run_id, reason);
+      setAllTestCases((prev) => prev.map((item) => rowKey(item) === rowKey(tc) ? res.data : item));
     } catch (err: any) { setError(err.message ?? 'Failed to reject'); }
   };
 
-  const handleSave = async (tcId: string, data: Partial<TestCase>) => {
+  const handleSave = async (tc: TestCase, data: Partial<TestCase>) => {
+    if (!tc.run_id) { setError('This legacy test case has no run ID and cannot be safely edited.'); return; }
     try {
-      await updateTestCase(tcId, data);
-      setAllTestCases((prev) => prev.map((tc) => tc.tc_id === tcId ? { ...tc, ...data } : tc));
+      await updateTestCase(tc.tc_id, tc.run_id, data);
+      const res = await revalidateTestCase(tc.tc_id, tc.run_id);
+      setAllTestCases((prev) => prev.map((item) => rowKey(item) === rowKey(tc) ? res.data : item));
+      setNotice(`Saved and revalidated ${tc.tc_id}; new quality score ${(res.data.quality_score * 100).toFixed(0)}%.`);
     } catch (err: any) { setError(err.message ?? 'Failed to update'); }
   };
 
@@ -521,6 +568,12 @@ export default function TestCases() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {notice && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200">
+          {notice}
+          <button onClick={() => setNotice(null)} className="float-right" aria-label="Dismiss notification">×</button>
+        </div>
+      )}
       {error && (
         <div role="alert" className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center justify-between">
           <span className="text-sm">{error}</span>
@@ -734,6 +787,7 @@ export default function TestCases() {
                       selected={selectedIds.has(rk)}
                       runColorIdx={runColorIdx}
                       runLabel={runLabel}
+                      qualityThreshold={qualityThreshold}
                       onToggle={() => setExpandedId(expandedId === rk ? null : rk)}
                       onSelect={() => toggleSelect(rk)}
                       onApprove={handleApprove}

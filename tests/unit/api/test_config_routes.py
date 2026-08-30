@@ -52,6 +52,8 @@ class TestGetConfig:
         assert "project" in data
         assert "llm" in data
         assert "output" in data
+        assert "specifications" in data
+        assert "review" in data
 
     def test_values_are_dicts(self, client: TestClient):
         data = client.get("/api/config/").json()
@@ -139,6 +141,29 @@ class TestStructuredUpdate:
         data = client.get("/api/config/").json()
         assert data["output"]["output_dir"] == "/tmp/out"
         assert data["llm"]["model"] == "combined-model"
+
+    def test_new_sections_and_advanced_values_round_trip(self, client: TestClient):
+        response = client.put(
+            "/api/config/",
+            json={
+                "specifications": {"enforce": True, "bdd": "docs/custom-bdd.md"},
+                "review": {"sqlite_path": "output/review/custom.sqlite3"},
+                "crawler": {"timeout_ms": 45000, "verify_ssl": False},
+                "bdd": {"pom_language": "java"},
+                "test_generation": {
+                    "domain_keywords": {"travel": ["booking"]},
+                    "component_suffix_map": {"booking": "Booking Page"},
+                },
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["specifications"]["bdd"] == "docs/custom-bdd.md"
+        assert data["review"]["sqlite_path"].endswith("custom.sqlite3")
+        assert data["crawler"]["timeout_ms"] == 45000
+        assert data["crawler"]["verify_ssl"] is False
+        assert data["bdd"]["pom_language"] == "java"
+        assert data["test_generation"]["domain_keywords"]["travel"] == ["booking"]
 
 
 # ---------------------------------------------------------------------------

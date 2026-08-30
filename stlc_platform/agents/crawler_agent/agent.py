@@ -262,7 +262,16 @@ class CrawlerAgent(BaseAgent):
         """Perform a dynamic Playwright crawl and return a SiteModelArtifact."""
         crawler_cfg = config.get("crawler", config)
         auth_raw = crawler_cfg.get("auth", config.get("auth_config")) or {}
-        auth_config = auth_raw if isinstance(auth_raw, dict) and any(auth_raw.values()) else None
+        # A partially filled UI form is not a usable authentication setup.  In
+        # particular, a stale password alone previously made the crawler visit
+        # the home page as a login page and wait for the default #username
+        # selector until timeout.
+        auth_config = None
+        if isinstance(auth_raw, dict):
+            username = str(auth_raw.get("username", "") or "").strip()
+            password = str(auth_raw.get("password", "") or "").strip()
+            if username and password:
+                auth_config = auth_raw
         crawler = DynamicCrawler(
             base_url=base_url_input,
             max_depth=int(crawler_cfg.get("max_depth", 3)),
@@ -270,7 +279,7 @@ class CrawlerAgent(BaseAgent):
             headless=bool(crawler_cfg.get("headless", True)),
             wait_for_idle=bool(crawler_cfg.get("wait_for_network_idle", True)),
             capture_screenshots=bool(crawler_cfg.get("capture_screenshots", False)),
-            timeout_ms=int(crawler_cfg.get("rate_limit_ms", 30000)),
+            timeout_ms=int(crawler_cfg.get("timeout_ms", 30000)),
             auth_config=auth_config,
         )
         crawl_result = crawler.crawl()

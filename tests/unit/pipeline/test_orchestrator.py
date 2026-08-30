@@ -96,6 +96,22 @@ def _parallel_dag():
     )
 
 
+def test_explicit_run_id_is_preserved():
+    dag = PipelineDAG(
+        stages=[StageNode(stage_id="one", agent_id="agent", input_map={})],
+        pipeline_name="single",
+    )
+    registry = _make_registry({"agent": _make_mock_agent()})
+    orchestrator = PipelineOrchestrator(
+        dag=dag,
+        registry=registry,
+        run_id="api-run-123",
+    )
+
+    assert orchestrator.run_id == "api-run-123"
+    assert orchestrator.run().run_id == "api-run-123"
+
+
 # ── Tests ────────────────────────────────────────────────────────────────────
 
 

@@ -236,6 +236,8 @@ class TestCaseScorer:
         executability = self._score_executability(tc, issues)
         uniqueness = self._score_uniqueness(tc, existing_tcs or [], issues)
         structural = self._score_structural(tc, issues)
+        semantic_issues = self._check_semantics(tc, slot, requirement)
+        issues.extend(semantic_issues)
 
         dimensions = {
             "coverage": coverage,
@@ -247,8 +249,13 @@ class TestCaseScorer:
 
         weights = self._config.weights
         overall = sum(dimensions[dim] * weights.get(dim, 0.0) for dim in dimensions)
+        # Semantic contradictions are cross-field defects that dimension-level
+        # structure/keyword scores cannot capture. Penalise them explicitly.
+        overall = max(0.0, overall - min(0.70, 0.35 * len(semantic_issues)))
 
-        if overall >= self._config.accept_threshold:
+        if semantic_issues:
+            suggestion = "regenerate"
+        elif overall >= self._config.accept_threshold:
             suggestion = "accept"
         elif overall >= self._config.regenerate_threshold:
             suggestion = "regenerate"
@@ -261,6 +268,94 @@ class TestCaseScorer:
             issues=issues,
             suggestion=suggestion,
         )
+
+    def _check_semantics(
+        self,
+        tc: TestCaseArtifact,
+        slot: Dict[str, str],
+        requirement: Any,
+    ) -> List[str]:
+        """Detect deterministic contradictions between an AC and its test case."""
+        if requirement is None:
+            return []
+
+        ac = str(slot.get("target_ac", "") or "").lower()
+        test_type = str(slot.get("test_type", tc.test_type) or "").lower()
+        setup_text = " ".join(
+            [tc.preconditions or "", tc.given or ""]
+            + [step.action or "" for step in tc.steps]
+        ).lower()
+        issues: List[str] = []
+
+        public_markers = ("publicly accessible", "without prior authentication", "no authentication")
+        if any(marker in ac for marker in public_markers) and any(
+            marker in setup_text
+            for marker in ("logged in", "log in", "valid credentials", "authenticated user")
+        ):
+            issues.append(
+                "Semantic contradiction: public/unauthenticated behavior requires authentication"
+            )
+
+        success_markers = ("on successful", "successfully", "is redirected", "redirected to")
+        if any(marker in ac for marker in success_markers) and test_type == "negative":
+            issues.append(
+                "Semantic mismatch: success-path acceptance criterion assigned a negative test"
+            )
+
+        boundary_markers = (
+            "minimum",
+            "maximum",
+            "at least",
+            "at most",
+            "shorter",
+            "longer",
+            "length",
+            "range",
+            "limit",
+            "threshold",
+        )
+        has_numeric_boundary = bool(re.search(r"\b\d+(?:\.\d+)?\b", ac))
+        if test_type == "edge_case" and not (
+            has_numeric_boundary or any(marker in ac for marker in boundary_markers)
+        ):
+            issues.append(
+                "Semantic mismatch: edge-case test uses boundary language for a non-boundary AC"
+            )
+
+        if "email" in ac and any(word in ac for word in ("invalid", "malformed", "format")):
+            email_candidates = re.findall(r"[\w.+-]+@[\w.-]+", setup_text)
+            for email in email_candidates:
+                valid_email = bool(
+                    re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
+                                 r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", email)
+                )
+                expected_text = " ".join(
+                    step.expected_result or "" for step in tc.steps if email in step.action
+                ).lower()
+                if not valid_email and any(
+                    word in expected_text for word in ("accept", "success", "redirect")
+                ):
+                    issues.append(
+                        "Semantic contradiction: malformed email is expected to be accepted"
+                    )
+                    break
+
+        if "no account record" in ac:
+            verification_actions = " ".join(step.action or "" for step in tc.steps).lower()
+            persistence_checks = (
+                "database",
+                "record count",
+                "query the account",
+                "api response",
+                "attempt to log in",
+                "search for the account",
+            )
+            if not any(check in verification_actions for check in persistence_checks):
+                issues.append(
+                    "Semantic gap: no account-record assertion has no persistence verification step"
+                )
+
+        return issues
 
     # ── Dimension scorers ────────────────────────────────────────────────────
 

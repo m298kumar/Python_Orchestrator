@@ -21,6 +21,7 @@ from stlc_platform.core.base_agent import (
     BaseAgent,
     ValidationResult,
 )
+from stlc_platform.core.specifications import SpecificationLoader
 
 
 class BDDAgent(BaseAgent):
@@ -80,19 +81,76 @@ class BDDAgent(BaseAgent):
             return AgentResult(success=False, errors=validation.errors)
 
         test_cases = artifacts["test_cases"]
-        framework = config.get("framework", "behave")
-        language = config.get(
+        bdd_cfg = {**config, **(config.get("bdd", {}) or {})}
+        specification_versions: Dict[str, str] = {}
+        quarantined_test_cases: List[str] = []
+        if config.get("specifications"):
+            try:
+                loader = SpecificationLoader(config)
+                tc_spec = loader.load("test_cases")
+                bdd_spec = loader.load("bdd")
+                specification_versions = {
+                    tc_spec.specification_id: tc_spec.version,
+                    bdd_spec.specification_id: bdd_spec.version,
+                }
+            except (OSError, ValueError) as exc:
+                return AgentResult(success=False, errors=[f"Specification validation failed: {exc}"])
+            if loader.enforce:
+                threshold = float(
+                    (config.get("quality_gate", {}) or {}).get("accept_threshold", 0.65)
+                )
+                quarantined_test_cases = [
+                    tc.tc_id
+                    for tc in test_cases
+                    if float(getattr(tc, "quality_score", 0.0)) < threshold
+                    or any(
+                        "semantic" in str(issue).lower()
+                        for issue in (getattr(tc, "quality_issues", []) or [])
+                    )
+                ]
+                if quarantined_test_cases:
+                    test_cases = [
+                        tc for tc in test_cases if tc.tc_id not in quarantined_test_cases
+                    ]
+                if not test_cases:
+                    return AgentResult(
+                        success=False,
+                        errors=[
+                            "BDD input violates the approved test-case specification; "
+                            "no eligible test cases remain after quarantining: "
+                            f"{', '.join(quarantined_test_cases)}"
+                        ],
+                    )
+        framework = str(bdd_cfg.get("framework", "behave")).lower()
+        framework = {
+            "cucumber": "cucumber_java",
+            "cucumber-java": "cucumber_java",
+            "cucumber_js": "cucumberjs",
+            "cucumber-js": "cucumberjs",
+        }.get(framework, framework)
+        language = bdd_cfg.get(
             "language",
             StepDefinitionGenerator.SUPPORTED_FRAMEWORKS.get(framework, "python"),
         )
-        automation_lib = config.get("automation_lib", "playwright")
+        automation_lib = bdd_cfg.get("automation_lib", "playwright")
+        pom_language = bdd_cfg.get("pom_language", language)
         selector_map = self._build_selector_map(artifacts.get("site_model"))
 
         try:
             feature_files, validation_warnings = self._generate_and_validate_features(
                 test_cases,
-                config,
+                bdd_cfg,
             )
+            if quarantined_test_cases:
+                validation_warnings.append(
+                    "Excluded test cases that failed the semantic quality gate: "
+                    + ", ".join(quarantined_test_cases)
+                )
+            if specification_versions:
+                feature_files = [
+                    ff.model_copy(update={"specification_versions": specification_versions})
+                    for ff in feature_files
+                ]
             parameterized_steps = self._parse_and_parameterize_steps(feature_files)
             step_defs = self._generate_step_defs(
                 parameterized_steps,
@@ -100,19 +158,19 @@ class BDDAgent(BaseAgent):
                 framework,
                 language,
                 automation_lib,
-                config,
+                bdd_cfg,
                 selector_map,
             )
             pom_stubs = self._generate_pom_stubs(
                 test_cases,
-                language,
+                pom_language,
                 automation_lib,
-                config,
+                bdd_cfg,
                 artifacts,
             )
             project = self._scaffold_project_if_requested(
                 framework,
-                config,
+                bdd_cfg,
                 feature_files,
                 step_defs,
                 pom_stubs,
@@ -126,8 +184,11 @@ class BDDAgent(BaseAgent):
                 framework,
                 language,
                 automation_lib,
+                pom_language,
                 selector_map,
                 validation_warnings,
+                specification_versions,
+                quarantined_test_cases,
             )
         except Exception as e:
             return AgentResult(success=False, errors=[f"BDD generation failed: {e}"])
@@ -258,8 +319,11 @@ class BDDAgent(BaseAgent):
         framework,
         language,
         automation_lib,
+        pom_language,
         selector_map,
         validation_warnings,
+        specification_versions=None,
+        quarantined_test_cases=None,
     ) -> AgentResult:
         total_scenarios = sum(ff.scenario_count for ff in feature_files)
         total_step_defs = sum(sd.step_count for sd in step_defs)
@@ -285,8 +349,11 @@ class BDDAgent(BaseAgent):
                 "framework": framework,
                 "language": language,
                 "automation_lib": automation_lib,
+                "pom_language": pom_language,
                 "selectors_injected": len(selector_map) if selector_map else 0,
                 "validation_warnings": validation_warnings,
+                "specification_versions": specification_versions or {},
+                "quarantined_test_cases": quarantined_test_cases or [],
             },
         )
 

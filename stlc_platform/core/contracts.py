@@ -30,6 +30,7 @@ class RequirementArtifact(BaseModel):
     acceptance_criteria: List[str] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
     raw_text: str = ""
+    specification_versions: Dict[str, str] = Field(default_factory=dict)
 
     def to_chroma_document(self) -> str:
         parts = [
@@ -87,6 +88,7 @@ class TestCaseArtifact(BaseModel):
     test_level: str = "unit"  # unit | api | integration | e2e (v1.1 test pyramid)
     quality_score: float = 0.0  # 0.0-1.0 from TestCaseScorer (v1.2 quality gate)
     quality_issues: List[str] = Field(default_factory=list)  # human-readable issues
+    specification_versions: Dict[str, str] = Field(default_factory=dict)
 
 
 # ── Stage 2: BDD Code Generation ────────────────────────────────────────────
@@ -101,6 +103,7 @@ class FeatureFileArtifact(BaseModel):
     content: str
     scenario_count: int = 0
     tags: List[str] = Field(default_factory=list)
+    specification_versions: Dict[str, str] = Field(default_factory=dict)
 
 
 class StepDefinitionArtifact(BaseModel):

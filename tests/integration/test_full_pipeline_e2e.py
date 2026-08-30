@@ -32,6 +32,37 @@ from stlc_platform.pipeline.pipeline_loader import load_pipeline_from_dict
 # ---------------------------------------------------------------------------
 
 
+def test_pipeline_result_and_metrics_use_explicit_api_run_id(tmp_path):
+    dag = PipelineDAG(
+        stages=[
+            StageNode(
+                stage_id="requirements",
+                agent_id="requirements_agent",
+                input_map={"requirements": [{"req_id": "REQ-001"}]},
+                output_keys=["test_cases"],
+            )
+        ],
+        pipeline_name="run_id_integration",
+    )
+    registry = AgentRegistry()
+    registry.register("requirements_agent", MockRequirementsAgent)
+    run_id = "1de8fa67-c3e2-420c-8c71-97adc18b7547"
+    orchestrator = PipelineOrchestrator(
+        dag=dag,
+        registry=registry,
+        config={"metrics": {"dir": str(tmp_path / "metrics")}},
+        run_dir=tmp_path / run_id,
+        run_id=run_id,
+    )
+
+    result = orchestrator.run()
+
+    assert result.run_id == run_id
+    metric_path = tmp_path / "metrics" / f"{run_id}.json"
+    assert metric_path.exists()
+    assert json.loads(metric_path.read_text(encoding="utf-8"))["run_id"] == run_id
+
+
 class MockRequirementsAgent(BaseAgent):
     """Produces test_cases from requirements input."""
 

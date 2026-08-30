@@ -106,13 +106,9 @@ class RequirementsReader:
                 req = self._parse_text_block(block, i + 1)
                 requirements.append(req)
         else:
-            req = Requirement(
-                req_id="REQ-001",
-                title="System Requirements",
-                description=content.strip(),
-                raw_text=content,
-            )
-            requirements.append(req)
+            # A single textual requirement still needs the same structured
+            # extraction (ID, title and acceptance criteria) as multi-block input.
+            requirements.append(self._parse_text_block(content.strip(), 1))
 
         return requirements
 

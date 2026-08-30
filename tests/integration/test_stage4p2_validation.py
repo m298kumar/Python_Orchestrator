@@ -8,6 +8,7 @@ feedback loop, CI output, and full pipeline E2E with mock agents.
 import json
 from pathlib import Path
 from typing import Any, Dict
+from unittest.mock import MagicMock
 
 from stlc_platform.core.base_agent import (
     AgentCapabilities,
@@ -392,7 +393,7 @@ class MockEnrichAgent(BaseAgent):
 
 
 class TestFullPipelineE2E:
-    def test_full_stlc_pipeline_with_mocks(self, tmp_path):
+    def test_full_stlc_pipeline_with_mocks(self, tmp_path, monkeypatch):
         """Full 5-stage pipeline with mock agents, skills, and profiles."""
         from stlc_platform.pipeline.pipeline_loader import load_pipeline
 
@@ -418,9 +419,20 @@ class TestFullPipelineE2E:
         # in the artifact store. We pre-populate it after creating the orchestrator.
         pipeline_config = {
             "requirements": [{"req_id": "REQ-001", "title": "Login"}],
-            "html_pages": {"http://test.com": "<html></html>"},
-            "openapi_spec": {"openapi": "3.0.0", "info": {"title": "Test"}},
+            "crawler": {
+                "html_pages": {"http://test.com": "<html></html>"},
+            },
+            "api_testing": {
+                "openapi_spec": {"openapi": "3.0.0", "info": {"title": "Test"}},
+            },
         }
+
+        # Keep this mock-agent integration test independent of Chroma/Ollama.
+        mock_vector_store = MagicMock()
+        monkeypatch.setattr(
+            "stlc_platform.pipeline.artifact_store.ArtifactResolver._create_vector_store",
+            lambda self: mock_vector_store,
+        )
 
         orchestrator = PipelineOrchestrator(
             dag=dag,

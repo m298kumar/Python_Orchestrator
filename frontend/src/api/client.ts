@@ -81,7 +81,14 @@ export interface TestCase {
   status: string;
   test_level: string;
   quality_score: number;
+  quality_issues: string[];
+  quality_validated: boolean;
   run_id?: string;
+  rag_example_id?: string;
+  review_id?: number;
+  reviewer?: string;
+  review_reason?: string;
+  reviewed_at?: string;
 }
 
 export interface FeatureFile {
@@ -224,24 +231,36 @@ export const listTestCasesByRun = (runId: string) =>
 
 export const getTestCase = (tcId: string) => api.get<TestCase>('/test-cases/' + tcId);
 
-export const updateTestCase = (tcId: string, data: Partial<TestCase>) =>
-  api.put('/test-cases/' + tcId, data);
+export const updateTestCase = (tcId: string, runId: string, data: Partial<TestCase>) =>
+  api.put('/test-cases/' + tcId, data, { params: { run_id: runId } });
 
-export const approveTestCase = (tcId: string) => api.post('/test-cases/' + tcId + '/approve');
+export const revalidateTestCase = (tcId: string, runId: string) =>
+  api.post<TestCase>(`/test-cases/runs/${runId}/${tcId}/revalidate`);
 
-export const rejectTestCase = (tcId: string) => api.post('/test-cases/' + tcId + '/reject');
+export const approveTestCase = (tcId: string, runId: string, reason?: string, reviewer?: string) =>
+  api.post<TestCase>(`/test-cases/runs/${runId}/${tcId}/approve`, { reason, reviewer });
 
-export const bulkApproveTestCases = (tcIds: string[], reason?: string) =>
-  api.post<{ updated: string[]; not_found: string[] }>('/test-cases/bulk/approve', {
-    tc_ids: tcIds,
-    reason,
-  });
+export const rejectTestCase = (tcId: string, runId: string, reason?: string, reviewer?: string) =>
+  api.post<TestCase>(`/test-cases/runs/${runId}/${tcId}/reject`, { reason, reviewer });
 
-export const bulkRejectTestCases = (tcIds: string[], reason?: string) =>
-  api.post<{ updated: string[]; not_found: string[] }>('/test-cases/bulk/reject', {
-    tc_ids: tcIds,
-    reason,
-  });
+export interface TestCaseReviewRef { tc_id: string; run_id: string }
+export interface BulkReviewResult extends TestCaseReviewRef {
+  success: boolean;
+  rag_example_id?: string;
+  error?: string;
+}
+
+export const bulkApproveTestCases = (
+  items: TestCaseReviewRef[], reason?: string, reviewer?: string,
+) => api.post<{ results: BulkReviewResult[] }>('/test-cases/review-actions/bulk/approve', {
+  items, reason, reviewer,
+});
+
+export const bulkRejectTestCases = (
+  items: TestCaseReviewRef[], reason?: string, reviewer?: string,
+) => api.post<{ results: BulkReviewResult[] }>('/test-cases/review-actions/bulk/reject', {
+  items, reason, reviewer,
+});
 
 // ---------------------------------------------------------------------------
 // BDD
@@ -339,6 +358,7 @@ export const getApiTest = (filename: string) =>
 
 export interface ConfigResponse {
   project: Record<string, any>;
+  specifications: Record<string, any>;
   llm: Record<string, any>;
   crawler: Record<string, any>;
   api_testing: Record<string, any>;
@@ -351,6 +371,7 @@ export interface ConfigResponse {
   export: Record<string, any>;
   circuit_breaker: Record<string, any>;
   metrics: Record<string, any>;
+  review: Record<string, any>;
 }
 
 export interface LLMTestRequest {
@@ -386,7 +407,11 @@ export interface MetricsRun {
   avg_quality_score: number;
   quality_distribution: Record<string, number>;
   tokens_used: number;
+  input_tokens?: number;
+  output_tokens?: number;
   estimated_cost_usd: number;
+  llm_provider?: string;
+  llm_model?: string;
   cache_hit_rate: number;
   generation_time_seconds: number;
   per_stage_durations: Record<string, number>;

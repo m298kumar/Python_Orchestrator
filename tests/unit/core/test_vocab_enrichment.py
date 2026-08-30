@@ -235,6 +235,7 @@ class TestVocabEnrichmentEndToEnd:
         gen = _make_generator(vector_store=MagicMock())
         gen.vector_store.add_vocab = MagicMock(return_value=3)
         gen.vector_store.extract_and_store_vocab = MagicMock()
+        gen.vector_store.add_requirements = MagicMock()
         gen.vector_store.get_context_for_requirement = MagicMock(return_value="")
         gen.vector_store.retrieve_examples = MagicMock(return_value=[])
 
@@ -253,6 +254,7 @@ class TestVocabEnrichmentEndToEnd:
 
         gen.generate_for_all([req])
 
+        gen.vector_store.add_requirements.assert_called_once_with([req])
         gen.vector_store.add_vocab.assert_called_once()
         terms_arg = gen.vector_store.add_vocab.call_args[0][0]
         assert "Shopping Cart" in terms_arg
@@ -263,6 +265,7 @@ class TestVocabEnrichmentEndToEnd:
         gen = _make_generator(vector_store=MagicMock())
         gen.vector_store.add_vocab = MagicMock(side_effect=RuntimeError("DB down"))
         gen.vector_store.extract_and_store_vocab = MagicMock()
+        gen.vector_store.add_requirements = MagicMock(side_effect=RuntimeError("DB down"))
         gen.vector_store.get_context_for_requirement = MagicMock(return_value="")
         gen.vector_store.retrieve_examples = MagicMock(return_value=[])
 

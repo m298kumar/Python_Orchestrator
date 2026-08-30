@@ -65,6 +65,10 @@ class TestMetricsCollector:
             artifact,
             quality_scores=[0.90, 0.70, 0.50, 0.20],
             token_count=1000,
+            input_tokens=700,
+            output_tokens=300,
+            llm_provider="openai",
+            llm_model="gpt-4.1-mini",
         )
         assert metrics.run_id == "abc123"
         assert metrics.total_test_cases == 4
@@ -74,6 +78,10 @@ class TestMetricsCollector:
         assert metrics.quality_distribution["fair"] == 1
         assert metrics.quality_distribution["poor"] == 1
         assert metrics.tokens_used == 1000
+        assert metrics.input_tokens == 700
+        assert metrics.output_tokens == 300
+        assert metrics.llm_provider == "openai"
+        assert metrics.llm_model == "gpt-4.1-mini"
         assert metrics.stages_completed == 2
 
     def test_collect_no_quality_scores(self):

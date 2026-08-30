@@ -18,6 +18,7 @@ from stlc_platform.api.routes import requirements as req_module
 def _clear_requirements():
     """Clear the in-memory requirements store between tests."""
     req_module._requirements.clear()
+    req_module._requirement_history.clear()
     yield
     req_module._requirements.clear()
 
@@ -29,6 +30,10 @@ def client():
 
 def _upload(client, reqs):
     """Helper: upload a list of requirement dicts as JSON."""
+    reqs = [
+        {**req, "acceptance_criteria": req.get("acceptance_criteria", ["Outcome is verifiable"])}
+        for req in reqs
+    ]
     payload = json.dumps(reqs).encode()
     return client.post(
         "/api/requirements/upload",
@@ -108,7 +113,7 @@ class TestUploadRequirements:
         assert resp.status_code == 400
 
     def test_upload_csv_returns_201(self, client: TestClient):
-        csv_content = b"id,title,description,priority\nREQ-001,Login,User login,High\nREQ-002,Logout,User logout,Medium"
+        csv_content = b"id,title,description,priority,acceptance_criteria\nREQ-001,Login,User login,High,Login succeeds\nREQ-002,Logout,User logout,Medium,Logout succeeds"
         resp = client.post(
             "/api/requirements/upload",
             files={"file": ("reqs.csv", io.BytesIO(csv_content), "text/csv")},
@@ -119,7 +124,7 @@ class TestUploadRequirements:
         assert data[0]["title"] == "Login"
 
     def test_upload_txt_returns_201(self, client: TestClient):
-        txt_content = b"REQ-001 Login feature\nUser must be able to log in with email and password."
+        txt_content = b"REQ-001 Login feature\nUser must be able to log in. Acceptance criteria: login succeeds."
         resp = client.post(
             "/api/requirements/upload",
             files={"file": ("reqs.txt", io.BytesIO(txt_content), "text/plain")},
@@ -133,6 +138,17 @@ class TestUploadRequirements:
             files={"file": ("reqs.json", io.BytesIO(b"not-json{{{"), "application/json")},
         )
         assert resp.status_code == 400
+
+    def test_upload_without_acceptance_criteria_violates_specification(self, client):
+        payload = json.dumps(
+            [{"id": "REQ-001", "title": "Login", "description": "User login"}]
+        ).encode()
+        resp = client.post(
+            "/api/requirements/upload",
+            files={"file": ("requirements.json", io.BytesIO(payload), "application/json")},
+        )
+        assert resp.status_code == 422
+        assert "acceptance criterion" in str(resp.json())
 
 
 class TestGetRequirement:
@@ -158,3 +174,18 @@ class TestGetRequirement:
     def test_404_has_detail(self, client: TestClient):
         data = client.get("/api/requirements/REQ-999").json()
         assert "detail" in data
+
+    def test_update_retains_revision_history(self, client: TestClient):
+        _upload(
+            client,
+            [{"id": "REQ-010", "title": "Search", "description": "Original"}],
+        )
+        update = client.put(
+            "/api/requirements/REQ-010",
+            json={"description": "Revised"},
+        )
+        assert update.status_code == 200
+
+        history = client.get("/api/requirements/REQ-010/history").json()["revisions"]
+        assert [revision["description"] for revision in history] == ["Original", "Revised"]
+        assert [revision["revision_number"] for revision in history] == [1, 2]
